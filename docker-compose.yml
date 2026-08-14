@@ -1,0 +1,57 @@
+services:
+  mongodb:
+    image: mongo:7
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: taskmaster
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: taskmaster
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - internal
+
+  backend:
+    build: ./server
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+      COOKIE_SECURE: "true"
+      MONGO_URI: mongodb://taskmaster:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/taskmaster?authSource=admin
+    depends_on:
+      - mongodb
+    networks:
+      - internal
+
+  frontend:
+    build: ./client
+    restart: unless-stopped
+    networks:
+      - internal
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - internal
+
+volumes:
+  mongo_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:
+    driver: bridge
