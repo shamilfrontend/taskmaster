@@ -181,11 +181,28 @@ Admin создаёт проект с `budgetLimit = 0`; лимит задаёт 
 
 Сборка и запуск через Docker Compose на VPS. Caddy терминирует HTTPS и проксирует на контейнеры.
 
-`YANDEX_CLIENT_ID`, `YANDEX_CLIENT_SECRET`, `JWT_SECRET` и `YANDEX_REDIRECT_URI` — env backend-контейнера (на VPS в `.env`).
+`YANDEX_CLIENT_ID`, `YANDEX_CLIENT_SECRET`, `JWT_SECRET` и `YANDEX_REDIRECT_URI` — GitHub Secrets; CI пишет их в `/opt/taskmaster/.env` на VPS.
 
-### CI/CD (GitHub Actions + SSH)
+### Первый деплой
 
-Секреты репозитория (будут добавлены позже):
+1. DNS: A-запись `taskmaster` → IPv4 VPS. Проверка: `dig +short taskmaster.shamilfrontend.ru`
+2. На VPS один раз (под `DEPLOY_USER`):
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git ca-certificates curl
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker "$USER"
+sudo ufw allow OpenSSH
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw --force enable
+sudo systemctl disable --now nginx apache2 2>/dev/null || true
+```
+
+Перелогинься, проверь `docker compose version`. Публичный ключ от `DEPLOY_SSH_KEY` — в `~/.ssh/authorized_keys`.
+
+3. GitHub Secrets:
 
 | Secret | Назначение |
 | --- | --- |
@@ -195,11 +212,15 @@ Admin создаёт проект с `budgetLimit = 0`; лимит задаёт 
 | `DEPLOY_SSH_KEY` | Приватный ключ для деплоя |
 | `YANDEX_CLIENT_ID` | OAuth-приложение Яндекс ID |
 | `YANDEX_CLIENT_SECRET` | Секрет OAuth-приложения |
-| `JWT_SECRET` | Подпись JWT |
-| `MONGO_INITDB_ROOT_PASSWORD` | Пароль MongoDB |
-| `YANDEX_REDIRECT_URI` | Callback OAuth (`https://taskmaster.shamilfrontend.ru/api/auth/yandex/callback`) |
+| `JWT_SECRET` | `openssl rand -hex 32` |
+| `MONGO_INITDB_ROOT_PASSWORD` | `openssl rand -hex 24` |
+| `YANDEX_REDIRECT_URI` | `https://taskmaster.shamilfrontend.ru/api/auth/yandex/callback` |
 
-Пайплайн: push → сборка/деплой по SSH → `docker compose up` на сервере.
+4. oauth.yandex.ru: добавь тот же Callback URI. Локальный `http://localhost:3000/api/auth/yandex/callback` не удаляй.
+5. Push в `main` → Actions → SSH → `git clone`/`pull` в `/opt/taskmaster` → `.env` → `docker compose up -d --build`
+6. Проверка: `https://taskmaster.shamilfrontend.ru/api/health` → `{"ok":true}`
+
+Если TLS не выдался — DNS ещё не дошёл или 80/443 закрыты.
 
 ## Вне v1
 

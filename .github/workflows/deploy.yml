@@ -15,12 +15,53 @@ jobs:
           PORT: ${{ secrets.DEPLOY_PORT }}
           USER: ${{ secrets.DEPLOY_USER }}
           KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          YANDEX_CLIENT_ID: ${{ secrets.YANDEX_CLIENT_ID }}
+          YANDEX_CLIENT_SECRET: ${{ secrets.YANDEX_CLIENT_SECRET }}
+          YANDEX_REDIRECT_URI: ${{ secrets.YANDEX_REDIRECT_URI }}
+          MONGO_INITDB_ROOT_PASSWORD: ${{ secrets.MONGO_INITDB_ROOT_PASSWORD }}
         run: |
           mkdir -p ~/.ssh
-          echo "$KEY" > ~/.ssh/deploy_key
+          printf '%s\n' "$KEY" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+
+          umask 077
+          {
+            printf 'NODE_ENV=production\n'
+            printf 'PORT=3000\n'
+            printf 'FRONTEND_URL=https://taskmaster.shamilfrontend.ru\n'
+            printf 'JWT_SECRET=%s\n' "$JWT_SECRET"
+            printf 'YANDEX_CLIENT_ID=%s\n' "$YANDEX_CLIENT_ID"
+            printf 'YANDEX_CLIENT_SECRET=%s\n' "$YANDEX_CLIENT_SECRET"
+            printf 'YANDEX_REDIRECT_URI=%s\n' "$YANDEX_REDIRECT_URI"
+            printf 'MONGO_INITDB_ROOT_PASSWORD=%s\n' "$MONGO_INITDB_ROOT_PASSWORD"
+            printf 'COOKIE_SECURE=true\n'
+          } > /tmp/taskmaster.env
+
           ssh -o StrictHostKeyChecking=accept-new \
             -p "${PORT}" \
             -i ~/.ssh/deploy_key \
             "${USER}@${HOST}" \
-            'cd /opt/taskmaster && git pull && docker compose up -d --build'
+            'set -euo pipefail
+            if [ ! -d /opt/taskmaster/.git ]; then
+              sudo mkdir -p /opt/taskmaster
+              sudo chown "$(whoami):$(whoami)" /opt/taskmaster
+              git clone https://github.com/shamilfrontend/taskmaster.git /opt/taskmaster
+            fi
+            cd /opt/taskmaster
+            git pull --ff-only origin main'
+
+          scp -o StrictHostKeyChecking=accept-new \
+            -P "${PORT}" \
+            -i ~/.ssh/deploy_key \
+            /tmp/taskmaster.env \
+            "${USER}@${HOST}:/opt/taskmaster/.env"
+
+          ssh -o StrictHostKeyChecking=accept-new \
+            -p "${PORT}" \
+            -i ~/.ssh/deploy_key \
+            "${USER}@${HOST}" \
+            'set -euo pipefail
+            chmod 600 /opt/taskmaster/.env
+            cd /opt/taskmaster
+            docker compose up -d --build'

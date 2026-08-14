@@ -107,8 +107,75 @@ export const useBoardStore = defineStore('board', () => {
   }
 
   async function addColumn(boardId: string, name: string): Promise<void> {
-    await http.post(`/boards/${boardId}/columns`, { name });
-    await fetchBoard(boardId);
+    isLoading.value = true;
+    error.value = null;
+
+    try {
+      await http.post(`/boards/${boardId}/columns`, { name });
+      await fetchBoard(boardId);
+    } catch (err: unknown) {
+      error.value = errorMessage(err);
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  async function patchColumn(
+    columnId: string,
+    patch: { name?: string; position?: number; isDone?: boolean }
+  ): Promise<void> {
+    isLoading.value = true;
+    error.value = null;
+
+    try {
+      await http.patch(`/boards/columns/${columnId}`, patch);
+
+      if (current.value) {
+        await fetchBoard(current.value.id);
+      }
+    } catch (err: unknown) {
+      error.value = errorMessage(err);
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  async function reorderColumns(orderedIds: string[]): Promise<void> {
+    isLoading.value = true;
+    error.value = null;
+
+    try {
+      await Promise.all(
+        orderedIds.map((id, position) =>
+          http.patch(`/boards/columns/${id}`, { position })
+        )
+      );
+
+      if (current.value) {
+        await fetchBoard(current.value.id);
+      }
+    } catch (err: unknown) {
+      error.value = errorMessage(err);
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  async function deleteColumn(columnId: string): Promise<void> {
+    isLoading.value = true;
+    error.value = null;
+
+    try {
+      await http.delete(`/boards/columns/${columnId}`);
+
+      if (current.value) {
+        await fetchBoard(current.value.id);
+      }
+    } catch (err: unknown) {
+      error.value = errorMessage(err);
+    } finally {
+      isLoading.value = false;
+    }
   }
 
   async function fetchRelease(releaseId: string): Promise<void> {
@@ -158,6 +225,9 @@ export const useBoardStore = defineStore('board', () => {
     addLabel,
     deleteLabel,
     addColumn,
+    patchColumn,
+    reorderColumns,
+    deleteColumn,
     fetchRelease,
     setReleaseStatus,
     attachCard,

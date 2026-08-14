@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useBoardStore } from '../stores/board.ts';
 import { useProjectStore } from '../stores/project.ts';
@@ -9,35 +9,78 @@ import {
   labelClass
 } from '../composables/format.ts';
 import ModalDialog from '../components/ModalDialog.vue';
-import type { LabelColor } from '../types/index.ts';
+import type { BoardCard, BoardColumn, LabelColor } from '../types/index.ts';
+
+const CARD_DRAG = 'card:';
+const COLUMN_DRAG = 'column:';
 
 const route = useRoute();
 const board = useBoardStore();
 const project = useProjectStore();
 const boardId = computed(() => String(route.params.boardId));
 const cardOpen = ref(false);
-const createOpen = ref(false);
 const hoursOpen = ref(false);
 const labelsOpen = ref(false);
-const title = ref('');
-const columnId = ref('');
-const assigneeId = ref('');
-const dueDate = ref('');
-const estimateHours = ref(0);
-const releaseId = ref('');
 const hours = ref(2);
 const comment = ref('');
 const labelName = ref('');
 const labelColor = ref<LabelColor>('blue');
-const columnName = ref('');
+const renamingId = ref<string | null>(null);
+const renameValue = ref('');
+const menuColumnId = ref<string | null>(null);
+const addingCardColumnId = ref<string | null>(null);
+const newCardTitle = ref('');
+const addingColumn = ref(false);
+const newColumnName = ref('');
 
-onMounted(async () => {
-  await board.fetchBoard(boardId.value);
+onMounted(() => {
+  document.addEventListener('click', closeMenus);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeMenus);
+});
+
+watch(boardId, async (id) => {
+  renamingId.value = null;
+  menuColumnId.value = null;
+  addingCardColumnId.value = null;
+  addingColumn.value = false;
+  cardOpen.value = false;
+  await board.fetchBoard(id);
 
   if (board.current) {
     await project.fetchOne(board.current.projectId);
-    columnId.value = board.current.columns[0]?.id ?? '';
   }
+}, { immediate: true });
+
+watch(addingCardColumnId, async (id) => {
+  if (!id) {
+    return;
+  }
+
+  await nextTick();
+  document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus();
+});
+
+watch(addingColumn, async (open) => {
+  if (!open) {
+    return;
+  }
+
+  await nextTick();
+  document.querySelector<HTMLInputElement>('.add-list .input')?.focus();
+});
+
+watch(renamingId, async (id) => {
+  if (!id) {
+    return;
+  }
+
+  await nextTick();
+  const input = document.querySelector<HTMLInputElement>('.column-title-input');
+  input?.focus();
+  input?.select();
 });
 
 const canEdit = computed(() => {
@@ -50,7 +93,11 @@ const canAdmin = computed(() => {
   return role === 'owner' || role === 'admin';
 });
 
-function cardsOf(id: string) {
+function closeMenus(): void {
+  menuColumnId.value = null;
+}
+
+function cardsOf(id: string): BoardCard[] {
   return (board.current?.cards ?? [])
     .filter((card) => card.columnId === id)
     .slice()
@@ -62,26 +109,143 @@ async function openCard(id: string): Promise<void> {
   cardOpen.value = true;
 }
 
-async function createCard(): Promise<void> {
-  await board.createCard({
-    boardId: boardId.value,
-    columnId: columnId.value,
-    title: title.value,
-    assigneeId: assigneeId.value || undefined,
-    dueDate: dueDate.value || undefined,
-    estimateHours: estimateHours.value,
-    releaseId: releaseId.value || undefined
-  });
-  createOpen.value = false;
+function toggleMenu(columnId: string): void {
+  menuColumnId.value = menuColumnId.value === columnId ? null : columnId;
 }
 
-async function onDrop(event: DragEvent, targetColumnId: string): Promise<void> {
-  const cardId = event.dataTransfer?.getData('text/plain');
-
-  if (!cardId || !canEdit.value) {
+function startRename(column: BoardColumn): void {
+  if (!canAdmin.value) {
     return;
   }
 
+  renamingId.value = column.id;
+  renameValue.value = column.name;
+  menuColumnId.value = null;
+}
+
+async function saveRename(columnId: string): Promise<void> {
+  const name = renameValue.value.trim();
+  const currentName = board.current?.columns.find((item) => item.id === columnId)
+    ?.name;
+  renamingId.value = null;
+
+  if (!name || name === currentName) {
+    return;
+  }
+
+  await board.patchColumn(columnId, { name });
+}
+
+async function markDone(columnId: string, isDone: boolean): Promise<void> {
+  menuColumnId.value = null;
+  await board.patchColumn(columnId, { isDone });
+}
+
+async function removeColumn(columnId: string): Promise<void> {
+  menuColumnId.value = null;
+  await board.deleteColumn(columnId);
+}
+
+function openCardComposer(columnId: string): void {
+  addingCardColumnId.value = columnId;
+  newCardTitle.value = '';
+  addingColumn.value = false;
+  menuColumnId.value = null;
+}
+
+function cancelCardComposer(): void {
+  addingCardColumnId.value = null;
+  newCardTitle.value = '';
+}
+
+async function submitCard(columnId: string): Promise<void> {
+  const title = newCardTitle.value.trim();
+
+  if (!title) {
+    return;
+  }
+
+  await board.createCard({
+    boardId: boardId.value,
+    columnId,
+    title
+  });
+  newCardTitle.value = '';
+  await nextTick();
+  document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus();
+}
+
+function openColumnComposer(): void {
+  addingColumn.value = true;
+  newColumnName.value = '';
+  addingCardColumnId.value = null;
+  menuColumnId.value = null;
+}
+
+function cancelColumnComposer(): void {
+  addingColumn.value = false;
+  newColumnName.value = '';
+}
+
+async function submitColumn(): Promise<void> {
+  const name = newColumnName.value.trim();
+
+  if (!name || !board.current) {
+    return;
+  }
+
+  await board.addColumn(board.current.id, name);
+  newColumnName.value = '';
+  await nextTick();
+  document.querySelector<HTMLInputElement>('.add-list .input')?.focus();
+}
+
+function onColumnDragStart(event: DragEvent, columnId: string): void {
+  const target = event.target as HTMLElement | null;
+
+  if (target?.closest('button, input') || !canAdmin.value) {
+    event.preventDefault();
+    return;
+  }
+
+  event.dataTransfer?.setData('text/plain', `${COLUMN_DRAG}${columnId}`);
+}
+
+function onCardDragStart(event: DragEvent, cardId: string): void {
+  event.dataTransfer?.setData('text/plain', `${CARD_DRAG}${cardId}`);
+}
+
+async function onDrop(event: DragEvent, targetColumnId: string): Promise<void> {
+  const raw = event.dataTransfer?.getData('text/plain') ?? '';
+
+  if (raw.startsWith(COLUMN_DRAG) && canAdmin.value) {
+    const dragId = raw.slice(COLUMN_DRAG.length);
+    const columns = board.current?.columns ?? [];
+    const from = columns.findIndex((item) => item.id === dragId);
+    const to = columns.findIndex((item) => item.id === targetColumnId);
+
+    if (from < 0 || to < 0 || from === to) {
+      return;
+    }
+
+    const ordered = columns.map((item) => item.id);
+    const moved = ordered[from];
+
+    if (moved === undefined) {
+      return;
+    }
+
+    ordered.splice(from, 1);
+    ordered.splice(to, 0, moved);
+    await board.reorderColumns(ordered);
+    return;
+  }
+
+  if (!raw.startsWith(CARD_DRAG) || !canEdit.value) {
+    return;
+  }
+
+  const cardId = raw.slice(CARD_DRAG.length);
   const siblings = cardsOf(targetColumnId);
   await board.moveCard(cardId, targetColumnId, siblings.length);
   await board.fetchBoard(boardId.value);
@@ -113,15 +277,6 @@ async function saveLabels(): Promise<void> {
   await board.addLabel(board.current.id, labelName.value, labelColor.value);
   labelName.value = '';
 }
-
-async function addCol(): Promise<void> {
-  if (!board.current) {
-    return;
-  }
-
-  await board.addColumn(board.current.id, columnName.value);
-  columnName.value = '';
-}
 </script>
 
 <template>
@@ -135,9 +290,6 @@ async function addCol(): Promise<void> {
           <button v-if="canAdmin" type="button" class="btn btn-ghost" @click="labelsOpen = true">
             Метки
           </button>
-          <button v-if="canEdit" type="button" class="btn" @click="createOpen = true">
-            Добавить карточку
-          </button>
         </div>
       </div>
       <p v-if="board.error" class="warn">{{ board.error }}</p>
@@ -149,37 +301,151 @@ async function addCol(): Promise<void> {
           @dragover.prevent
           @drop="onDrop($event, column.id)"
         >
-          <div class="column-head">
-            <h2>{{ column.name }}</h2>
+          <div
+            class="column-head"
+            :draggable="canAdmin && renamingId !== column.id"
+            @dragstart="onColumnDragStart($event, column.id)"
+          >
+            <input
+              v-if="renamingId === column.id"
+              v-model="renameValue"
+              class="column-title-input"
+              type="text"
+              @click.stop
+              @keydown.enter.prevent="saveRename(column.id)"
+              @keydown.escape.prevent="renamingId = null"
+              @blur="saveRename(column.id)"
+            >
+            <h2
+              v-else
+              :class="{ 'is-editable': canAdmin }"
+              @click="startRename(column)"
+            >
+              {{ column.name }}
+            </h2>
             <span class="count">{{ cardsOf(column.id).length }}</span>
+            <button
+              v-if="canAdmin"
+              type="button"
+              class="column-menu-btn"
+              @click.stop="toggleMenu(column.id)"
+            >
+              ⋯
+            </button>
+            <div
+              v-if="menuColumnId === column.id"
+              class="column-menu"
+              @click.stop
+            >
+              <button type="button" @click="startRename(column)">
+                Переименовать
+              </button>
+              <button
+                v-if="!column.isDone"
+                type="button"
+                @click="markDone(column.id, true)"
+              >
+                Отметить как Готово
+              </button>
+              <button
+                v-else
+                type="button"
+                @click="markDone(column.id, false)"
+              >
+                Снять отметку Готово
+              </button>
+              <button
+                type="button"
+                class="is-danger"
+                @click="removeColumn(column.id)"
+              >
+                Удалить
+              </button>
+            </div>
+          </div>
+          <div class="column-cards">
+            <button
+              v-for="card in cardsOf(column.id)"
+              :key="card.id"
+              type="button"
+              class="task"
+              draggable="true"
+              @dragstart="onCardDragStart($event, card.id)"
+              @click="openCard(card.id)"
+            >
+              <span v-if="card.releaseName" class="release-chip">{{ card.releaseName }}</span>
+              <h3>{{ card.title }}</h3>
+              <div class="labels">
+                <span
+                  v-for="labelId in card.labelIds"
+                  :key="labelId"
+                  :class="labelClass(board.current.labels.find((item) => item.id === labelId)?.color ?? 'blue')"
+                >
+                  {{ board.current.labels.find((item) => item.id === labelId)?.name }}
+                </span>
+              </div>
+              <div class="task-foot">
+                <span v-if="card.assigneeName" class="avatar sm">
+                  {{ initials(card.assigneeName) }}
+                </span>
+                <span>{{ formatDate(card.dueDate) }}</span>
+                <span class="hours">план {{ card.estimateHours }}ч · факт {{ card.factHours }}ч</span>
+              </div>
+            </button>
+          </div>
+          <div v-if="canEdit" class="composer">
+            <template v-if="addingCardColumnId === column.id">
+              <textarea
+                v-model="newCardTitle"
+                placeholder="Название карточки…"
+                @keydown.enter.exact.prevent="submitCard(column.id)"
+                @keydown.escape="cancelCardComposer"
+              />
+              <div class="composer-actions">
+                <button type="button" class="btn" @click="submitCard(column.id)">
+                  Добавить
+                </button>
+                <button type="button" class="icon-btn" @click="cancelCardComposer">
+                  ×
+                </button>
+              </div>
+            </template>
+            <button
+              v-else
+              type="button"
+              class="add-card-btn"
+              @click="openCardComposer(column.id)"
+            >
+              + Добавить карточку
+            </button>
+          </div>
+        </div>
+        <div v-if="canAdmin" class="add-list">
+          <div v-if="addingColumn" class="composer">
+            <input
+              v-model="newColumnName"
+              class="input"
+              type="text"
+              placeholder="Название колонки…"
+              @keydown.enter.prevent="submitColumn"
+              @keydown.escape="cancelColumnComposer"
+            >
+            <div class="composer-actions">
+              <button type="button" class="btn" @click="submitColumn">
+                Добавить колонку
+              </button>
+              <button type="button" class="icon-btn" @click="cancelColumnComposer">
+                ×
+              </button>
+            </div>
           </div>
           <button
-            v-for="card in cardsOf(column.id)"
-            :key="card.id"
+            v-else
             type="button"
-            class="task"
-            draggable="true"
-            @dragstart="($event as DragEvent).dataTransfer?.setData('text/plain', card.id)"
-            @click="openCard(card.id)"
+            class="add-list-btn"
+            @click="openColumnComposer"
           >
-            <span v-if="card.releaseName" class="release-chip">{{ card.releaseName }}</span>
-            <h3>{{ card.title }}</h3>
-            <div class="labels">
-              <span
-                v-for="labelId in card.labelIds"
-                :key="labelId"
-                :class="labelClass(board.current.labels.find((item) => item.id === labelId)?.color ?? 'blue')"
-              >
-                {{ board.current.labels.find((item) => item.id === labelId)?.name }}
-              </span>
-            </div>
-            <div class="task-foot">
-              <span v-if="card.assigneeName" class="avatar sm">
-                {{ initials(card.assigneeName) }}
-              </span>
-              <span>{{ formatDate(card.dueDate) }}</span>
-              <span class="hours">план {{ card.estimateHours }}ч · факт {{ card.factHours }}ч</span>
-            </div>
+            + Добавить колонку
           </button>
         </div>
       </div>
@@ -256,59 +522,6 @@ async function addCol(): Promise<void> {
       </aside>
     </div>
 
-    <ModalDialog :open="createOpen" title="Новая карточка" @close="createOpen = false">
-      <div class="field">
-        <label>Название</label>
-        <input v-model="title" class="input" type="text">
-      </div>
-      <div class="field-row">
-        <div class="field">
-          <label>Колонка</label>
-          <select v-model="columnId" class="select">
-            <option v-for="column in board.current.columns" :key="column.id" :value="column.id">
-              {{ column.name }}
-            </option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Исполнитель</label>
-          <select v-model="assigneeId" class="select">
-            <option value="">Без исполнителя</option>
-            <option
-              v-for="row in project.current?.rates ?? []"
-              :key="row.userId"
-              :value="row.userId"
-            >
-              {{ row.displayName }}
-            </option>
-          </select>
-        </div>
-      </div>
-      <div class="field-row">
-        <div class="field">
-          <label>Срок</label>
-          <input v-model="dueDate" class="input" type="date">
-        </div>
-        <div class="field">
-          <label>Оценка, часы</label>
-          <input v-model.number="estimateHours" class="input" type="number" min="0" step="0.5">
-        </div>
-      </div>
-      <div class="field">
-        <label>Релиз</label>
-        <select v-model="releaseId" class="select">
-          <option value="">Без релиза</option>
-          <option v-for="item in board.current.releases" :key="item.id" :value="item.id">
-            {{ item.name }}
-          </option>
-        </select>
-      </div>
-      <div class="modal-foot">
-        <button type="button" class="btn btn-ghost" @click="createOpen = false">Отмена</button>
-        <button type="button" class="btn" @click="createCard">Создать</button>
-      </div>
-    </ModalDialog>
-
     <ModalDialog :open="hoursOpen" title="Списать часы" @close="hoursOpen = false">
       <div class="field">
         <label>Часы</label>
@@ -320,7 +533,7 @@ async function addCol(): Promise<void> {
       </div>
     </ModalDialog>
 
-    <ModalDialog :open="labelsOpen" title="Метки и колонки" @close="labelsOpen = false">
+    <ModalDialog :open="labelsOpen" title="Метки" @close="labelsOpen = false">
       <div v-for="label in board.current.labels" :key="label.id" class="label-row">
         <span :class="labelClass(label.color)">{{ label.name }}</span>
         <button type="button" class="btn btn-ghost" @click="board.deleteLabel(board.current!.id, label.id)">
@@ -345,13 +558,6 @@ async function addCol(): Promise<void> {
       </div>
       <div class="modal-foot">
         <button type="button" class="btn" @click="saveLabels">Добавить метку</button>
-      </div>
-      <div class="field mt-16">
-        <label>Новая колонка</label>
-        <input v-model="columnName" class="input" type="text">
-      </div>
-      <div class="modal-foot">
-        <button type="button" class="btn" @click="addCol">Добавить колонку</button>
       </div>
     </ModalDialog>
   </section>

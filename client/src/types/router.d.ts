@@ -4,7 +4,6 @@ declare module 'vue-router' {
   interface RouteMeta {
     chrome?: boolean;
     public?: boolean;
-    crumb?: string;
   }
 }
 

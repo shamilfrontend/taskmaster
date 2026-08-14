@@ -19,6 +19,7 @@ services:
       PORT: 3000
       NODE_ENV: production
       COOKIE_SECURE: "true"
+      FRONTEND_URL: https://taskmaster.shamilfrontend.ru
       MONGO_URI: mongodb://taskmaster:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/taskmaster?authSource=admin
     depends_on:
       - mongodb
