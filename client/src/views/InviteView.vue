@@ -3,7 +3,8 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.ts';
 import { http, errorMessage } from '../api/http.ts';
-import type { InvitePreview, InviteRole } from '../types/index.ts';
+import { roleLabel } from '../composables/format.ts';
+import type { InvitePreview } from '../types/index.ts';
 
 const route = useRoute();
 const router = useRouter();
@@ -39,8 +40,6 @@ async function accept(): Promise<void> {
 function login(): void {
   auth.login(`/invite/${token.value}`);
 }
-
-const roleLabel = (role: InviteRole): string => role;
 </script>
 
 <template>
@@ -77,3 +76,41 @@ const roleLabel = (role: InviteRole): string => role;
     </div>
   </section>
 </template>
+
+<style lang="scss" scoped>
+.auth-card {
+  width: 400px;
+  padding: 40px 32px;
+  text-align: center;
+  box-shadow: 0 8px 24px #091e4226;
+
+  img {
+    width: 48px;
+    height: 48px;
+  }
+
+  h1 {
+    margin: 16px 0 8px;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  p {
+    margin: 0 0 24px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+}
+
+.invite-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  text-align: left;
+  font-size: 14px;
+}
+</style>

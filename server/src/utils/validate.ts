@@ -2,10 +2,12 @@ import mongoose from 'mongoose';
 import { AppError } from '../errors/app-error.js';
 import {
   ANALYTICS_PERIODS,
+  BOARD_BACKGROUNDS,
   INVITE_ROLES,
   LABEL_COLORS,
   TEAM_ROLES,
   type AnalyticsPeriod,
+  type BoardBackground,
   type InviteRole,
   type LabelColor,
   type TeamRole
@@ -153,6 +155,19 @@ export function readInviteRole(body: unknown, field: string): InviteRole {
   return value as InviteRole;
 }
 
+export function readBoardBackground(
+  body: unknown,
+  field: string
+): BoardBackground {
+  const value = readString(body, field);
+
+  if (!BOARD_BACKGROUNDS.includes(value as BoardBackground)) {
+    throw new AppError(400, 'Некорректный фон доски');
+  }
+
+  return value as BoardBackground;
+}
+
 export function readLabelColor(body: unknown, field: string): LabelColor {
   const value = readString(body, field);
 
@@ -188,6 +203,33 @@ export function readOptionalDate(
   }
 
   return date;
+}
+
+export function readBoolean(body: unknown, field: string): boolean {
+  if (typeof body !== 'object' || body === null) {
+    throw new AppError(400, 'Некорректное тело запроса');
+  }
+
+  const value = (body as Record<string, unknown>)[field];
+
+  if (typeof value !== 'boolean') {
+    throw new AppError(400, `Поле ${field} должно быть boolean`);
+  }
+
+  return value;
+}
+
+export function isFeatureOn(value: boolean | undefined): boolean {
+  return value === true;
+}
+
+export function assertFeatureOn(
+  value: boolean | undefined,
+  message: string
+): void {
+  if (!isFeatureOn(value)) {
+    throw new AppError(403, message);
+  }
 }
 
 export function assertRole(

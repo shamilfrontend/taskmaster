@@ -8,30 +8,67 @@ import type {
   ReleaseDetails
 } from '../types/index.ts';
 
+interface CardPatch {
+  title?: string;
+  description?: string;
+  assigneeId?: string | null;
+  dueDate?: string | null;
+  estimateHours?: number;
+  releaseId?: string | null;
+  labelIds?: string[];
+}
+
 export const useBoardStore = defineStore('board', () => {
   const current = ref<BoardDetails | null>(null);
   const card = ref<CardDetails | null>(null);
   const release = ref<ReleaseDetails | null>(null);
   const isLoading = ref(false);
   const error = ref<string | null>(null);
+  let fetchSeq = 0;
+
+  function reset(): void {
+    current.value = null;
+    error.value = null;
+  }
 
   async function fetchBoard(boardId: string): Promise<void> {
+    const seq = ++fetchSeq;
     isLoading.value = true;
     error.value = null;
 
     try {
       const { data } = await http.get<BoardDetails>(`/boards/${boardId}`);
+
+      if (seq !== fetchSeq) {
+        return;
+      }
+
       current.value = data;
     } catch (err: unknown) {
+      if (seq !== fetchSeq) {
+        return;
+      }
+
       error.value = errorMessage(err);
     } finally {
-      isLoading.value = false;
+      if (seq === fetchSeq) {
+        isLoading.value = false;
+      }
+    }
+  }
+
+  function syncCommentCount(cardId: string, count: number): void {
+    const item = current.value?.cards.find((boardCard) => boardCard.id === cardId);
+
+    if (item) {
+      item.commentCount = count;
     }
   }
 
   async function fetchCard(cardId: string): Promise<void> {
     const { data } = await http.get<CardDetails>(`/cards/${cardId}`);
     card.value = data;
+    syncCommentCount(cardId, data.comments.length);
   }
 
   async function createCard(payload: {
@@ -57,17 +94,30 @@ export const useBoardStore = defineStore('board', () => {
     }
   }
 
-  async function patchCard(
-    cardId: string,
-    patch: Record<string, unknown>
-  ): Promise<void> {
-    await http.patch(`/cards/${cardId}`, patch);
+  async function refreshCardAndBoard(cardId?: string): Promise<void> {
+    const id = cardId ?? card.value?.id;
+
+    if (id) {
+      await fetchCard(id);
+    }
 
     if (current.value) {
       await fetchBoard(current.value.id);
     }
+  }
 
-    await fetchCard(cardId);
+  async function patchCard(cardId: string, patch: CardPatch): Promise<void> {
+    await http.patch(`/cards/${cardId}`, patch);
+    await refreshCardAndBoard(cardId);
+  }
+
+  async function deleteCard(cardId: string): Promise<void> {
+    await http.delete(`/cards/${cardId}`);
+    card.value = null;
+
+    if (current.value) {
+      await fetchBoard(current.value.id);
+    }
   }
 
   async function moveCard(
@@ -78,18 +128,78 @@ export const useBoardStore = defineStore('board', () => {
     await http.patch(`/cards/${cardId}`, { columnId, position });
   }
 
-  async function logHours(cardId: string, hours: number): Promise<void> {
-    await http.post(`/cards/${cardId}/time-entries`, { hours });
-    await fetchCard(cardId);
+  async function logHours(
+    cardId: string,
+    hours: number,
+    workedAt?: string
+  ): Promise<void> {
+    await http.post(`/cards/${cardId}/time-entries`, {
+      hours,
+      ...(workedAt ? { workedAt } : {})
+    });
+    await refreshCardAndBoard(cardId);
+  }
 
-    if (current.value) {
-      await fetchBoard(current.value.id);
-    }
+  async function patchTimeEntry(entryId: string, hours: number): Promise<void> {
+    await http.patch(`/cards/time-entries/${entryId}`, { hours });
+    await refreshCardAndBoard();
+  }
+
+  async function deleteTimeEntry(entryId: string): Promise<void> {
+    await http.delete(`/cards/time-entries/${entryId}`);
+    await refreshCardAndBoard();
   }
 
   async function addComment(cardId: string, body: string): Promise<void> {
     await http.post(`/cards/${cardId}/comments`, { body });
     await fetchCard(cardId);
+  }
+
+  async function deleteComment(commentId: string): Promise<void> {
+    await http.delete(`/cards/comments/${commentId}`);
+
+    if (card.value) {
+      await fetchCard(card.value.id);
+    }
+  }
+
+  async function addChecklist(cardId: string, title?: string): Promise<void> {
+    await http.post(`/cards/${cardId}/checklists`, title ? { title } : {});
+    await refreshCardAndBoard(cardId);
+  }
+
+  async function renameChecklist(
+    checklistId: string,
+    title: string
+  ): Promise<void> {
+    await http.patch(`/cards/checklists/${checklistId}`, { title });
+    await refreshCardAndBoard();
+  }
+
+  async function deleteChecklist(checklistId: string): Promise<void> {
+    await http.delete(`/cards/checklists/${checklistId}`);
+    await refreshCardAndBoard();
+  }
+
+  async function addChecklistItem(
+    checklistId: string,
+    text: string
+  ): Promise<void> {
+    await http.post(`/cards/checklists/${checklistId}/items`, { text });
+    await refreshCardAndBoard();
+  }
+
+  async function patchChecklistItem(
+    itemId: string,
+    patch: { text?: string; done?: boolean }
+  ): Promise<void> {
+    await http.patch(`/cards/checklist-items/${itemId}`, patch);
+    await refreshCardAndBoard();
+  }
+
+  async function deleteChecklistItem(itemId: string): Promise<void> {
+    await http.delete(`/cards/checklist-items/${itemId}`);
+    await refreshCardAndBoard();
   }
 
   async function addLabel(
@@ -122,7 +232,7 @@ export const useBoardStore = defineStore('board', () => {
 
   async function patchColumn(
     columnId: string,
-    patch: { name?: string; position?: number; isDone?: boolean }
+    patch: { name?: string; position?: number }
   ): Promise<void> {
     isLoading.value = true;
     error.value = null;
@@ -200,8 +310,29 @@ export const useBoardStore = defineStore('board', () => {
     await fetchRelease(releaseId);
   }
 
+  async function updateRelease(
+    releaseId: string,
+    payload: { name?: string; date?: string | null }
+  ): Promise<boolean> {
+    error.value = null;
+
+    try {
+      await http.patch(`/releases/${releaseId}`, payload);
+      await fetchRelease(releaseId);
+      return true;
+    } catch (err: unknown) {
+      error.value = errorMessage(err);
+      return false;
+    }
+  }
+
   async function attachCard(releaseId: string, cardId: string): Promise<void> {
     await http.post(`/releases/${releaseId}/cards`, { cardId });
+    await fetchRelease(releaseId);
+  }
+
+  async function detachCard(releaseId: string, cardId: string): Promise<void> {
+    await http.delete(`/releases/${releaseId}/cards/${cardId}`);
     await fetchRelease(releaseId);
   }
 
@@ -215,13 +346,24 @@ export const useBoardStore = defineStore('board', () => {
     release,
     isLoading,
     error,
+    reset,
     fetchBoard,
     fetchCard,
     createCard,
     patchCard,
+    deleteCard,
     moveCard,
     logHours,
+    patchTimeEntry,
+    deleteTimeEntry,
     addComment,
+    deleteComment,
+    addChecklist,
+    renameChecklist,
+    deleteChecklist,
+    addChecklistItem,
+    patchChecklistItem,
+    deleteChecklistItem,
     addLabel,
     deleteLabel,
     addColumn,
@@ -230,7 +372,9 @@ export const useBoardStore = defineStore('board', () => {
     deleteColumn,
     fetchRelease,
     setReleaseStatus,
+    updateRelease,
     attachCard,
+    detachCard,
     deleteRelease
   };
 });

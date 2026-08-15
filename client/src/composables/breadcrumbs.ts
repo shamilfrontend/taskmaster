@@ -18,13 +18,8 @@ export function useBreadcrumbs(): { crumbs: ComputedRef<Crumb[]> } {
   async function loadParents(): Promise<void> {
     const name = route.name;
 
+    // TeamView owns fetch for route `team`
     if (name === 'team') {
-      const teamId = String(route.params.teamId);
-
-      if (teams.current?.id !== teamId) {
-        await teams.fetchOne(teamId);
-      }
-
       return;
     }
 
@@ -32,28 +27,6 @@ export function useBreadcrumbs(): { crumbs: ComputedRef<Crumb[]> } {
       const projectId = String(route.params.projectId);
 
       if (project.current?.id !== projectId) {
-        await project.fetchOne(projectId);
-      }
-
-      const teamId = project.current?.teamId;
-
-      if (teamId && teams.current?.id !== teamId) {
-        await teams.fetchOne(teamId);
-      }
-
-      return;
-    }
-
-    if (name === 'board') {
-      const boardId = String(route.params.boardId);
-
-      if (board.current?.id !== boardId) {
-        await board.fetchBoard(boardId);
-      }
-
-      const projectId = board.current?.projectId;
-
-      if (projectId && project.current?.id !== projectId) {
         await project.fetchOne(projectId);
       }
 
@@ -117,10 +90,15 @@ export function useBreadcrumbs(): { crumbs: ComputedRef<Crumb[]> } {
     if (
       name === 'project' &&
       teamCrumb &&
+      projectCrumb &&
       projectName &&
       projectId === String(route.params.projectId) &&
       project.current?.teamId === teamId
     ) {
+      if (route.query.tab === 'releases' && project.current?.releasesEnabled) {
+        return [teamCrumb, projectCrumb, { label: 'Релизы' }];
+      }
+
       return [teamCrumb, { label: projectName }];
     }
 
@@ -132,18 +110,6 @@ export function useBreadcrumbs(): { crumbs: ComputedRef<Crumb[]> } {
       project.current?.teamId === teamId
     ) {
       return [teamCrumb, projectCrumb, { label: 'Аналитика' }];
-    }
-
-    if (
-      name === 'board' &&
-      teamCrumb &&
-      projectCrumb &&
-      board.current &&
-      board.current.id === String(route.params.boardId) &&
-      board.current.projectId === projectId &&
-      project.current?.teamId === teamId
-    ) {
-      return [teamCrumb, projectCrumb, { label: board.current.name }];
     }
 
     if (

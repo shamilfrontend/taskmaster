@@ -3,6 +3,44 @@ export type InviteRole = 'admin' | 'member' | 'viewer';
 export type ReleaseStatus = 'planned' | 'released';
 export type LabelColor = 'blue' | 'green' | 'purple' | 'pink' | 'amber';
 export type AnalyticsPeriod = '7d' | '30d' | 'quarter';
+export type BoardBackgroundId =
+  | 'default'
+  | 'bg-01'
+  | 'bg-02'
+  | 'bg-03'
+  | 'bg-04'
+  | 'bg-05'
+  | 'bg-06'
+  | 'bg-07'
+  | 'bg-08'
+  | 'bg-09'
+  | 'bg-10'
+  | 'bg-11'
+  | 'bg-12'
+  | 'bg-13'
+  | 'bg-14'
+  | 'bg-15'
+  | 'bg-16'
+  | 'bg-17'
+  | 'bg-18'
+  | 'bg-19'
+  | 'bg-20'
+  | 'bg-21'
+  | 'bg-22'
+  | 'bg-23'
+  | 'bg-24'
+  | 'bg-25'
+  | 'bg-26'
+  | 'bg-27'
+  | 'bg-28'
+  | 'bg-29'
+  | 'bg-30'
+  | 'bg-31'
+  | 'bg-32'
+  | 'bg-33'
+  | 'bg-34'
+  | 'bg-35'
+  | 'bg-36';
 
 export interface AuthUser {
   id: string;
@@ -30,6 +68,7 @@ export interface TeamMember {
 export interface TeamProject {
   id: string;
   name: string;
+  budgetEnabled: boolean;
   budgetLimit?: number;
 }
 
@@ -48,17 +87,52 @@ export interface TeamDetails {
   invites: TeamInvite[];
 }
 
+export type ActivityKind = 'card_created' | 'card_moved' | 'comment_added';
+
+export interface ActivityItem {
+  id: string;
+  kind: ActivityKind;
+  cardId: string;
+  cardTitle: string;
+  detail: string;
+  boardId: string;
+  projectId: string;
+  actorId: string;
+  actorName: string;
+  createdAt: string;
+}
+
+export interface DueSoonItem {
+  cardId: string;
+  title: string;
+  dueDate: string;
+  boardId: string;
+  projectId: string;
+  projectName: string;
+  status: 'overdue' | 'dueSoon';
+}
+
+export interface OverviewCardItem {
+  cardId: string;
+  title: string;
+  dueDate: string | null;
+  boardId: string;
+  projectId: string;
+  projectName: string;
+  status: 'overdue' | 'dueSoon' | 'open';
+}
+
+export interface TeamOverview {
+  activity: ActivityItem[];
+  dueSoon: DueSoonItem[];
+  myTasks: OverviewCardItem[];
+  unassigned: OverviewCardItem[];
+}
+
 export interface InvitePreview {
   teamName: string;
   role: InviteRole;
   expiresAt: string;
-}
-
-export interface ProjectBoard {
-  id: string;
-  name: string;
-  columnCount: number;
-  cardCount: number;
 }
 
 export interface ProjectRelease {
@@ -82,12 +156,15 @@ export interface ProjectDetails {
   teamId: string;
   name: string;
   role: TeamRole;
+  releasesEnabled: boolean;
+  budgetEnabled: boolean;
+  boardBackground: BoardBackgroundId;
   budgetLimit?: number;
   fact?: number;
   remainder?: number;
   roleRates?: Record<TeamRole, number>;
   rates: ProjectRateRow[];
-  boards: ProjectBoard[];
+  board: { id: string };
   releases: ProjectRelease[];
 }
 
@@ -118,6 +195,9 @@ export interface BoardCard {
   releaseId: string | null;
   releaseName: string | null;
   labelIds: string[];
+  commentCount: number;
+  checklistDone: number;
+  checklistTotal: number;
   position: number;
 }
 
@@ -150,16 +230,32 @@ export interface CardComment {
   createdAt?: string;
 }
 
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  done: boolean;
+  position: number;
+}
+
+export interface CardChecklist {
+  id: string;
+  title: string;
+  position: number;
+  items: ChecklistItem[];
+}
+
 export interface CardDetails {
   id: string;
   boardId: string;
   columnId: string;
   title: string;
+  description: string;
   assigneeId: string | null;
   dueDate: string | null;
   estimateHours: number;
   releaseId: string | null;
   labelIds: string[];
+  checklists: CardChecklist[];
   planAmount?: number;
   timeEntries: TimeEntry[];
   comments: CardComment[];
@@ -186,12 +282,14 @@ export interface AnalyticsPayload {
   from: string;
   to: string;
   role: TeamRole;
+  releasesEnabled: boolean;
+  budgetEnabled: boolean;
   summary: {
     cards: number;
     overdue: number;
     noAssignee: number;
     noEstimate: number;
-    noRelease: number;
+    noRelease?: number;
     factAmount?: number;
   };
   byStatus: { columnId: string; name: string; count: number }[];

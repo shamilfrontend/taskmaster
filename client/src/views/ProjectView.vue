@@ -1,24 +1,34 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useBoardStore } from '../stores/board.ts';
 import { useProjectStore } from '../stores/project.ts';
-import { formatMoney } from '../composables/format.ts';
+import {
+  BOARD_BACKGROUNDS,
+  boardBackgroundStyle,
+  findBoardBackground
+} from '../composables/board-backgrounds.ts';
+import { useProjectTabs } from '../composables/project-tabs.ts';
 import ModalDialog from '../components/ModalDialog.vue';
-import type { TeamRole } from '../types/index.ts';
+import PageTabs from '../components/PageTabs.vue';
+import BoardView from './BoardView.vue';
+import type { BoardBackgroundId, TeamRole } from '../types/index.ts';
 
 const route = useRoute();
 const router = useRouter();
 const projects = useProjectStore();
+const board = useBoardStore();
 const projectId = computed(() => String(route.params.projectId));
 
 const budgetOpen = ref(false);
 const budgetLimit = ref('0');
-const boardOpen = ref(false);
-const boardName = ref('');
 const releaseOpen = ref(false);
 const releaseName = ref('');
 const releaseDate = ref('');
 const ratesOpen = ref(false);
+const deleteOpen = ref(false);
+const releasesDraft = ref(false);
+const budgetDraft = ref(false);
 const roleRates = ref<Record<TeamRole, number>>({
   owner: 0,
   admin: 0,
@@ -26,8 +36,19 @@ const roleRates = ref<Record<TeamRole, number>>({
   viewer: 0
 });
 
-onMounted(async () => {
-  await projects.fetchOne(projectId.value);
+function syncFeatureDrafts(): void {
+  releasesDraft.value = Boolean(projects.current?.releasesEnabled);
+  budgetDraft.value = Boolean(projects.current?.budgetEnabled);
+}
+
+watch(projectId, async (id) => {
+  if (projects.current?.id !== id) {
+    projects.current = null;
+    board.reset();
+  }
+
+  await projects.fetchOne(id);
+  syncFeatureDrafts();
 
   if (projects.current?.roleRates) {
     roleRates.value = { ...projects.current.roleRates };
@@ -36,25 +57,55 @@ onMounted(async () => {
   if (projects.current?.budgetLimit !== undefined) {
     budgetLimit.value = String(projects.current.budgetLimit);
   }
-});
+}, { immediate: true });
 
 const canAdmin = computed(() => {
   const role = projects.current?.role;
   return role === 'owner' || role === 'admin';
 });
 
+const isReleases = computed(
+  () =>
+    route.query.tab === 'releases' &&
+    Boolean(projects.current?.releasesEnabled)
+);
+
+const isSettings = computed(
+  () => route.query.tab === 'settings' && canAdmin.value
+);
+
+const isBoard = computed(() => !isReleases.value && !isSettings.value);
+
+const selectedBackground = computed(
+  () => projects.current?.boardBackground ?? 'default'
+);
+
+const hasBoardPhoto = computed(() =>
+  Boolean(findBoardBackground(selectedBackground.value).full)
+);
+
+const boardStyle = computed(() => {
+  if (!hasBoardPhoto.value) {
+    return undefined;
+  }
+
+  return boardBackgroundStyle(selectedBackground.value);
+});
+
+const tabs = useProjectTabs(
+  projectId,
+  computed(() => projects.current?.role),
+  computed(() => Boolean(projects.current?.releasesEnabled))
+);
+
 async function saveBudget(): Promise<void> {
   await projects.updateBudget(projectId.value, Number(budgetLimit.value));
   budgetOpen.value = false;
 }
 
-async function createBoard(): Promise<void> {
-  const id = await projects.createBoard(projectId.value, boardName.value);
-
-  if (id) {
-    boardOpen.value = false;
-    await router.push({ name: 'board', params: { boardId: id } });
-  }
+function openBudget(): void {
+  budgetLimit.value = String(projects.current?.budgetLimit ?? 0);
+  budgetOpen.value = true;
 }
 
 async function createRelease(): Promise<void> {
@@ -74,81 +125,75 @@ async function saveRates(): Promise<void> {
   await projects.saveRoleRates(projectId.value, roleRates.value);
   ratesOpen.value = false;
 }
+
+async function saveFeatures(): Promise<void> {
+  await projects.updateSettings(projectId.value, {
+    releasesEnabled: releasesDraft.value,
+    budgetEnabled: budgetDraft.value
+  });
+  syncFeatureDrafts();
+}
+
+async function selectBackground(id: BoardBackgroundId): Promise<void> {
+  if (id === selectedBackground.value || projects.isLoading) {
+    return;
+  }
+
+  if (projects.current) {
+    projects.current.boardBackground = id;
+  }
+
+  await projects.updateSettings(projectId.value, { boardBackground: id });
+}
+
+async function removeProject(): Promise<void> {
+  const teamId = projects.current?.teamId;
+  const ok = await projects.deleteProject(projectId.value);
+
+  if (ok && teamId) {
+    await router.push({ name: 'team', params: { teamId } });
+  }
+}
 </script>
 
 <template>
   <section v-if="projects.current" class="screen is-active">
-    <div class="wrap">
+    <div
+      class="board-screen"
+      :class="{ 'has-photo': hasBoardPhoto }"
+      :style="boardStyle"
+    >
       <div class="page-head">
         <div>
           <h1>{{ projects.current.name }}</h1>
-          <p>валюта RUB</p>
-        </div>
-        <div class="actions">
-          <button
-            type="button"
-            class="btn btn-ghost"
-            @click="router.push({ name: 'analytics', params: { projectId: projectId } })"
-          >
-            Аналитика
-          </button>
-          <button
-            v-if="projects.current.role === 'owner'"
-            type="button"
-            class="btn btn-ghost"
-            @click="budgetOpen = true"
-          >
-            Изменить бюджет
-          </button>
-          <button v-if="canAdmin" type="button" class="btn" @click="boardOpen = true">
-            Создать доску
-          </button>
+          <p v-if="projects.current.budgetEnabled && !isBoard">валюта RUB</p>
         </div>
       </div>
+      <PageTabs :tabs="tabs" />
       <p v-if="projects.error" class="warn">{{ projects.error }}</p>
-      <div
-        v-if="projects.current.remainder !== undefined && projects.current.remainder < 0"
-        class="warn"
-      >
-        Бюджет превышен. Списания не блокируются.
-      </div>
-      <div class="grid-3 mb-16">
-        <div v-if="projects.current.budgetLimit !== undefined" class="panel stat">
-          <div class="label">Бюджет</div>
-          <div class="value">{{ formatMoney(projects.current.budgetLimit) }}</div>
-        </div>
-        <div v-if="projects.current.fact !== undefined" class="panel stat">
-          <div class="label">Факт</div>
-          <div class="value">{{ formatMoney(projects.current.fact) }}</div>
-        </div>
-        <div v-if="projects.current.remainder !== undefined" class="panel stat">
-          <div class="label">Остаток</div>
-          <div class="value" :class="{ neg: projects.current.remainder < 0 }">
-            {{ formatMoney(projects.current.remainder) }}
+      <BoardView
+        v-if="isBoard && projects.current.board.id"
+        :key="projects.current.board.id"
+      />
+      <p v-else-if="isBoard" class="muted">Загрузка…</p>
+      <div v-else-if="isReleases" class="stack">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Релизы</h2>
+            <button
+              v-if="canAdmin"
+              type="button"
+              class="btn"
+              @click="releaseOpen = true"
+            >
+              Создать релиз
+            </button>
           </div>
-        </div>
-      </div>
-      <div class="grid-2 mb-16">
-        <div class="panel">
-          <h2>Доски</h2>
-          <button
-            v-for="board in projects.current.boards"
-            :key="board.id"
-            type="button"
-            class="card board-tile full mb-12"
-            @click="router.push({ name: 'board', params: { boardId: board.id } })"
-          >
-            <strong>{{ board.name }}</strong>
-            <span class="muted">{{ board.columnCount }} колонки · {{ board.cardCount }} карточек</span>
-          </button>
-        </div>
-        <div class="panel">
-          <h2>Релизы</h2>
           <button
             v-for="release in projects.current.releases"
             :key="release.id"
             type="button"
-            class="project-row row-btn"
+            class="list-row"
             @click="router.push({ name: 'release', params: { releaseId: release.id } })"
           >
             <div class="grow">
@@ -162,35 +207,97 @@ async function saveRates(): Promise<void> {
               {{ release.status }}
             </span>
           </button>
-          <div v-if="canAdmin" class="pt-12">
-            <button type="button" class="btn btn-ghost" @click="releaseOpen = true">
-              Создать релиз
+        </div>
+      </div>
+      <div v-else-if="isSettings" class="stack">
+        <div v-if="projects.current.budgetEnabled && projects.current.roleRates" class="panel">
+          <div class="panel-head">
+            <h2>Ставки, ₽/час</h2>
+            <button type="button" class="btn btn-ghost" @click="ratesOpen = true">
+              Ставки ролей
+            </button>
+          </div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Участник</th>
+                <th>Источник</th>
+                <th>Ставка</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in projects.current.rates" :key="row.userId">
+                <td>{{ row.displayName }}</td>
+                <td class="muted">
+                  {{ row.source === 'personal' ? 'персональная' : 'роль ' + row.role }}
+                </td>
+                <td>{{ row.amount }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Фон доски</h2>
+          </div>
+          <div class="bg-picker">
+            <button
+              v-for="option in BOARD_BACKGROUNDS"
+              :key="option.id"
+              type="button"
+              class="bg-pick"
+              :class="{ 'is-on': option.id === selectedBackground }"
+              :style="option.thumb ? { backgroundImage: `url(${option.thumb})` } : undefined"
+              :title="option.label"
+              :disabled="projects.isLoading"
+              @click="selectBackground(option.id)"
+            >
+              <span>{{ option.label }}</span>
             </button>
           </div>
         </div>
-      </div>
-      <div v-if="projects.current.roleRates" class="panel">
-        <h2>Ставки, ₽/час</h2>
-        <table class="table">
-          <thead>
-            <tr>
-              <th>Участник</th>
-              <th>Источник</th>
-              <th>Ставка</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in projects.current.rates" :key="row.userId">
-              <td>{{ row.displayName }}</td>
-              <td class="muted">{{ row.source === 'personal' ? 'персональная' : 'роль ' + row.role }}</td>
-              <td>{{ row.amount }}</td>
-            </tr>
-          </tbody>
-        </table>
-        <div v-if="canAdmin" class="pt-12">
-          <button type="button" class="btn btn-ghost" @click="ratesOpen = true">
-            Ставки ролей
-          </button>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Функции</h2>
+            <button
+              v-if="projects.current.budgetEnabled && projects.current.role === 'owner'"
+              type="button"
+              class="btn btn-ghost"
+              @click="openBudget"
+            >
+              Изменить бюджет
+            </button>
+          </div>
+          <div class="choice-list">
+            <label class="choice">
+              <input v-model="releasesDraft" type="checkbox">
+              <span>Релизы</span>
+            </label>
+            <label class="choice">
+              <input v-model="budgetDraft" type="checkbox">
+              <span>Введение бюджета</span>
+            </label>
+          </div>
+          <div class="actions actions--start">
+            <button
+              type="button"
+              class="btn"
+              :disabled="projects.isLoading"
+              @click="saveFeatures"
+            >
+              Сохранить
+            </button>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Опасная зона</h2>
+          </div>
+          <div class="actions actions--start">
+            <button type="button" class="btn btn-danger" @click="deleteOpen = true">
+              Удалить проект
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -198,7 +305,13 @@ async function saveRates(): Promise<void> {
     <ModalDialog :open="budgetOpen" title="Бюджет проекта" @close="budgetOpen = false">
       <div class="field">
         <label>Лимит, ₽</label>
-        <input v-model="budgetLimit" class="input" type="number" min="0">
+        <input
+          v-model="budgetLimit"
+          class="input"
+          type="number"
+          min="0"
+          placeholder="0"
+        >
       </div>
       <div class="modal-foot">
         <button type="button" class="btn btn-ghost" @click="budgetOpen = false">Отмена</button>
@@ -206,21 +319,15 @@ async function saveRates(): Promise<void> {
       </div>
     </ModalDialog>
 
-    <ModalDialog :open="boardOpen" title="Создать доску" @close="boardOpen = false">
-      <div class="field">
-        <label>Название</label>
-        <input v-model="boardName" class="input" type="text">
-      </div>
-      <div class="modal-foot">
-        <button type="button" class="btn btn-ghost" @click="boardOpen = false">Отмена</button>
-        <button type="button" class="btn" @click="createBoard">Создать</button>
-      </div>
-    </ModalDialog>
-
     <ModalDialog :open="releaseOpen" title="Создать релиз" @close="releaseOpen = false">
       <div class="field">
         <label>Название</label>
-        <input v-model="releaseName" class="input" type="text">
+        <input
+          v-model="releaseName"
+          class="input"
+          type="text"
+          placeholder="Название релиза…"
+        >
       </div>
       <div class="field">
         <label>Дата релиза</label>
@@ -236,12 +343,84 @@ async function saveRates(): Promise<void> {
     <ModalDialog :open="ratesOpen" title="Ставки ролей" @close="ratesOpen = false">
       <div v-for="role in (['owner', 'admin', 'member', 'viewer'] as TeamRole[])" :key="role" class="field">
         <label>{{ role }}</label>
-        <input v-model.number="roleRates[role]" class="input" type="number" min="0">
+        <input
+          v-model.number="roleRates[role]"
+          class="input"
+          type="number"
+          min="0"
+          placeholder="0"
+        >
       </div>
       <div class="modal-foot">
         <button type="button" class="btn btn-ghost" @click="ratesOpen = false">Отмена</button>
         <button type="button" class="btn" @click="saveRates">Сохранить</button>
       </div>
     </ModalDialog>
+
+    <ModalDialog :open="deleteOpen" title="Удалить проект" @close="deleteOpen = false">
+      <p class="muted mb-16">Каскадом удалятся доски, карточки и релизы.</p>
+      <div class="modal-foot">
+        <button type="button" class="btn btn-ghost" @click="deleteOpen = false">Отмена</button>
+        <button type="button" class="btn btn-danger" @click="removeProject">Удалить</button>
+      </div>
+    </ModalDialog>
   </section>
 </template>
+
+<style lang="scss" scoped>
+.bg-picker {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+
+.bg-pick {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 16 / 10;
+  border: 0;
+  border-radius: var(--radius);
+  background-color: var(--board-bg);
+  background-size: cover;
+  background-position: center;
+  box-shadow: var(--shadow);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: auto 0 0;
+    height: 46%;
+    background: linear-gradient(transparent, rgb(9 30 66 / 55%));
+  }
+
+  span {
+    position: absolute;
+    z-index: 1;
+    right: 6px;
+    bottom: 6px;
+    left: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-shadow: 0 1px 2px #091e42a6;
+  }
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+
+  &.is-on {
+    box-shadow: 0 0 0 2px var(--blue);
+  }
+}
+
+@media (max-width: 800px) {
+  .bg-picker {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+</style>

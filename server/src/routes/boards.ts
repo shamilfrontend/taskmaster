@@ -11,7 +11,9 @@ import {
 import { BoardModel } from '../models/board.js';
 import { CardModel } from '../models/card.js';
 import { ColumnModel } from '../models/column.js';
+import { CommentModel } from '../models/comment.js';
 import { LabelModel } from '../models/label.js';
+import { ProjectModel } from '../models/project.js';
 import { ReleaseModel } from '../models/release.js';
 import { TimeEntryModel } from '../models/time-entry.js';
 import { UserModel } from '../models/user.js';
@@ -19,6 +21,7 @@ import { deleteBoardCascade } from '../services/cascade.js';
 import {
   asObjectId,
   assertRole,
+  isFeatureOn,
   readLabelColor,
   readOptionalString,
   readString
@@ -55,8 +58,22 @@ boardsRouter.get(
     const entries = await TimeEntryModel.find({
       cardId: { $in: cards.map((card) => card._id) }
     }).lean();
+    const commentRows = await CommentModel.find({
+      cardId: { $in: cards.map((card) => card._id) }
+    })
+      .select('cardId')
+      .lean();
+    const commentCountByCard = new Map<string, number>();
 
-    const hideMoney = membership.role === 'viewer';
+    for (const row of commentRows) {
+      const id = row.cardId.toString();
+      commentCountByCard.set(id, (commentCountByCard.get(id) ?? 0) + 1);
+    }
+    const project = await ProjectModel.findById(board.projectId).lean();
+    const releasesEnabled = isFeatureOn(project?.releasesEnabled);
+
+    const hideMoney =
+      membership.role === 'viewer' || !isFeatureOn(project?.budgetEnabled);
 
     res.json({
       id: board._id.toString(),
@@ -74,11 +91,13 @@ boardsRouter.get(
         name: label.name,
         color: label.color
       })),
-      releases: releases.map((release) => ({
-        id: release._id.toString(),
-        name: release.name,
-        status: release.status
-      })),
+      releases: releasesEnabled
+        ? releases.map((release) => ({
+            id: release._id.toString(),
+            name: release.name,
+            status: release.status
+          }))
+        : [],
       cards: cards.map((card) => {
         const factHours = entries
           .filter((entry) => entry.cardId.toString() === card._id.toString())
@@ -96,8 +115,13 @@ boardsRouter.get(
         const assignee = users.find(
           (user) => user._id.toString() === card.assigneeId?.toString()
         );
-        const release = releases.find(
-          (item) => item._id.toString() === card.releaseId?.toString()
+        const release = releasesEnabled
+          ? releases.find(
+              (item) => item._id.toString() === card.releaseId?.toString()
+            )
+          : undefined;
+        const checklistItems = (card.checklists ?? []).flatMap(
+          (list) => list.items
         );
 
         return {
@@ -111,9 +135,14 @@ boardsRouter.get(
           factHours,
           planAmount: showMoney ? card.planAmount : undefined,
           factAmount: showMoney ? factAmount : undefined,
-          releaseId: card.releaseId?.toString() ?? null,
+          releaseId: releasesEnabled
+            ? card.releaseId?.toString() ?? null
+            : null,
           releaseName: release?.name ?? null,
           labelIds: card.labelIds.map((id) => id.toString()),
+          commentCount: commentCountByCard.get(card._id.toString()) ?? 0,
+          checklistDone: checklistItems.filter((item) => item.done).length,
+          checklistTotal: checklistItems.length,
           position: card.position
         };
       })
@@ -205,16 +234,6 @@ boardsRouter.patch(
       column.position = req.body.position;
     }
 
-    if (req.body?.isDone === true) {
-      await ColumnModel.updateMany(
-        { boardId: column.boardId },
-        { $set: { isDone: false } }
-      );
-      column.isDone = true;
-    } else if (req.body?.isDone === false) {
-      column.isDone = false;
-    }
-
     await column.save();
     res.json({
       id: column._id.toString(),
@@ -233,15 +252,21 @@ boardsRouter.delete(
     const membership = await requireMembership(teamId, req.userId);
     assertRole(membership.role, ['owner', 'admin']);
 
+    const column = await ColumnModel.findById(asObjectId(columnId, 'columnId'));
+
+    if (!column) {
+      throw new AppError(404, 'Колонка не найдена');
+    }
+
     const count = await CardModel.countDocuments({
-      columnId: asObjectId(columnId, 'columnId')
+      columnId: column._id
     });
 
     if (count > 0) {
       throw new AppError(409, 'Сначала переместите карточки');
     }
 
-    await ColumnModel.deleteOne({ _id: asObjectId(columnId, 'columnId') });
+    await ColumnModel.deleteOne({ _id: column._id });
     res.json({ ok: true });
   })
 );

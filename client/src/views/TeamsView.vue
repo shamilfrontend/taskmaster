@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useTeamsStore } from '../stores/teams.ts';
-import { initials } from '../composables/format.ts';
+import { initials, pluralRu, roleLabel } from '../composables/format.ts';
 import ModalDialog from '../components/ModalDialog.vue';
 
 const router = useRouter();
@@ -19,6 +19,7 @@ async function create(): Promise<void> {
 
   if (id) {
     modalOpen.value = false;
+    name.value = '';
     await router.push({ name: 'team', params: { teamId: id } });
   }
 }
@@ -37,32 +38,53 @@ async function create(): Promise<void> {
         </button>
       </div>
       <p v-if="teams.error" class="warn">{{ teams.error }}</p>
-      <div class="team-grid">
+      <p v-if="teams.isLoading && !teams.list.length" class="muted">Загрузка…</p>
+      <div
+        v-else-if="!teams.isLoading && !teams.list.length"
+        class="panel"
+      >
+        <p class="muted mb-16">Вы пока не состоите ни в одной команде.</p>
+        <button type="button" class="btn" @click="modalOpen = true">
+          Создать команду
+        </button>
+      </div>
+      <div v-else class="panel">
         <button
           v-for="team in teams.list"
           :key="team.id"
           type="button"
-          class="team-card"
+          class="list-row"
           @click="router.push({ name: 'team', params: { teamId: team.id } })"
         >
-          <span class="avatar lg">{{ initials(team.name) }}</span>
-          <h3>{{ team.name }}</h3>
-          <div class="meta">
-            <span>{{ team.memberCount }} участника</span>
-            <span>{{ team.projectCount }} проекта</span>
-          </div>
-        </button>
-        <button type="button" class="team-card create" @click="modalOpen = true">
-          + Новая команда
+          <span class="avatar">{{ initials(team.name) }}</span>
+          <div class="grow">{{ team.name }}</div>
+          <span class="muted">{{
+            pluralRu(
+              team.memberCount,
+              'участник',
+              'участника',
+              'участников'
+            )
+          }}</span>
+          <span class="muted">{{
+            pluralRu(team.projectCount, 'проект', 'проекта', 'проектов')
+          }}</span>
+          <span>{{ roleLabel(team.role) }}</span>
         </button>
       </div>
     </div>
     <ModalDialog :open="modalOpen" title="Создать команду" @close="modalOpen = false">
       <div class="field">
         <label for="team-name">Название</label>
-        <input id="team-name" v-model="name" class="input" type="text">
+        <input
+          id="team-name"
+          v-model="name"
+          class="input"
+          type="text"
+          placeholder="Название команды…"
+        >
       </div>
-      <p class="muted mb-16">Вы станете Owner этой команды.</p>
+      <p class="muted mb-16">Вы станете владельцем этой команды.</p>
       <div class="modal-foot">
         <button type="button" class="btn btn-ghost" @click="modalOpen = false">Отмена</button>
         <button type="button" class="btn" :disabled="!name.trim() || teams.isLoading" @click="create">

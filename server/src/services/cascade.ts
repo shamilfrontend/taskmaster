@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { ActivityEventModel } from '../models/activity-event.js';
 import { BoardModel } from '../models/board.js';
 import { CardModel } from '../models/card.js';
 import { ColumnModel } from '../models/column.js';
@@ -20,6 +21,7 @@ export async function deleteBoardCascade(
 
   await TimeEntryModel.deleteMany({ cardId: { $in: cardIds } });
   await CommentModel.deleteMany({ cardId: { $in: cardIds } });
+  await ActivityEventModel.deleteMany({ boardId });
   await CardModel.deleteMany({ boardId });
   await ColumnModel.deleteMany({ boardId });
   await LabelModel.deleteMany({ boardId });
@@ -49,6 +51,7 @@ export async function deleteTeamCascade(
     await deleteProjectCascade(project._id);
   }
 
+  await ActivityEventModel.deleteMany({ teamId });
   await InviteModel.deleteMany({ teamId });
   await TeamMemberModel.deleteMany({ teamId });
   await TeamModel.deleteOne({ _id: teamId });

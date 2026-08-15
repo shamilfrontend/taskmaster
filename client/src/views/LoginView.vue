@@ -25,3 +25,30 @@ onMounted(() => {
     </div>
   </section>
 </template>
+
+<style lang="scss" scoped>
+.auth-card {
+  width: 400px;
+  padding: 40px 32px;
+  text-align: center;
+  box-shadow: 0 8px 24px #091e4226;
+
+  img {
+    width: 48px;
+    height: 48px;
+  }
+
+  h1 {
+    margin: 16px 0 8px;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  p {
+    margin: 0 0 24px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+}
+</style>

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
+import type { Types } from 'mongoose';
 import { AppError } from '../errors/app-error.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -10,16 +11,30 @@ import {
 import { BoardModel } from '../models/board.js';
 import { CardModel } from '../models/card.js';
 import { ColumnModel } from '../models/column.js';
+import { ProjectModel } from '../models/project.js';
 import { ReleaseModel } from '../models/release.js';
 import { UserModel } from '../models/user.js';
 import { normalizeName } from '../utils/crypto.js';
 import {
   asObjectId,
+  assertFeatureOn,
   assertRole,
   readOptionalDate,
   readOptionalString,
   readString
 } from '../utils/validate.js';
+
+async function assertProjectReleasesOn(
+  projectId: Types.ObjectId
+): Promise<void> {
+  const project = await ProjectModel.findById(projectId).lean();
+
+  if (!project) {
+    throw new AppError(404, 'Проект не найден');
+  }
+
+  assertFeatureOn(project.releasesEnabled, 'Релизы выключены в проекте');
+}
 
 export const releasesRouter = Router();
 releasesRouter.use(requireAuth);
@@ -35,6 +50,8 @@ releasesRouter.get(
     if (!release) {
       throw new AppError(404, 'Релиз не найден');
     }
+
+    await assertProjectReleasesOn(release.projectId);
 
     const cards = await CardModel.find({ releaseId: release._id }).lean();
     const boards = await BoardModel.find({
@@ -91,6 +108,8 @@ releasesRouter.patch(
       throw new AppError(404, 'Релиз не найден');
     }
 
+    await assertProjectReleasesOn(release.projectId);
+
     const name = readOptionalString(req.body, 'name');
 
     if (name) {
@@ -135,6 +154,14 @@ releasesRouter.delete(
     const membership = await requireMembership(teamId, req.userId);
     assertRole(membership.role, ['owner', 'admin']);
 
+    const release = await ReleaseModel.findById(asObjectId(releaseId)).lean();
+
+    if (!release) {
+      throw new AppError(404, 'Релиз не найден');
+    }
+
+    await assertProjectReleasesOn(release.projectId);
+
     await CardModel.updateMany(
       { releaseId: asObjectId(releaseId) },
       { $set: { releaseId: null } }
@@ -157,6 +184,8 @@ releasesRouter.post(
     if (!release) {
       throw new AppError(404, 'Релиз не найден');
     }
+
+    await assertProjectReleasesOn(release.projectId);
 
     const cardId = readString(req.body, 'cardId');
     const card = await CardModel.findById(asObjectId(cardId, 'cardId'));
@@ -185,6 +214,14 @@ releasesRouter.delete(
     const teamId = await teamIdFromRelease(releaseId);
     const membership = await requireMembership(teamId, req.userId);
     assertRole(membership.role, ['owner', 'admin', 'member']);
+
+    const release = await ReleaseModel.findById(asObjectId(releaseId)).lean();
+
+    if (!release) {
+      throw new AppError(404, 'Релиз не найден');
+    }
+
+    await assertProjectReleasesOn(release.projectId);
 
     await CardModel.updateOne(
       {

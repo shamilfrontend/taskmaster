@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import { DEFAULT_COLUMNS, type TeamRole } from '../constants.js';
+import type { TeamRole } from '../constants.js';
 import { AppError } from '../errors/app-error.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -10,7 +10,6 @@ import {
 } from '../middleware/access.js';
 import { BoardModel } from '../models/board.js';
 import { CardModel } from '../models/card.js';
-import { ColumnModel } from '../models/column.js';
 import { ProjectModel } from '../models/project.js';
 import { ProjectMemberRateModel } from '../models/project-member-rate.js';
 import { ReleaseModel } from '../models/release.js';
@@ -19,11 +18,19 @@ import { TimeEntryModel } from '../models/time-entry.js';
 import { UserModel } from '../models/user.js';
 import { deleteProjectCascade } from '../services/cascade.js';
 import { recalcAssigneePlans, recalcRolePlans } from '../services/plan.js';
+import {
+  createDefaultBoard,
+  resolveProjectBoard
+} from '../services/project-setup.js';
 import { normalizeName } from '../utils/crypto.js';
 import { resolveRate } from '../utils/rates.js';
 import {
   asObjectId,
+  assertFeatureOn,
   assertRole,
+  isFeatureOn,
+  readBoolean,
+  readBoardBackground,
   readBudget,
   readNumber,
   readOptionalDate,
@@ -49,38 +56,20 @@ async function projectFact(projectId: string): Promise<number> {
 }
 
 projectsRouter.post(
-  '/:projectId/boards',
-  asyncHandler(async (req: Request, res: Response) => {
-    const projectId = req.params.projectId as string;
-    const teamId = await teamIdFromProject(projectId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin']);
-
-    const board = await BoardModel.create({
-      projectId: asObjectId(projectId),
-      name: readString(req.body, 'name')
-    });
-
-    await ColumnModel.insertMany(
-      DEFAULT_COLUMNS.map((column, index) => ({
-        boardId: board._id,
-        name: column.name,
-        position: index,
-        isDone: column.isDone
-      }))
-    );
-
-    res.status(201).json({ id: board._id.toString(), name: board.name });
-  })
-);
-
-projectsRouter.post(
   '/:projectId/releases',
   asyncHandler(async (req: Request, res: Response) => {
     const projectId = req.params.projectId as string;
     const teamId = await teamIdFromProject(projectId);
     const membership = await requireMembership(teamId, req.userId);
     assertRole(membership.role, ['owner', 'admin']);
+
+    const project = await ProjectModel.findById(asObjectId(projectId)).lean();
+
+    if (!project) {
+      throw new AppError(404, 'Проект не найден');
+    }
+
+    assertFeatureOn(project.releasesEnabled, 'Релизы выключены в проекте');
 
     const name = readString(req.body, 'name');
     const nameNormalized = normalizeName(name);
@@ -123,13 +112,8 @@ projectsRouter.get(
       throw new AppError(404, 'Проект не найден');
     }
 
-    const boards = await BoardModel.find({ projectId: project._id }).lean();
-    const columns = await ColumnModel.find({
-      boardId: { $in: boards.map((board) => board._id) }
-    }).lean();
-    const cards = await CardModel.find({
-      boardId: { $in: boards.map((board) => board._id) }
-    }).lean();
+    const board = await resolveProjectBoard(project._id);
+    const cards = await CardModel.find({ boardId: board._id }).lean();
     const releases = await ReleaseModel.find({ projectId: project._id }).lean();
     const members = await TeamMemberModel.find({ teamId: project.teamId }).lean();
     const users = await UserModel.find({
@@ -140,11 +124,17 @@ projectsRouter.get(
     }).lean();
     const fact = await projectFact(projectId);
     const remainder = project.budgetLimit - fact;
+    const releasesEnabled = isFeatureOn(project.releasesEnabled);
+    const budgetEnabled = isFeatureOn(project.budgetEnabled);
 
     const canSeeBudget =
-      membership.role === 'owner' || membership.role === 'admin';
+      budgetEnabled &&
+      (membership.role === 'owner' || membership.role === 'admin');
     const canSeeRates =
       membership.role === 'owner' || membership.role === 'admin';
+    const canSeeRemainder =
+      budgetEnabled &&
+      (canSeeBudget || membership.role === 'member');
 
     const rates = members.map((member) => {
       const personal = personalRates.find(
@@ -174,31 +164,26 @@ projectsRouter.get(
       teamId,
       name: project.name,
       role: membership.role,
+      releasesEnabled,
+      budgetEnabled,
+      boardBackground: project.boardBackground ?? 'default',
       budgetLimit: canSeeBudget ? project.budgetLimit : undefined,
       fact: canSeeBudget ? fact : undefined,
-      remainder:
-        canSeeBudget || membership.role === 'member' ? remainder : undefined,
+      remainder: canSeeRemainder ? remainder : undefined,
       roleRates: canSeeRates ? project.roleRates : undefined,
       rates: canSeeRates ? rates : rates.map(({ amount: _a, source: _s, ...rest }) => rest),
-      boards: boards.map((board) => ({
-        id: board._id.toString(),
-        name: board.name,
-        columnCount: columns.filter(
-          (column) => column.boardId.toString() === board._id.toString()
-        ).length,
-        cardCount: cards.filter(
-          (card) => card.boardId.toString() === board._id.toString()
-        ).length
-      })),
-      releases: releases.map((release) => ({
-        id: release._id.toString(),
-        name: release.name,
-        date: release.date,
-        status: release.status,
-        cardCount: cards.filter(
-          (card) => card.releaseId?.toString() === release._id.toString()
-        ).length
-      }))
+      board: { id: board._id.toString() },
+      releases: releasesEnabled
+        ? releases.map((release) => ({
+            id: release._id.toString(),
+            name: release.name,
+            date: release.date,
+            status: release.status,
+            cardCount: cards.filter(
+              (card) => card.releaseId?.toString() === release._id.toString()
+            ).length
+          }))
+        : []
     });
   })
 );
@@ -222,17 +207,80 @@ projectsRouter.patch(
       project.name = name;
     }
 
+    if (req.body?.releasesEnabled !== undefined) {
+      assertRole(membership.role, ['owner', 'admin']);
+      project.releasesEnabled = readBoolean(req.body, 'releasesEnabled');
+    }
+
+    if (req.body?.budgetEnabled !== undefined) {
+      assertRole(membership.role, ['owner', 'admin']);
+      project.budgetEnabled = readBoolean(req.body, 'budgetEnabled');
+    }
+
     if (req.body?.budgetLimit !== undefined) {
       assertRole(membership.role, ['owner'], 'Бюджет меняет только Owner');
+      assertFeatureOn(project.budgetEnabled, 'Бюджет выключен в проекте');
       project.budgetLimit = readBudget(req.body, 'budgetLimit');
+    }
+
+    if (req.body?.boardBackground !== undefined) {
+      assertRole(membership.role, ['owner', 'admin']);
+      project.boardBackground = readBoardBackground(req.body, 'boardBackground');
     }
 
     await project.save();
     res.json({
       id: project._id.toString(),
       name: project.name,
-      budgetLimit: project.budgetLimit
+      budgetLimit: project.budgetLimit,
+      releasesEnabled: project.releasesEnabled,
+      budgetEnabled: project.budgetEnabled,
+      boardBackground: project.boardBackground
     });
+  })
+);
+
+projectsRouter.post(
+  '/:projectId/duplicate',
+  asyncHandler(async (req: Request, res: Response) => {
+    const projectId = req.params.projectId as string;
+    const teamId = await teamIdFromProject(projectId);
+    const membership = await requireMembership(teamId, req.userId);
+    assertRole(membership.role, ['owner', 'admin']);
+
+    const source = await ProjectModel.findById(asObjectId(projectId)).lean();
+
+    if (!source) {
+      throw new AppError(404, 'Проект не найден');
+    }
+
+    const project = await ProjectModel.create({
+      teamId: source.teamId,
+      name: `${source.name} (копия)`,
+      budgetLimit: source.budgetLimit,
+      budgetEnabled: source.budgetEnabled,
+      releasesEnabled: source.releasesEnabled,
+      roleRates: { ...source.roleRates },
+      boardBackground: source.boardBackground
+    });
+
+    await createDefaultBoard(project._id);
+
+    const memberRates = await ProjectMemberRateModel.find({
+      projectId: source._id
+    }).lean();
+
+    if (memberRates.length > 0) {
+      await ProjectMemberRateModel.insertMany(
+        memberRates.map((rate) => ({
+          projectId: project._id,
+          userId: rate.userId,
+          amount: rate.amount
+        }))
+      );
+    }
+
+    res.status(201).json({ id: project._id.toString() });
   })
 );
 
@@ -243,7 +291,14 @@ projectsRouter.delete(
     const teamId = await teamIdFromProject(projectId);
     const membership = await requireMembership(teamId, req.userId);
     assertRole(membership.role, ['owner', 'admin']);
-    await deleteProjectCascade(asObjectId(projectId));
+
+    const project = await ProjectModel.findById(asObjectId(projectId)).lean();
+
+    if (!project) {
+      throw new AppError(404, 'Проект не найден');
+    }
+
+    await deleteProjectCascade(project._id);
     res.json({ ok: true });
   })
 );

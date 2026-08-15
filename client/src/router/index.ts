@@ -1,5 +1,14 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import { http } from '../api/http.ts';
 import { useAuthStore } from '../stores/auth.ts';
+
+declare global {
+  interface Window {
+    ym?: (counterId: number, method: string, ...args: unknown[]) => void;
+  }
+}
+
+const YANDEX_METRIKA_ID = 111630298;
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -44,7 +53,22 @@ export const router = createRouter({
       path: '/boards/:boardId',
       name: 'board',
       component: () => import('../views/BoardView.vue'),
-      meta: { chrome: true }
+      meta: { chrome: true },
+      beforeEnter: async (to) => {
+        try {
+          const { data } = await http.get<{ projectId: string }>(
+            `/boards/${String(to.params.boardId)}`
+          );
+
+          return {
+            name: 'project',
+            params: { projectId: data.projectId },
+            query: to.query
+          };
+        } catch {
+          return { name: 'teams' };
+        }
+      }
     },
     {
       path: '/releases/:releaseId',
@@ -80,4 +104,11 @@ router.beforeEach(async (to) => {
   }
 
   return true;
+});
+
+router.afterEach((to) => {
+  const ym = window.ym;
+  if (typeof ym === 'function') {
+    ym(YANDEX_METRIKA_ID, 'hit', to.fullPath);
+  }
 });

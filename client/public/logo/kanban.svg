@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Taskmaster">
   <title>Taskmaster</title>
-  <rect width="256" height="256" rx="48" fill="#2563EB"/>
+  <rect width="256" height="256" rx="48" fill="#0079BF"/>
   <rect x="47" y="73" width="42" height="30" rx="7" fill="#FFFFFF"/>
   <rect x="47" y="113" width="42" height="30" rx="7" fill="#FFFFFF"/>
   <rect x="107" y="73" width="42" height="30" rx="7" fill="#FFFFFF"/>

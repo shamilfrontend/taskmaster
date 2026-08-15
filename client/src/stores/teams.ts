@@ -1,16 +1,18 @@
-import { defineStore } from 'pinia';
+import { acceptHMRUpdate, defineStore } from 'pinia';
 import { ref } from 'vue';
 import { http, errorMessage } from '../api/http.ts';
 import type {
   InviteRole,
   TeamDetails,
   TeamListItem,
+  TeamOverview,
   TeamRole
 } from '../types/index.ts';
 
 export const useTeamsStore = defineStore('teams', () => {
   const list = ref<TeamListItem[]>([]);
   const current = ref<TeamDetails | null>(null);
+  const overview = ref<TeamOverview | null>(null);
   const isLoading = ref(false);
   const error = ref<string | null>(null);
 
@@ -37,8 +39,24 @@ export const useTeamsStore = defineStore('teams', () => {
       current.value = data;
     } catch (err: unknown) {
       error.value = errorMessage(err);
+
+      if (current.value?.id === teamId) {
+        current.value = null;
+      }
     } finally {
       isLoading.value = false;
+    }
+  }
+
+  async function fetchOverview(teamId: string): Promise<void> {
+    error.value = null;
+
+    try {
+      const { data } = await http.get<TeamOverview>(`/teams/${teamId}/overview`);
+      overview.value = data;
+    } catch (err: unknown) {
+      error.value = errorMessage(err);
+      overview.value = null;
     }
   }
 
@@ -77,22 +95,60 @@ export const useTeamsStore = defineStore('teams', () => {
     }
   }
 
-  async function revokeInvite(teamId: string, inviteId: string): Promise<void> {
-    await http.delete(`/teams/${teamId}/invites/${inviteId}`);
-    await fetchOne(teamId);
+  async function renameTeam(teamId: string, name: string): Promise<boolean> {
+    error.value = null;
+
+    try {
+      const { data } = await http.patch<{ id: string; name: string }>(
+        `/teams/${teamId}`,
+        { name }
+      );
+
+      if (current.value?.id === teamId) {
+        current.value = { ...current.value, name: data.name };
+      }
+
+      const item = list.value.find((team) => team.id === teamId);
+
+      if (item) {
+        item.name = data.name;
+      }
+
+      return true;
+    } catch (err: unknown) {
+      error.value = errorMessage(err);
+      return false;
+    }
   }
 
-  async function transferOwner(teamId: string, userId: string): Promise<void> {
-    await http.post(`/teams/${teamId}/transfer`, { userId });
-    await fetchOne(teamId);
+  async function revokeInvite(
+    teamId: string,
+    inviteId: string
+  ): Promise<boolean> {
+    error.value = null;
+
+    try {
+      await http.delete(`/teams/${teamId}/invites/${inviteId}`);
+      await fetchOne(teamId);
+      return true;
+    } catch (err: unknown) {
+      error.value = errorMessage(err);
+      return false;
+    }
   }
 
-  async function deleteTeam(teamId: string, confirmName: string): Promise<boolean> {
+  async function deleteTeam(teamId: string): Promise<boolean> {
     isLoading.value = true;
     error.value = null;
 
     try {
-      await http.delete(`/teams/${teamId}`, { data: { confirmName } });
+      await http.delete(`/teams/${teamId}`);
+      list.value = list.value.filter((team) => team.id !== teamId);
+
+      if (current.value?.id === teamId) {
+        current.value = null;
+      }
+
       return true;
     } catch (err: unknown) {
       error.value = errorMessage(err);
@@ -106,14 +162,44 @@ export const useTeamsStore = defineStore('teams', () => {
     teamId: string,
     userId: string,
     role: TeamRole
-  ): Promise<void> {
-    await http.patch(`/teams/${teamId}/members/${userId}`, { role });
-    await fetchOne(teamId);
+  ): Promise<boolean> {
+    error.value = null;
+
+    try {
+      await http.patch(`/teams/${teamId}/members/${userId}`, { role });
+      await fetchOne(teamId);
+      return true;
+    } catch (err: unknown) {
+      error.value = errorMessage(err);
+      return false;
+    }
   }
 
-  async function removeMember(teamId: string, userId: string): Promise<void> {
-    await http.delete(`/teams/${teamId}/members/${userId}`);
-    await fetchOne(teamId);
+  async function removeMember(
+    teamId: string,
+    userId: string,
+    refresh = true
+  ): Promise<boolean> {
+    error.value = null;
+
+    try {
+      await http.delete(`/teams/${teamId}/members/${userId}`);
+
+      if (refresh) {
+        await fetchOne(teamId);
+      } else {
+        list.value = list.value.filter((team) => team.id !== teamId);
+
+        if (current.value?.id === teamId) {
+          current.value = null;
+        }
+      }
+
+      return true;
+    } catch (err: unknown) {
+      error.value = errorMessage(err);
+      return false;
+    }
   }
 
   async function createProject(
@@ -139,20 +225,64 @@ export const useTeamsStore = defineStore('teams', () => {
     }
   }
 
+  async function duplicateProject(projectId: string): Promise<string | null> {
+    error.value = null;
+
+    try {
+      const { data } = await http.post<{ id: string }>(
+        `/projects/${projectId}/duplicate`
+      );
+
+      if (current.value) {
+        await fetchOne(current.value.id);
+      }
+
+      return data.id;
+    } catch (err: unknown) {
+      error.value = errorMessage(err);
+      return null;
+    }
+  }
+
+  async function deleteProject(projectId: string): Promise<boolean> {
+    error.value = null;
+
+    try {
+      await http.delete(`/projects/${projectId}`);
+
+      if (current.value) {
+        await fetchOne(current.value.id);
+      }
+
+      return true;
+    } catch (err: unknown) {
+      error.value = errorMessage(err);
+      return false;
+    }
+  }
+
   return {
     list,
     current,
+    overview,
     isLoading,
     error,
     fetchList,
     fetchOne,
+    fetchOverview,
     createTeam,
+    renameTeam,
     createInvite,
     revokeInvite,
-    transferOwner,
     deleteTeam,
     changeRole,
     removeMember,
-    createProject
+    createProject,
+    duplicateProject,
+    deleteProject
   };
 });
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useTeamsStore, import.meta.hot));
+}

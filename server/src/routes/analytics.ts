@@ -16,7 +16,7 @@ import { TeamMemberModel } from '../models/team-member.js';
 import { TimeEntryModel } from '../models/time-entry.js';
 import { UserModel } from '../models/user.js';
 import { addDays, periodRange, startOfDay, weekStart } from '../utils/dates.js';
-import { asObjectId, readPeriod } from '../utils/validate.js';
+import { asObjectId, isFeatureOn, readPeriod } from '../utils/validate.js';
 
 export const analyticsRouter = Router();
 analyticsRouter.use(requireAuth);
@@ -172,6 +172,8 @@ analyticsRouter.get(
 
     const hideMoney = membership.role === 'viewer';
     const memberMoney = membership.role === 'member';
+    const releasesEnabled = isFeatureOn(project.releasesEnabled);
+    const budgetEnabled = isFeatureOn(project.budgetEnabled);
 
     const risks = cards.flatMap((card) => {
       const items: { cardId: string; title: string; kind: string; detail: string }[] = [];
@@ -207,7 +209,7 @@ analyticsRouter.get(
         holes.push('нет оценки');
       }
 
-      if (!card.releaseId) {
+      if (releasesEnabled && !card.releaseId) {
         holes.push('без релиза');
       }
 
@@ -228,12 +230,16 @@ analyticsRouter.get(
       from,
       to,
       role: membership.role,
+      releasesEnabled,
+      budgetEnabled,
       summary: {
         cards: cards.length,
         overdue: cards.filter(isOverdue).length,
         noAssignee: cards.filter((card) => !card.assigneeId).length,
         noEstimate: cards.filter((card) => !card.estimateHours).length,
-        noRelease: cards.filter((card) => !card.releaseId).length,
+        noRelease: releasesEnabled
+          ? cards.filter((card) => !card.releaseId).length
+          : undefined,
         factAmount: hideMoney ? undefined : memberMoney ? undefined : factAmount
       },
       byStatus,
@@ -243,15 +249,16 @@ analyticsRouter.get(
         planAmount: hideMoney ? undefined : memberMoney ? undefined : planAmount,
         factAmount: hideMoney ? undefined : memberMoney ? undefined : factAmount
       },
-      burn: hideMoney
-        ? undefined
-        : {
-            limit: membership.role === 'member' ? undefined : project.budgetLimit,
-            totalFact: membership.role === 'member' ? undefined : totalFact,
-            remainder: project.budgetLimit - totalFact
-          },
+      burn:
+        hideMoney || !budgetEnabled
+          ? undefined
+          : {
+              limit: membership.role === 'member' ? undefined : project.budgetLimit,
+              totalFact: membership.role === 'member' ? undefined : totalFact,
+              remainder: project.budgetLimit - totalFact
+            },
       workload,
-      releases: releaseRows,
+      releases: releasesEnabled ? releaseRows : [],
       weeks: weeks.map((week) => ({
         from: week.from,
         to: week.to,
