@@ -76,8 +76,36 @@ const isSettings = computed(
 
 const isBoard = computed(() => !isReleases.value && !isSettings.value);
 
+const BACKGROUND_PREVIEW_COUNT = 12;
+const showAllBackgrounds = ref(false);
+
 const selectedBackground = computed(
   () => projects.current?.boardBackground ?? 'default'
+);
+
+const orderedBackgrounds = computed(() => {
+  const selected = BOARD_BACKGROUNDS.find(
+    (option) => option.id === selectedBackground.value
+  );
+
+  if (!selected) {
+    return BOARD_BACKGROUNDS;
+  }
+
+  return [
+    selected,
+    ...BOARD_BACKGROUNDS.filter((option) => option.id !== selected.id)
+  ];
+});
+
+const hasMoreBackgrounds = computed(
+  () => orderedBackgrounds.value.length > BACKGROUND_PREVIEW_COUNT
+);
+
+const visibleBackgrounds = computed(() =>
+  showAllBackgrounds.value
+    ? orderedBackgrounds.value
+    : orderedBackgrounds.value.slice(0, BACKGROUND_PREVIEW_COUNT)
 );
 
 const hasBoardPhoto = computed(() =>
@@ -242,7 +270,7 @@ async function removeProject(): Promise<void> {
           </div>
           <div class="bg-picker">
             <button
-              v-for="option in BOARD_BACKGROUNDS"
+              v-for="option in visibleBackgrounds"
               :key="option.id"
               type="button"
               class="bg-pick"
@@ -253,6 +281,15 @@ async function removeProject(): Promise<void> {
               @click="selectBackground(option.id)"
             >
               <span>{{ option.label }}</span>
+            </button>
+          </div>
+          <div v-if="hasMoreBackgrounds" class="actions actions--start mt-16">
+            <button
+              type="button"
+              class="btn btn-ghost"
+              @click="showAllBackgrounds = !showAllBackgrounds"
+            >
+              {{ showAllBackgrounds ? 'Свернуть' : 'Показать все' }}
             </button>
           </div>
         </div>
