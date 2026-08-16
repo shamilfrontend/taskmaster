@@ -1,9 +1,51 @@
 import axios, { isAxiosError } from 'axios';
+import { notify } from '@kyvg/vue3-notification';
 import type { ApiErrorBody } from '../types/index.ts';
+
+export const DEMO_BLOCKED_MESSAGE = 'Действия в демо-доступе отключены';
+
+export class DemoBlockedError extends Error {
+  readonly isDemoBlocked = true;
+
+  constructor() {
+    super(DEMO_BLOCKED_MESSAGE);
+    this.name = 'DemoBlockedError';
+  }
+}
 
 export const http = axios.create({
   baseURL: '/api',
   withCredentials: true
+});
+
+let demoMode = false;
+
+export function setDemoMode(value: boolean): void {
+  demoMode = value;
+}
+
+function isWriteAllowed(url: string): boolean {
+  return url.includes('/auth/logout') || url.includes('/auth/demo');
+}
+
+function isMutating(method: string | undefined): boolean {
+  const verb = (method ?? 'get').toLowerCase();
+
+  return verb !== 'get' && verb !== 'head' && verb !== 'options';
+}
+
+http.interceptors.request.use((config) => {
+  if (!demoMode || !isMutating(config.method) || isWriteAllowed(config.url ?? '')) {
+    return config;
+  }
+
+  notify({
+    type: 'warn',
+    text: DEMO_BLOCKED_MESSAGE,
+    ignoreDuplicates: true
+  });
+
+  throw new DemoBlockedError();
 });
 
 http.interceptors.response.use(
@@ -29,6 +71,10 @@ http.interceptors.response.use(
 );
 
 export function errorMessage(err: unknown): string {
+  if (err instanceof DemoBlockedError) {
+    return err.message;
+  }
+
   if (isAxiosError(err)) {
     const data: unknown = err.response?.data;
 

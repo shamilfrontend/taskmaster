@@ -203,14 +203,20 @@ const hasBurnMeter = computed(() => {
       :style="boardStyle"
     >
       <div class="page-head">
-        <div>
-          <h1>{{ projects.current?.name ?? 'Аналитика' }}</h1>
-          <p v-if="projects.analytics">
-            {{ formatDate(projects.analytics.from) }} –
-            {{ formatDate(projects.analytics.to) }}
-          </p>
-        </div>
+        <h1>{{ projects.current?.name ?? 'Аналитика' }}</h1>
+      </div>
+      <PageTabs :tabs="tabs" />
+      <div class="analytics-bar">
         <div class="filter">
+          <button
+            type="button"
+            class="btn btn-ghost"
+            :class="{ 'is-active': period === 'today' }"
+            :disabled="projects.isLoading"
+            @click="setPeriod('today')"
+          >
+            Сегодня
+          </button>
           <button
             type="button"
             class="btn btn-ghost"
@@ -238,9 +244,39 @@ const hasBurnMeter = computed(() => {
           >
             Квартал
           </button>
+          <button
+            type="button"
+            class="btn btn-ghost"
+            :class="{ 'is-active': period === 'year' }"
+            :disabled="projects.isLoading"
+            @click="setPeriod('year')"
+          >
+            Год
+          </button>
+          <button
+            type="button"
+            class="btn btn-ghost"
+            :class="{ 'is-active': period === '3y' }"
+            :disabled="projects.isLoading"
+            @click="setPeriod('3y')"
+          >
+            3 года
+          </button>
+          <button
+            type="button"
+            class="btn btn-ghost"
+            :class="{ 'is-active': period === '5y' }"
+            :disabled="projects.isLoading"
+            @click="setPeriod('5y')"
+          >
+            5 лет
+          </button>
         </div>
+        <p v-if="projects.analytics" class="muted">
+          {{ formatDate(projects.analytics.from) }} –
+          {{ formatDate(projects.analytics.to) }}
+        </p>
       </div>
-      <PageTabs :tabs="tabs" />
       <p v-if="projects.error" class="warn">{{ projects.error }}</p>
       <p v-if="projects.isLoading && !projects.analytics" class="muted">
         Загрузка…
@@ -540,7 +576,8 @@ const hasBurnMeter = computed(() => {
 }
 
 button.stat:hover {
-  background: var(--hover);
+  background: var(--bg);
+  box-shadow: var(--shadow-hover);
 }
 
 .chart {
@@ -622,6 +659,15 @@ button.stat:hover {
   }
 }
 
+.analytics-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
 .filter {
   display: flex;
   gap: 4px;
@@ -639,6 +685,31 @@ button.stat:hover {
     color: var(--blue);
     border-color: transparent;
     box-shadow: var(--shadow);
+  }
+}
+
+.board-screen.has-photo {
+  .analytics-bar .muted {
+    color: rgb(255 255 255 / 80%);
+  }
+
+  .filter {
+    .btn,
+    .btn-ghost {
+      background: transparent;
+      color: var(--text);
+
+      &:hover:not(:disabled) {
+        background: var(--hover);
+        color: var(--text);
+      }
+    }
+
+    button.is-active,
+    button.is-active:hover:not(:disabled) {
+      background: var(--surface);
+      color: var(--blue);
+    }
   }
 }
 

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
-import { http, errorMessage } from '../api/http.ts';
+import { http, errorMessage, setDemoMode } from '../api/http.ts';
 import type { AuthUser } from '../types/index.ts';
 
 export const useAuthStore = defineStore('auth', () => {
@@ -15,9 +15,11 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const { data } = await http.get<AuthUser>('/auth/me');
       user.value = data;
+      setDemoMode(Boolean(data.isDemo));
       return true;
     } catch (err: unknown) {
       user.value = null;
+      setDemoMode(false);
       error.value = errorMessage(err);
       return false;
     } finally {
@@ -29,6 +31,26 @@ export const useAuthStore = defineStore('auth', () => {
     window.location.assign(`/api/auth/yandex?next=${encodeURIComponent(next)}`);
   }
 
+  async function loginDemo(): Promise<boolean> {
+    isLoading.value = true;
+    error.value = null;
+
+    try {
+      await http.post('/auth/demo');
+      const { data } = await http.get<AuthUser>('/auth/me');
+      user.value = data;
+      setDemoMode(Boolean(data.isDemo));
+      return true;
+    } catch (err: unknown) {
+      user.value = null;
+      setDemoMode(false);
+      error.value = errorMessage(err);
+      return false;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
   async function logout(): Promise<void> {
     isLoading.value = true;
     error.value = null;
@@ -36,6 +58,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       await http.post('/auth/logout');
       user.value = null;
+      setDemoMode(false);
     } catch (err: unknown) {
       error.value = errorMessage(err);
     } finally {
@@ -43,5 +66,5 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  return { user, isLoading, error, fetchMe, login, logout };
+  return { user, isLoading, error, fetchMe, login, loginDemo, logout };
 });

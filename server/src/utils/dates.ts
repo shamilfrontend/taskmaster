@@ -11,8 +11,14 @@ export function periodRange(period: AnalyticsPeriod, now = new Date()): {
     from.setDate(from.getDate() - 6);
   } else if (period === '30d') {
     from.setDate(from.getDate() - 29);
-  } else {
+  } else if (period === 'quarter') {
     from.setMonth(from.getMonth() - 3);
+  } else if (period === 'year') {
+    from.setFullYear(from.getFullYear() - 1);
+  } else if (period === '3y') {
+    from.setFullYear(from.getFullYear() - 3);
+  } else if (period === '5y') {
+    from.setFullYear(from.getFullYear() - 5);
   }
 
   from.setHours(0, 0, 0, 0);

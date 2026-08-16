@@ -2,7 +2,14 @@ export type TeamRole = 'owner' | 'admin' | 'member' | 'viewer';
 export type InviteRole = 'admin' | 'member' | 'viewer';
 export type ReleaseStatus = 'planned' | 'released';
 export type LabelColor = 'blue' | 'green' | 'purple' | 'pink' | 'amber';
-export type AnalyticsPeriod = '7d' | '30d' | 'quarter';
+export type AnalyticsPeriod =
+  | 'today'
+  | '7d'
+  | '30d'
+  | 'quarter'
+  | 'year'
+  | '3y'
+  | '5y';
 export type AnalyticsRiskKind = 'overdue' | 'dueSoon' | 'gaps';
 export type BoardBackgroundId =
   | 'default'
@@ -48,6 +55,7 @@ export interface AuthUser {
   displayName: string;
   email: string;
   avatarUrl: string;
+  isDemo: boolean;
 }
 
 export interface TeamListItem {

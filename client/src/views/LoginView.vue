@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.ts';
 
 interface LandingCard {
@@ -10,6 +10,7 @@ interface LandingCard {
 
 const auth = useAuthStore();
 const route = useRoute();
+const router = useRouter();
 
 const next = computed(() => {
   return typeof route.query.next === 'string' ? route.query.next : '/';
@@ -48,6 +49,14 @@ const outcomes: LandingCard[] = [
 function login(): void {
   auth.login(next.value);
 }
+
+async function loginDemo(): Promise<void> {
+  const ok = await auth.loginDemo();
+
+  if (ok) {
+    await router.push(next.value);
+  }
+}
 </script>
 
 <template>
@@ -58,10 +67,20 @@ function login(): void {
           <img src="/logo/kanban.svg" alt="">
           Taskmaster
         </div>
-        <button type="button" class="btn btn-yandex" @click="login">
-          <span class="ya-mark">Я</span>
-          Войти через Яндекс ID
-        </button>
+        <div class="landing-actions">
+          <button
+            type="button"
+            class="btn btn-demo"
+            :disabled="auth.isLoading"
+            @click="loginDemo"
+          >
+            {{ auth.isLoading ? 'Открываем…' : 'Демо-доступ' }}
+          </button>
+          <button type="button" class="btn btn-yandex" @click="login">
+            <span class="ya-mark">Я</span>
+            Войти через Яндекс ID
+          </button>
+        </div>
       </div>
     </header>
 
@@ -74,10 +93,20 @@ function login(): void {
             Аналитику и учёт расходов. <br>
             Есть импорт проекта из Trello.
           </p>
-          <button type="button" class="btn btn-hero" @click="login">
-            <span class="ya-mark">Я</span>
-            Открыть доску
-          </button>
+          <div class="hero__actions">
+            <button type="button" class="btn btn-hero" @click="login">
+              <span class="ya-mark">Я</span>
+              Открыть доску
+            </button>
+            <button
+              type="button"
+              class="btn btn-demo btn-demo-on-dark"
+              :disabled="auth.isLoading"
+              @click="loginDemo"
+            >
+              {{ auth.isLoading ? 'Открываем…' : 'Демо-доступ' }}
+            </button>
+          </div>
         </div>
         <figure class="hero__shot">
           <img
@@ -119,10 +148,20 @@ function login(): void {
           Войдите через Яндекс ID и начните с задач.
           В настройках проектов можно включить аналитику и учёт расходов.
         </p>
-        <button type="button" class="btn btn-hero" @click="login">
-          <span class="ya-mark">Я</span>
-          Войти через Яндекс ID
-        </button>
+        <div class="cta__actions">
+          <button type="button" class="btn btn-hero" @click="login">
+            <span class="ya-mark">Я</span>
+            Войти через Яндекс ID
+          </button>
+          <button
+            type="button"
+            class="btn btn-demo btn-demo-on-dark"
+            :disabled="auth.isLoading"
+            @click="loginDemo"
+          >
+            {{ auth.isLoading ? 'Открываем…' : 'Демо-доступ' }}
+          </button>
+        </div>
       </div>
     </section>
   </div>
@@ -152,6 +191,24 @@ function login(): void {
   margin: 0 auto;
 }
 
+.landing-actions,
+.hero__actions,
+.cta__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.hero__actions,
+.cta__actions {
+  gap: 12px;
+}
+
+.cta__actions {
+  justify-content: center;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -173,9 +230,32 @@ function login(): void {
   padding: 0 16px;
 }
 
-.landing-bar .btn-yandex {
+.landing-bar .btn-yandex,
+.landing-bar .btn-demo {
   height: 36px;
   padding: 0 14px;
+}
+
+.btn-demo {
+  width: auto;
+  padding: 0 16px;
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text);
+
+  &:hover:not(:disabled) {
+    background: var(--hover);
+  }
+}
+
+.btn-demo-on-dark {
+  height: 44px;
+  border-color: rgb(255 255 255 / 55%);
+  color: #fff;
+
+  &:hover:not(:disabled) {
+    background: rgb(255 255 255 / 12%);
+  }
 }
 
 .btn-hero {

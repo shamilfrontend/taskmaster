@@ -8,6 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@kyvg/vue3-notification": "^3.4.2",
     "axios": "^1.7.9",
     "echarts": "^6.1.0",
     "pinia": "^2.3.0",

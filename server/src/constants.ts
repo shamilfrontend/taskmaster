@@ -16,7 +16,15 @@ export const LABEL_COLORS = [
 ] as const;
 export type LabelColor = (typeof LABEL_COLORS)[number];
 
-export const ANALYTICS_PERIODS = ['7d', '30d', 'quarter'] as const;
+export const ANALYTICS_PERIODS = [
+  'today',
+  '7d',
+  '30d',
+  'quarter',
+  'year',
+  '3y',
+  '5y'
+] as const;
 export type AnalyticsPeriod = (typeof ANALYTICS_PERIODS)[number];
 
 export const DEFAULT_COLUMNS: { name: string; isDone: boolean }[] = [

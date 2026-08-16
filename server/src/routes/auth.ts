@@ -5,6 +5,7 @@ import { AppError } from '../errors/app-error.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { UserModel } from '../models/user.js';
+import { ensureDemoData } from '../services/demo-seed.js';
 import { signToken } from '../utils/crypto.js';
 
 export const authRouter = Router();
@@ -117,6 +118,36 @@ authRouter.get(
   })
 );
 
+authRouter.post(
+  '/demo',
+  asyncHandler(async (_req: Request, res: Response) => {
+    const user = await UserModel.findOneAndUpdate(
+      { yandexId: 'demo' },
+      {
+        $setOnInsert: {
+          yandexId: 'demo',
+          displayName: 'Демо',
+          email: '',
+          avatarUrl: ''
+        }
+      },
+      { upsert: true, new: true }
+    ).lean();
+
+    if (!user) {
+      throw new AppError(500, 'Не удалось создать демо-пользователя');
+    }
+
+    await ensureDemoData(user._id);
+    res.cookie(
+      config.cookieName,
+      signToken(user._id.toString()),
+      cookieOptions()
+    );
+    res.json({ ok: true });
+  })
+);
+
 authRouter.get(
   '/me',
   requireAuth,
@@ -131,7 +162,8 @@ authRouter.get(
       id: user._id.toString(),
       displayName: user.displayName,
       email: user.email,
-      avatarUrl: user.avatarUrl
+      avatarUrl: user.avatarUrl,
+      isDemo: user.yandexId === 'demo'
     });
   })
 );

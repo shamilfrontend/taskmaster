@@ -180,7 +180,10 @@ export function readLabelColor(body: unknown, field: string): LabelColor {
 
 export function readPeriod(value: unknown): AnalyticsPeriod {
   if (typeof value !== 'string' || !ANALYTICS_PERIODS.includes(value as AnalyticsPeriod)) {
-    throw new AppError(400, 'Период: 7d, 30d или quarter');
+    throw new AppError(
+      400,
+      'Период: today, 7d, 30d, quarter, year, 3y или 5y'
+    );
   }
 
   return value as AnalyticsPeriod;
