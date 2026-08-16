@@ -251,6 +251,30 @@ export const useTeamsStore = defineStore('teams', () => {
     }
   }
 
+  async function createProjectFromTrello(
+    teamId: string,
+    name: string,
+    board: unknown
+  ): Promise<string | null> {
+    isLoading.value = true;
+    error.value = null;
+
+    try {
+      const { data } = await http.post<{ id: string }>(
+        `/teams/${teamId}/projects/from-trello`,
+        { name, board },
+        { timeout: 60000 }
+      );
+      await fetchOne(teamId);
+      return data.id;
+    } catch (err: unknown) {
+      error.value = errorMessage(err);
+      return null;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
   async function duplicateProject(projectId: string): Promise<string | null> {
     error.value = null;
 
@@ -306,6 +330,7 @@ export const useTeamsStore = defineStore('teams', () => {
     changeRole,
     removeMember,
     createProject,
+    createProjectFromTrello,
     duplicateProject,
     deleteProject
   };

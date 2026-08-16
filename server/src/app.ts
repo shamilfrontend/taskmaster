@@ -21,6 +21,10 @@ export function createApp() {
       credentials: true
     })
   );
+  app.use(
+    '/api/teams/:teamId/projects/from-trello',
+    express.json({ limit: '10mb' })
+  );
   app.use(express.json());
   app.use(cookieParser());
 

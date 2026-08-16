@@ -28,6 +28,8 @@ interface MenuPosition {
   right: string;
 }
 
+type ProjectSource = 'blank' | 'trello';
+
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
@@ -41,6 +43,10 @@ const inviteUrl = ref('');
 const inviteCopied = ref(false);
 const projectOpen = ref(false);
 const projectName = ref('');
+const projectSource = ref<ProjectSource>('blank');
+const trelloBoard = ref<unknown>(null);
+const trelloError = ref('');
+const trelloInputKey = ref(0);
 const deleteOpen = ref(false);
 const projectDeleteOpen = ref(false);
 const projectToDelete = ref<{ id: string; name: string } | null>(null);
@@ -286,12 +292,90 @@ async function copyInviteUrl(): Promise<void> {
   }
 }
 
+function isTrelloBoard(value: unknown): value is { name: string } {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  const row = value as Record<string, unknown>;
+
+  return (
+    typeof row.name === 'string' &&
+    Array.isArray(row.lists) &&
+    Array.isArray(row.cards)
+  );
+}
+
+function resetTrelloFile(): void {
+  trelloBoard.value = null;
+  trelloError.value = '';
+  trelloInputKey.value += 1;
+}
+
+function openProjectModal(): void {
+  projectName.value = '';
+  projectSource.value = 'blank';
+  resetTrelloFile();
+  projectOpen.value = true;
+}
+
+function closeProjectModal(): void {
+  projectOpen.value = false;
+  projectName.value = '';
+  projectSource.value = 'blank';
+  resetTrelloFile();
+}
+
+watch(projectSource, (source) => {
+  if (source === 'blank') {
+    resetTrelloFile();
+  }
+});
+
+function onTrelloFile(event: Event): void {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  trelloError.value = '';
+  trelloBoard.value = null;
+
+  if (!file) {
+    return;
+  }
+
+  void file.text().then((text) => {
+    try {
+      const parsed: unknown = JSON.parse(text);
+
+      if (!isTrelloBoard(parsed)) {
+        trelloError.value = 'Это не экспорт доски Trello';
+        return;
+      }
+
+      trelloBoard.value = parsed;
+      projectName.value = parsed.name;
+    } catch {
+      trelloError.value = 'Не удалось прочитать JSON';
+    }
+  });
+}
+
 async function createProject(): Promise<void> {
-  const id = await teams.createProject(teamId.value, projectName.value);
+  if (projectSource.value === 'trello' && !trelloBoard.value) {
+    trelloError.value = 'Выберите JSON-файл Trello';
+    return;
+  }
+
+  const id =
+    projectSource.value === 'trello' && trelloBoard.value
+      ? await teams.createProjectFromTrello(
+          teamId.value,
+          projectName.value,
+          trelloBoard.value
+        )
+      : await teams.createProject(teamId.value, projectName.value);
 
   if (id) {
-    projectOpen.value = false;
-    projectName.value = '';
+    closeProjectModal();
     await router.push({ name: 'project', params: { projectId: id } });
   }
 }
@@ -474,7 +558,7 @@ async function confirmRevoke(): Promise<void> {
                 v-if="canManage"
                 type="button"
                 class="btn"
-                @click="projectOpen = true"
+                @click="openProjectModal"
               >
                 Создать проект
               </button>
@@ -716,8 +800,18 @@ async function confirmRevoke(): Promise<void> {
       v-if="teams.current"
       :open="projectOpen"
       title="Создать проект"
-      @close="projectOpen = false"
+      @close="closeProjectModal"
     >
+      <div class="choice-list choice-list--row">
+        <label class="choice">
+          <input v-model="projectSource" type="radio" value="blank">
+          <span><strong>Обычный</strong></span>
+        </label>
+        <label class="choice">
+          <input v-model="projectSource" type="radio" value="trello">
+          <span><strong>Из Trello</strong></span>
+        </label>
+      </div>
       <div class="field">
         <label>Название</label>
         <input
@@ -727,9 +821,35 @@ async function confirmRevoke(): Promise<void> {
           placeholder="Название проекта…"
         >
       </div>
+      <div v-if="projectSource === 'trello'" class="field">
+        <p class="muted mb-16">
+          В Trello откройте доску → меню → Печать, экспорт
+          и публикация → Экспортировать как JSON.
+        </p>
+        <label>Файл Trello</label>
+        <input
+          :key="trelloInputKey"
+          class="input"
+          type="file"
+          accept=".json,application/json"
+          @change="onTrelloFile"
+        >
+      </div>
+      <p v-if="trelloError || teams.error" class="warn">
+        {{ trelloError || teams.error }}
+      </p>
       <div class="modal-foot">
-        <button type="button" class="btn btn-ghost" @click="projectOpen = false">Отмена</button>
-        <button type="button" class="btn" @click="createProject">Создать</button>
+        <button type="button" class="btn btn-ghost" @click="closeProjectModal">
+          Отмена
+        </button>
+        <button
+          type="button"
+          class="btn"
+          :disabled="teams.isLoading"
+          @click="createProject"
+        >
+          Создать
+        </button>
       </div>
     </ModalDialog>
 

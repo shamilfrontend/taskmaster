@@ -1275,24 +1275,6 @@ async function saveLabels(): Promise<void> {
             {{ row.displayName }}
           </option>
         </select>
-        <select v-model="filterDue" class="select board-filter-select">
-          <option value="">Все сроки</option>
-          <option value="overdue">Просрочено</option>
-        </select>
-        <select v-model="filterEstimate" class="select board-filter-select">
-          <option value="">Все оценки</option>
-          <option value="none">Без оценки</option>
-        </select>
-        <select v-model="filterColumnId" class="select board-filter-select">
-          <option value="">Все статусы</option>
-          <option
-            v-for="column in board.current.columns"
-            :key="column.id"
-            :value="column.id"
-          >
-            {{ column.name }}
-          </option>
-        </select>
         <div class="board-filter-labels">
           <select v-model="filterLabelId" class="select board-filter-select">
             <option value="">Все метки</option>

@@ -471,6 +471,33 @@ h2 {
   flex-direction: column;
   gap: 4px;
   margin-bottom: 16px;
+
+  &--row {
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+
+    .choice {
+      position: relative;
+      flex: 1;
+      justify-content: center;
+      min-width: 0;
+      padding: 8px 12px;
+      border-radius: 0;
+      white-space: nowrap;
+
+      input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+      }
+    }
+  }
 }
 
 .choice {
