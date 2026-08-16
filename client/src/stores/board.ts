@@ -326,8 +326,14 @@ export const useBoardStore = defineStore('board', () => {
     }
   }
 
-  async function attachCard(releaseId: string, cardId: string): Promise<void> {
-    await http.post(`/releases/${releaseId}/cards`, { cardId });
+  async function attachCard(
+    releaseId: string,
+    cardIds: string[]
+  ): Promise<void> {
+    for (const cardId of cardIds) {
+      await http.post(`/releases/${releaseId}/cards`, { cardId });
+    }
+
     await fetchRelease(releaseId);
   }
 

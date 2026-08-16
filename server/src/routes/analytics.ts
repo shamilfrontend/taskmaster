@@ -157,16 +157,24 @@ analyticsRouter.get(
     const weeks: {
       from: Date;
       to: Date;
+      hours: number;
       amount: number;
     }[] = [];
     let cursor = weekStart(from);
 
     while (cursor <= to) {
       const end = addDays(cursor, 7);
-      const amount = periodEntries
-        .filter((entry) => entry.workedAt >= cursor && entry.workedAt < end)
-        .reduce((sum, entry) => sum + entry.amount, 0);
-      weeks.push({ from: new Date(cursor), to: addDays(end, -1), amount });
+      const weekEntries = periodEntries.filter(
+        (entry) => entry.workedAt >= cursor && entry.workedAt < end
+      );
+      const hours = weekEntries.reduce((sum, entry) => sum + entry.hours, 0);
+      const amount = weekEntries.reduce((sum, entry) => sum + entry.amount, 0);
+      weeks.push({
+        from: new Date(cursor),
+        to: addDays(end, -1),
+        hours,
+        amount
+      });
       cursor = end;
     }
 
@@ -175,8 +183,14 @@ analyticsRouter.get(
     const releasesEnabled = isFeatureOn(project.releasesEnabled);
     const budgetEnabled = isFeatureOn(project.budgetEnabled);
 
+    type RiskKind = 'overdue' | 'dueSoon' | 'gaps';
     const risks = cards.flatMap((card) => {
-      const items: { cardId: string; title: string; kind: string; detail: string }[] = [];
+      const items: {
+        cardId: string;
+        title: string;
+        kind: RiskKind;
+        detail: string;
+      }[] = [];
 
       if (isOverdue(card)) {
         items.push({
@@ -262,6 +276,7 @@ analyticsRouter.get(
       weeks: weeks.map((week) => ({
         from: week.from,
         to: week.to,
+        hours: week.hours,
         amount: hideMoney ? undefined : memberMoney ? undefined : week.amount
       })),
       risks

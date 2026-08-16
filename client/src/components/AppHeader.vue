@@ -11,7 +11,7 @@ const { crumbs } = useBreadcrumbs();
 
 async function logout(): Promise<void> {
   await auth.logout();
-  await router.push({ name: 'login' });
+  await router.push({ name: 'landing' });
 }
 </script>
 

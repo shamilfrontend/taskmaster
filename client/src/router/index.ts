@@ -16,6 +16,19 @@ export const router = createRouter({
     {
       path: '/login',
       name: 'login',
+      redirect: (to) => {
+        const next = to.query.next;
+
+        if (typeof next === 'string') {
+          return { path: '/landing', query: { next } };
+        }
+
+        return { path: '/landing' };
+      }
+    },
+    {
+      path: '/landing',
+      name: 'landing',
       component: () => import('../views/LoginView.vue'),
       meta: { chrome: false, public: true }
     },
@@ -87,7 +100,7 @@ router.beforeEach(async (to) => {
   }
 
   if (to.meta.public) {
-    if (to.name === 'login' && auth.user) {
+    if (to.name === 'landing' && auth.user) {
       const next =
         typeof to.query.next === 'string' ? to.query.next : '/';
       return next;
@@ -97,8 +110,12 @@ router.beforeEach(async (to) => {
   }
 
   if (!auth.user) {
+    if (to.name === 'teams') {
+      return { name: 'landing' };
+    }
+
     return {
-      name: 'login',
+      name: 'landing',
       query: { next: to.fullPath }
     };
   }

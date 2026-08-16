@@ -17,9 +17,7 @@ import PageTabs, { type PageTab } from '../components/PageTabs.vue';
 import type {
   ActivityItem,
   ActivityKind,
-  DueSoonItem,
   InviteRole,
-  OverviewCardItem,
   TeamInvite,
   TeamMember,
   TeamRole
@@ -75,7 +73,8 @@ watch(teamId, async (id) => {
     teams.current = null;
   }
 
-  teams.overview = null;
+  teams.activity = [];
+  teams.activityHasMore = false;
   closeMenus();
   await teams.fetchOne(id);
 
@@ -105,31 +104,31 @@ const menuProject = computed(() => {
     ?? null;
 });
 
-type TeamTab = 'overview' | 'projects' | 'members' | 'settings';
+type TeamTab = 'projects' | 'members' | 'activity' | 'settings';
 
 const activeTab = computed<TeamTab>(() => {
   const tab = route.query.tab;
 
-  if (tab === 'projects') {
-    return 'projects';
-  }
-
   if (tab === 'members') {
     return 'members';
+  }
+
+  if (tab === 'activity') {
+    return 'activity';
   }
 
   if (tab === 'settings' && canManage.value) {
     return 'settings';
   }
 
-  return 'overview';
+  return 'projects';
 });
 
 watch(
   [teamId, activeTab],
   async ([id, tab]) => {
-    if (tab === 'overview' && id) {
-      await teams.fetchOverview(id);
+    if (tab === 'activity' && id) {
+      await teams.fetchActivity(id);
     }
   },
   { immediate: true }
@@ -138,18 +137,9 @@ watch(
 const tabs = computed<PageTab[]>(() => {
   const items: PageTab[] = [
     {
-      id: 'overview',
-      label: 'Обзор',
-      to: { name: 'team', params: { teamId: teamId.value } }
-    },
-    {
       id: 'projects',
       label: 'Проекты',
-      to: {
-        name: 'team',
-        params: { teamId: teamId.value },
-        query: { tab: 'projects' }
-      }
+      to: { name: 'team', params: { teamId: teamId.value } }
     },
     {
       id: 'members',
@@ -158,6 +148,15 @@ const tabs = computed<PageTab[]>(() => {
         name: 'team',
         params: { teamId: teamId.value },
         query: { tab: 'members' }
+      }
+    },
+    {
+      id: 'activity',
+      label: 'Действия',
+      to: {
+        name: 'team',
+        params: { teamId: teamId.value },
+        query: { tab: 'activity' }
       }
     }
   ];
@@ -361,32 +360,16 @@ function activitySubtitle(item: ActivityItem): string {
   return item.cardTitle;
 }
 
-function openOverviewCard(projectId: string, cardId: string): void {
+function openActivityItem(item: ActivityItem): void {
   void router.push({
     name: 'project',
-    params: { projectId },
-    query: { card: cardId }
+    params: { projectId: item.projectId },
+    query: { card: item.cardId }
   });
 }
 
-function openActivityItem(item: ActivityItem): void {
-  openOverviewCard(item.projectId, item.cardId);
-}
-
-function openDueSoonItem(item: DueSoonItem): void {
-  openOverviewCard(item.projectId, item.cardId);
-}
-
-function openOverviewCardItem(item: OverviewCardItem): void {
-  openOverviewCard(item.projectId, item.cardId);
-}
-
-function cardDueLabel(item: OverviewCardItem): string {
-  if (!item.dueDate) {
-    return 'без срока';
-  }
-
-  return formatDate(item.dueDate);
+function loadMoreActivity(): void {
+  void teams.fetchActivity(teamId.value, false);
 }
 
 const canLeave = computed(() => {
@@ -483,124 +466,7 @@ async function confirmRevoke(): Promise<void> {
         </div>
         <PageTabs :tabs="tabs" />
         <p v-if="teams.error" class="warn">{{ teams.error }}</p>
-        <div v-if="activeTab === 'overview'" class="stack">
-          <div class="grid-2">
-            <div class="panel">
-              <div class="panel-head">
-                <h2>Последняя активность</h2>
-              </div>
-              <button
-                v-for="item in teams.overview?.activity ?? []"
-                :key="item.id"
-                type="button"
-                class="list-row"
-                @click="openActivityItem(item)"
-              >
-                <div class="grow">
-                  <div>
-                    {{ item.actorName || 'Участник' }}
-                    {{ activityAction(item.kind) }}
-                  </div>
-                  <div class="muted">{{ activitySubtitle(item) }}</div>
-                </div>
-                <span class="muted">{{ formatDate(item.createdAt) }}</span>
-              </button>
-              <p
-                v-if="!(teams.overview?.activity.length)"
-                class="muted"
-              >
-                Нет активности
-              </p>
-            </div>
-            <div class="panel">
-              <div class="panel-head">
-                <h2>Скоро срок</h2>
-              </div>
-              <button
-                v-for="item in teams.overview?.dueSoon ?? []"
-                :key="item.cardId"
-                type="button"
-                class="list-row"
-                @click="openDueSoonItem(item)"
-              >
-                <div class="grow">
-                  <div>{{ item.title }}</div>
-                  <div class="muted">{{ item.projectName }}</div>
-                </div>
-                <span
-                  :class="item.status === 'overdue' ? 'is-overdue' : 'muted'"
-                >
-                  {{ formatDate(item.dueDate) }}
-                </span>
-              </button>
-              <p
-                v-if="!(teams.overview?.dueSoon.length)"
-                class="muted"
-              >
-                Нет задач со сроком
-              </p>
-            </div>
-          </div>
-          <div class="grid-2">
-            <div class="panel">
-              <div class="panel-head">
-                <h2>Мои задачи</h2>
-              </div>
-              <button
-                v-for="item in teams.overview?.myTasks ?? []"
-                :key="item.cardId"
-                type="button"
-                class="list-row"
-                @click="openOverviewCardItem(item)"
-              >
-                <div class="grow">
-                  <div>{{ item.title }}</div>
-                  <div class="muted">{{ item.projectName }}</div>
-                </div>
-                <span
-                  :class="item.status === 'overdue' ? 'is-overdue' : 'muted'"
-                >
-                  {{ cardDueLabel(item) }}
-                </span>
-              </button>
-              <p
-                v-if="!(teams.overview?.myTasks.length)"
-                class="muted"
-              >
-                Нет назначенных задач
-              </p>
-            </div>
-            <div class="panel">
-              <div class="panel-head">
-                <h2>Без исполнителя</h2>
-              </div>
-              <button
-                v-for="item in teams.overview?.unassigned ?? []"
-                :key="item.cardId"
-                type="button"
-                class="list-row"
-                @click="openOverviewCardItem(item)"
-              >
-                <div class="grow">
-                  <div>{{ item.title }}</div>
-                  <div class="muted">{{ item.projectName }}</div>
-                </div>
-                <span
-                  :class="item.status === 'overdue' ? 'is-overdue' : 'muted'"
-                >
-                  {{ cardDueLabel(item) }}
-                </span>
-              </button>
-              <p
-                v-if="!(teams.overview?.unassigned.length)"
-                class="muted"
-              >
-                Все задачи назначены
-              </p>
-            </div>
-          </div>
-        </div>
-        <div v-else-if="activeTab === 'projects'" class="stack">
+        <div v-if="activeTab === 'projects'" class="stack">
           <div class="panel">
             <div class="panel-head">
               <h2>Проекты</h2>
@@ -722,6 +588,50 @@ async function confirmRevoke(): Promise<void> {
                 Отозвать
               </button>
             </div>
+          </div>
+        </div>
+        <div v-else-if="activeTab === 'activity'" class="stack">
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Действия</h2>
+            </div>
+            <p v-if="teams.isActivityLoading && !teams.activity.length" class="muted">
+              Загрузка…
+            </p>
+            <template v-else>
+              <button
+                v-for="item in teams.activity"
+                :key="item.id"
+                type="button"
+                class="list-row"
+                @click="openActivityItem(item)"
+              >
+                <div class="grow">
+                  <div>
+                    {{ item.actorName || 'Участник' }}
+                    {{ activityAction(item.kind) }}
+                  </div>
+                  <div class="muted">{{ activitySubtitle(item) }}</div>
+                </div>
+                <span class="muted">{{ formatDate(item.createdAt) }}</span>
+              </button>
+              <p v-if="!teams.activity.length" class="muted">
+                Нет активности
+              </p>
+              <div
+                v-if="teams.activityHasMore"
+                class="actions actions--start mt-16"
+              >
+                <button
+                  type="button"
+                  class="btn btn-ghost"
+                  :disabled="teams.isActivityLoading"
+                  @click="loadMoreActivity"
+                >
+                  Загрузить еще
+                </button>
+              </div>
+            </template>
           </div>
         </div>
         <div v-else-if="activeTab === 'settings'" class="stack">

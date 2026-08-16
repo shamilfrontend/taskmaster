@@ -3,6 +3,7 @@ export type InviteRole = 'admin' | 'member' | 'viewer';
 export type ReleaseStatus = 'planned' | 'released';
 export type LabelColor = 'blue' | 'green' | 'purple' | 'pink' | 'amber';
 export type AnalyticsPeriod = '7d' | '30d' | 'quarter';
+export type AnalyticsRiskKind = 'overdue' | 'dueSoon' | 'gaps';
 export type BoardBackgroundId =
   | 'default'
   | 'bg-01'
@@ -102,31 +103,9 @@ export interface ActivityItem {
   createdAt: string;
 }
 
-export interface DueSoonItem {
-  cardId: string;
-  title: string;
-  dueDate: string;
-  boardId: string;
-  projectId: string;
-  projectName: string;
-  status: 'overdue' | 'dueSoon';
-}
-
-export interface OverviewCardItem {
-  cardId: string;
-  title: string;
-  dueDate: string | null;
-  boardId: string;
-  projectId: string;
-  projectName: string;
-  status: 'overdue' | 'dueSoon' | 'open';
-}
-
-export interface TeamOverview {
-  activity: ActivityItem[];
-  dueSoon: DueSoonItem[];
-  myTasks: OverviewCardItem[];
-  unassigned: OverviewCardItem[];
+export interface TeamActivityPage {
+  items: ActivityItem[];
+  hasMore: boolean;
 }
 
 export interface InvitePreview {
@@ -319,8 +298,13 @@ export interface AnalyticsPayload {
     planHours: number;
     factHours: number;
   }[];
-  weeks: { from: string; to: string; amount?: number }[];
-  risks: { cardId: string; title: string; kind: string; detail: string }[];
+  weeks: { from: string; to: string; hours: number; amount?: number }[];
+  risks: {
+    cardId: string;
+    title: string;
+    kind: AnalyticsRiskKind;
+    detail: string;
+  }[];
 }
 
 export interface ApiErrorBody {

@@ -2,20 +2,29 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useBoardStore } from '../stores/board.ts';
+import { useProjectStore } from '../stores/project.ts';
 import { http } from '../api/http.ts';
+import {
+  boardBackgroundStyle,
+  findBoardBackground
+} from '../composables/board-backgrounds.ts';
 import { formatDate } from '../composables/format.ts';
+import { useProjectTabs } from '../composables/project-tabs.ts';
 import type { BoardCard } from '../types/index.ts';
 import ModalDialog from '../components/ModalDialog.vue';
+import PageTabs from '../components/PageTabs.vue';
 
 const route = useRoute();
 const router = useRouter();
 const board = useBoardStore();
+const projects = useProjectStore();
 const releaseId = computed(() => String(route.params.releaseId));
+const projectId = computed(() => board.release?.projectId ?? '');
 const attachOpen = ref(false);
 const editOpen = ref(false);
 const statusOpen = ref(false);
 const deleteOpen = ref(false);
-const selectedCardId = ref('');
+const selectedCardIds = ref<string[]>([]);
 const editName = ref('');
 const editDate = ref('');
 const projectCards = ref<BoardCard[]>([]);
@@ -23,16 +32,45 @@ const projectCards = ref<BoardCard[]>([]);
 onMounted(async () => {
   await board.fetchRelease(releaseId.value);
 
-  if (board.release) {
-    const { data } = await http.get<{
-      board: { id: string };
-    }>(`/projects/${board.release.projectId}`);
-    const boardRes = await http.get<{ cards: BoardCard[] }>(
-      `/boards/${data.board.id}`
-    );
-    projectCards.value = boardRes.data.cards;
+  if (!board.release) {
+    return;
   }
+
+  await projects.fetchOne(board.release.projectId);
+
+  const boardId = projects.current?.board.id;
+
+  if (!boardId) {
+    return;
+  }
+
+  const boardRes = await http.get<{ cards: BoardCard[] }>(
+    `/boards/${boardId}`
+  );
+  projectCards.value = boardRes.data.cards;
 });
+
+const selectedBackground = computed(
+  () => projects.current?.boardBackground ?? 'default'
+);
+
+const hasBoardPhoto = computed(() =>
+  Boolean(findBoardBackground(selectedBackground.value).full)
+);
+
+const boardStyle = computed(() => {
+  if (!hasBoardPhoto.value) {
+    return undefined;
+  }
+
+  return boardBackgroundStyle(selectedBackground.value);
+});
+
+const tabs = useProjectTabs(
+  projectId,
+  computed(() => projects.current?.role ?? board.release?.role),
+  computed(() => Boolean(projects.current?.releasesEnabled))
+);
 
 const canAdmin = computed(() => {
   const role = board.release?.role;
@@ -102,10 +140,18 @@ async function markReleased(): Promise<void> {
   statusOpen.value = false;
 }
 
-async function attach(): Promise<void> {
-  await board.attachCard(releaseId.value, selectedCardId.value);
-  selectedCardId.value = '';
+function closeAttach(): void {
   attachOpen.value = false;
+  selectedCardIds.value = [];
+}
+
+async function attach(): Promise<void> {
+  if (!selectedCardIds.value.length) {
+    return;
+  }
+
+  await board.attachCard(releaseId.value, selectedCardIds.value);
+  closeAttach();
 }
 
 async function detach(cardId: string): Promise<void> {
@@ -113,19 +159,27 @@ async function detach(cardId: string): Promise<void> {
 }
 
 async function remove(): Promise<void> {
-  const projectId = board.release?.projectId;
+  const nextProjectId = board.release?.projectId;
   await board.deleteRelease(releaseId.value);
   deleteOpen.value = false;
 
-  if (projectId) {
-    await router.push({ name: 'project', params: { projectId } });
+  if (nextProjectId) {
+    await router.push({ name: 'project', params: { projectId: nextProjectId } });
   }
 }
 </script>
 
 <template>
   <section v-if="board.release" class="screen is-active">
-    <div class="wrap">
+    <div
+      class="board-screen"
+      :class="{ 'has-photo': hasBoardPhoto }"
+      :style="boardStyle"
+    >
+      <div class="page-head">
+        <h1>{{ projects.current?.name ?? board.release.name }}</h1>
+      </div>
+      <PageTabs :tabs="tabs" />
       <div class="page-head">
         <div>
           <h1>
@@ -167,11 +221,13 @@ async function remove(): Promise<void> {
             v-if="canAdmin && board.release.status !== 'released'"
             type="button"
             class="btn btn-ghost"
+            :disabled="!board.release.cards.length"
             @click="statusOpen = true"
           >
             Отметить как released
           </button>
         </div>
+        <p v-if="!board.release.cards.length" class="muted">Нет задач</p>
         <div v-for="card in board.release.cards" :key="card.id" class="list-row">
           <div class="grow">
             <div>{{ card.title }}</div>
@@ -233,17 +289,24 @@ async function remove(): Promise<void> {
       </div>
     </ModalDialog>
 
-    <ModalDialog :open="attachOpen" title="Прикрепить карточку" @close="attachOpen = false">
+    <ModalDialog :open="attachOpen" title="Прикрепить карточку" @close="closeAttach">
       <div class="choice-list">
         <p v-if="!availableCards.length" class="muted">Нет свободных карточек.</p>
         <label v-for="card in availableCards" :key="card.id" class="choice">
-          <input v-model="selectedCardId" type="radio" :value="card.id">
+          <input v-model="selectedCardIds" type="checkbox" :value="card.id">
           <span>{{ card.title }}</span>
         </label>
       </div>
       <div class="modal-foot">
-        <button type="button" class="btn btn-ghost" @click="attachOpen = false">Отмена</button>
-        <button type="button" class="btn" :disabled="!selectedCardId" @click="attach">Прикрепить</button>
+        <button type="button" class="btn btn-ghost" @click="closeAttach">Отмена</button>
+        <button
+          type="button"
+          class="btn"
+          :disabled="!selectedCardIds.length"
+          @click="attach"
+        >
+          Прикрепить
+        </button>
       </div>
     </ModalDialog>
 

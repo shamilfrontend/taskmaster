@@ -2,18 +2,21 @@ import { acceptHMRUpdate, defineStore } from 'pinia';
 import { ref } from 'vue';
 import { http, errorMessage } from '../api/http.ts';
 import type {
+  ActivityItem,
   InviteRole,
+  TeamActivityPage,
   TeamDetails,
   TeamListItem,
-  TeamOverview,
   TeamRole
 } from '../types/index.ts';
 
 export const useTeamsStore = defineStore('teams', () => {
   const list = ref<TeamListItem[]>([]);
   const current = ref<TeamDetails | null>(null);
-  const overview = ref<TeamOverview | null>(null);
+  const activity = ref<ActivityItem[]>([]);
+  const activityHasMore = ref(false);
   const isLoading = ref(false);
+  const isActivityLoading = ref(false);
   const error = ref<string | null>(null);
 
   async function fetchList(): Promise<void> {
@@ -48,15 +51,38 @@ export const useTeamsStore = defineStore('teams', () => {
     }
   }
 
-  async function fetchOverview(teamId: string): Promise<void> {
+  async function fetchActivity(
+    teamId: string,
+    reset = true
+  ): Promise<void> {
+    isActivityLoading.value = true;
     error.value = null;
 
     try {
-      const { data } = await http.get<TeamOverview>(`/teams/${teamId}/overview`);
-      overview.value = data;
+      const last = activity.value[activity.value.length - 1];
+      const { data } = await http.get<TeamActivityPage>(
+        `/teams/${teamId}/activity`,
+        {
+          params: !reset && last ? { before: last.createdAt } : undefined
+        }
+      );
+
+      if (reset) {
+        activity.value = data.items;
+      } else {
+        activity.value = [...activity.value, ...data.items];
+      }
+
+      activityHasMore.value = data.hasMore;
     } catch (err: unknown) {
       error.value = errorMessage(err);
-      overview.value = null;
+
+      if (reset) {
+        activity.value = [];
+        activityHasMore.value = false;
+      }
+    } finally {
+      isActivityLoading.value = false;
     }
   }
 
@@ -264,12 +290,14 @@ export const useTeamsStore = defineStore('teams', () => {
   return {
     list,
     current,
-    overview,
+    activity,
+    activityHasMore,
     isLoading,
+    isActivityLoading,
     error,
     fetchList,
     fetchOne,
-    fetchOverview,
+    fetchActivity,
     createTeam,
     renameTeam,
     createInvite,

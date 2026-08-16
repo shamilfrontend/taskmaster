@@ -13,11 +13,14 @@ http.interceptors.response.use(
       const url = error.config?.url ?? '';
       const isMe = url.includes('/auth/me');
       const path = window.location.pathname;
-      const isPublic = path.startsWith('/login') || path.startsWith('/invite');
+      const isPublic =
+        path.startsWith('/landing') ||
+        path.startsWith('/login') ||
+        path.startsWith('/invite');
 
       if (!isMe && !isPublic) {
         const next = encodeURIComponent(path + window.location.search);
-        window.location.assign(`/login?next=${next}`);
+        window.location.assign(`/landing?next=${next}`);
       }
     }
 

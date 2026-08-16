@@ -194,7 +194,6 @@ async function removeProject(): Promise<void> {
       <div class="page-head">
         <div>
           <h1>{{ projects.current.name }}</h1>
-          <p v-if="projects.current.budgetEnabled && !isBoard">валюта RUB</p>
         </div>
       </div>
       <PageTabs :tabs="tabs" />

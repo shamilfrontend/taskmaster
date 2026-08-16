@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.ts';
 import { useBoardStore } from '../stores/board.ts';
 import { useProjectStore } from '../stores/project.ts';
@@ -26,6 +26,7 @@ const COLUMN_DRAG = 'column:';
 type DragKind = 'card' | 'column';
 
 const route = useRoute();
+const router = useRouter();
 const dragKind = ref<DragKind | null>(null);
 const dragCardId = ref<string | null>(null);
 const dragColumnId = ref<string | null>(null);
@@ -76,6 +77,9 @@ const filterQuery = ref('');
 const filterAssignee = ref('');
 const filterLabelId = ref('');
 const filterReleaseId = ref('');
+const filterDue = ref('');
+const filterEstimate = ref('');
+const filterColumnId = ref('');
 
 onMounted(() => {
   document.addEventListener('click', closeMenus);
@@ -100,7 +104,9 @@ watch(boardId, async (id) => {
   addingCardColumnId.value = null;
   addingColumn.value = false;
   cardOpen.value = false;
-  clearFilters();
+  filterQuery.value = '';
+  filterLabelId.value = '';
+  applyFiltersFromQuery();
   await board.fetchBoard(id);
 }, { immediate: true });
 
@@ -227,7 +233,10 @@ const filtersActive = computed(() => {
     filterQuery.value.trim() !== '' ||
     filterAssignee.value !== '' ||
     filterLabelId.value !== '' ||
-    filterReleaseId.value !== ''
+    filterReleaseId.value !== '' ||
+    filterDue.value !== '' ||
+    filterEstimate.value !== '' ||
+    filterColumnId.value !== ''
   );
 });
 
@@ -245,11 +254,98 @@ function canDeleteBoardCard(card: BoardCard): boolean {
   return card.factHours === 0 || canAdmin.value;
 }
 
+function queryParam(key: string): string {
+  const value = route.query[key];
+  return typeof value === 'string' ? value : '';
+}
+
+function applyFiltersFromQuery(): void {
+  const due = queryParam('due');
+  filterDue.value = due === 'overdue' ? 'overdue' : '';
+
+  const estimate = queryParam('estimate');
+  filterEstimate.value = estimate === 'none' ? 'none' : '';
+
+  filterAssignee.value = queryParam('assignee');
+  filterReleaseId.value = queryParam('release');
+  filterColumnId.value = queryParam('column');
+}
+
+function filterQueryState(): Record<string, string> {
+  const next: Record<string, string> = {};
+
+  if (filterDue.value) {
+    next.due = filterDue.value;
+  }
+
+  if (filterAssignee.value) {
+    next.assignee = filterAssignee.value;
+  }
+
+  if (filterEstimate.value) {
+    next.estimate = filterEstimate.value;
+  }
+
+  if (filterReleaseId.value) {
+    next.release = filterReleaseId.value;
+  }
+
+  if (filterColumnId.value) {
+    next.column = filterColumnId.value;
+  }
+
+  return next;
+}
+
+function syncFiltersToQuery(): void {
+  const next = filterQueryState();
+  const currentDue = queryParam('due');
+  const currentAssignee = queryParam('assignee');
+  const currentEstimate = queryParam('estimate');
+  const currentRelease = queryParam('release');
+  const currentColumn = queryParam('column');
+
+  if (
+    (next.due ?? '') === currentDue &&
+    (next.assignee ?? '') === currentAssignee &&
+    (next.estimate ?? '') === currentEstimate &&
+    (next.release ?? '') === currentRelease &&
+    (next.column ?? '') === currentColumn
+  ) {
+    return;
+  }
+
+  const query: Record<string, string> = { ...next };
+  const card = queryParam('card');
+  const tab = queryParam('tab');
+
+  if (card) {
+    query.card = card;
+  }
+
+  if (tab) {
+    query.tab = tab;
+  }
+
+  void router.replace({ query });
+}
+
+function cardIsOverdue(card: BoardCard): boolean {
+  const column = board.current?.columns.find(
+    (item) => item.id === card.columnId
+  );
+
+  return isOverdue(card.dueDate, column?.isDone ?? false);
+}
+
 function clearFilters(): void {
   filterQuery.value = '';
   filterAssignee.value = '';
   filterLabelId.value = '';
   filterReleaseId.value = '';
+  filterDue.value = '';
+  filterEstimate.value = '';
+  filterColumnId.value = '';
 }
 
 function matchesFilters(card: BoardCard): boolean {
@@ -278,9 +374,29 @@ function matchesFilters(card: BoardCard): boolean {
     return false;
   }
 
+  if (filterReleaseId.value === 'none' && card.releaseId !== null) {
+    return false;
+  }
+
   if (
     filterReleaseId.value !== '' &&
+    filterReleaseId.value !== 'none' &&
     card.releaseId !== filterReleaseId.value
+  ) {
+    return false;
+  }
+
+  if (filterDue.value === 'overdue' && !cardIsOverdue(card)) {
+    return false;
+  }
+
+  if (filterEstimate.value === 'none' && card.estimateHours !== 0) {
+    return false;
+  }
+
+  if (
+    filterColumnId.value !== '' &&
+    card.columnId !== filterColumnId.value
   ) {
     return false;
   }
@@ -348,6 +464,26 @@ watch(
     }
 
     await openCard(cardFromQuery);
+  }
+);
+
+watch(
+  () => [
+    route.query.due,
+    route.query.assignee,
+    route.query.estimate,
+    route.query.release,
+    route.query.column
+  ],
+  () => {
+    applyFiltersFromQuery();
+  }
+);
+
+watch(
+  [filterDue, filterAssignee, filterEstimate, filterReleaseId, filterColumnId],
+  () => {
+    syncFiltersToQuery();
   }
 );
 
@@ -1139,6 +1275,24 @@ async function saveLabels(): Promise<void> {
             {{ row.displayName }}
           </option>
         </select>
+        <select v-model="filterDue" class="select board-filter-select">
+          <option value="">Все сроки</option>
+          <option value="overdue">Просрочено</option>
+        </select>
+        <select v-model="filterEstimate" class="select board-filter-select">
+          <option value="">Все оценки</option>
+          <option value="none">Без оценки</option>
+        </select>
+        <select v-model="filterColumnId" class="select board-filter-select">
+          <option value="">Все статусы</option>
+          <option
+            v-for="column in board.current.columns"
+            :key="column.id"
+            :value="column.id"
+          >
+            {{ column.name }}
+          </option>
+        </select>
         <div class="board-filter-labels">
           <select v-model="filterLabelId" class="select board-filter-select">
             <option value="">Все метки</option>
@@ -1165,6 +1319,7 @@ async function saveLabels(): Promise<void> {
           class="select board-filter-select"
         >
           <option value="">Все релизы</option>
+          <option value="none">Без релиза</option>
           <option
             v-for="release in board.current.releases"
             :key="release.id"
@@ -1568,7 +1723,7 @@ async function saveLabels(): Promise<void> {
 
             <div class="field-row">
               <div class="field">
-                <label>Оценка, часы</label>
+                <label>Оценка (план), часы</label>
                 <input
                   class="input"
                   type="number"
@@ -1582,7 +1737,15 @@ async function saveLabels(): Promise<void> {
               </div>
               <div class="field">
                 <label>Потрачено</label>
-                <div class="fake-input">
+                <button
+                  v-if="canLogHours"
+                  type="button"
+                  class="fake-input fake-input--action"
+                  @click="openHoursModal"
+                >
+                  {{ factHours }} ч
+                </button>
+                <div v-else class="fake-input">
                   {{ factHours }} ч
                 </div>
               </div>
@@ -1805,7 +1968,17 @@ async function saveLabels(): Promise<void> {
                   </div>
                 </div>
               </div>
-              <p v-else class="muted">Затрат пока нет</p>
+              <div v-else class="costs-empty">
+                <p class="muted">Затрат пока нет</p>
+                <button
+                  v-if="canLogHours"
+                  type="button"
+                  class="btn btn-ghost"
+                  @click="openHoursModal"
+                >
+                  Списать часы
+                </button>
+              </div>
             </div>
           </div>
 
@@ -2580,12 +2753,31 @@ h2.card-modal-title {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   min-height: 36px;
   padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--input-bg);
+  color: inherit;
+  font: inherit;
   font-size: 14px;
+  text-align: left;
+
+  &--action {
+    cursor: pointer;
+
+    &:hover {
+      border-color: var(--blue);
+      background: var(--hover);
+    }
+
+    &:focus-visible {
+      outline: none;
+      border-color: var(--blue);
+      box-shadow: 0 0 0 2px var(--blue-soft);
+    }
+  }
 }
 
 .comment {
@@ -2787,6 +2979,17 @@ h2.card-modal-title {
 
 .costs {
   margin-bottom: 8px;
+}
+
+.costs-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  .muted {
+    margin: 0;
+  }
 }
 
 .costs-total {
