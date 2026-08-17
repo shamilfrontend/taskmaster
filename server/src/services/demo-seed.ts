@@ -50,6 +50,7 @@ interface DemoCommentSeed {
   author: UserKey;
   body: string;
   daysAgo?: number;
+  parentIndex?: number;
 }
 
 interface DemoTimeEntrySeed {
@@ -264,6 +265,12 @@ const TEAMS: DemoTeamSeed[] = [
                 body: 'Нужен столбец «Ждём клиента», как в старой CRM.',
                 daysAgo: 1,
               },
+              {
+                author: 'maria',
+                body: 'Добавлю после текущих статусов, не ломая выгрузку.',
+                daysAgo: 1,
+                parentIndex: 0,
+              },
             ],
             activity: [
               { kind: 'card_created', actor: 'demo', daysAgo: 12 },
@@ -373,6 +380,18 @@ const TEAMS: DemoTeamSeed[] = [
                 author: 'pavel',
                 body: 'Цвета тегов как в Excel-выгрузке.',
                 daysAgo: 2,
+              },
+              {
+                author: 'anna',
+                body: 'Возьму палитру из макета, вечером сверю.',
+                daysAgo: 1,
+                parentIndex: 0,
+              },
+              {
+                author: 'pavel',
+                body: 'Ок, только без кислотно-зелёного.',
+                daysAgo: 1,
+                parentIndex: 1,
               },
             ],
           },
@@ -1084,12 +1103,33 @@ async function seedProject(
     }
 
     if (cardSeed.comments) {
+      const created: Array<{
+        id: mongoose.Types.ObjectId;
+        parentId: mongoose.Types.ObjectId | null;
+      }> = [];
+
       for (const comment of cardSeed.comments) {
-        await CommentModel.create({
+        let parentId: mongoose.Types.ObjectId | null = null;
+
+        if (comment.parentIndex !== undefined) {
+          const parent = created[comment.parentIndex];
+
+          if (parent) {
+            parentId = parent.parentId ?? parent.id;
+          }
+        }
+
+        const createdComment = await CommentModel.create({
           cardId: card._id,
           userId: users[comment.author],
+          parentId,
           body: comment.body,
           createdAt: daysAgo(comment.daysAgo ?? 0),
+        });
+
+        created.push({
+          id: createdComment._id,
+          parentId: createdComment.parentId ?? null,
         });
       }
     }

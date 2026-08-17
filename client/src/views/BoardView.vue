@@ -18,6 +18,7 @@ import type {
   BoardCard,
   BoardColumn,
   CardChecklist,
+  CardComment,
   LabelColor,
   TimeEntry,
 } from '../types/index.ts';
@@ -55,12 +56,18 @@ const checklistDrafts = ref<Record<string, string>>({});
 const itemDrafts = ref<Record<string, string>>({});
 const newItemText = ref<Record<string, string>>({});
 const comment = ref('');
+const replyTo = ref<{ id: string; displayName: string } | null>(null);
 const labelName = ref('');
 const labelColor = ref<LabelColor>('blue');
 const labelDrafts = ref<Record<string, string>>({});
 interface MenuPosition {
   top: string;
   right: string;
+}
+
+interface CommentThread {
+  root: CardComment;
+  items: CardComment[];
 }
 
 const renamingId = ref<string | null>(null);
@@ -465,6 +472,8 @@ async function openCard(id: string): Promise<void> {
   descEditing.value = false;
   descDraft.value = board.card?.description ?? '';
   descExpanded.value = false;
+  comment.value = '';
+  replyTo.value = null;
   cardOpen.value = true;
   await measureDescription();
 }
@@ -1194,6 +1203,46 @@ function canDeleteComment(userId: string): boolean {
   return userId === auth.user?.id;
 }
 
+const commentThreads = computed((): CommentThread[] => {
+  const comments = board.card?.comments ?? [];
+  const roots = comments.filter((item) => !item.parentId);
+  const repliesByParent = new Map<string, CardComment[]>();
+
+  for (const item of comments) {
+    if (item.parentId) {
+      const list = repliesByParent.get(item.parentId) ?? [];
+      list.push(item);
+      repliesByParent.set(item.parentId, list);
+    }
+  }
+
+  return roots.map((root) => {
+    const replies = repliesByParent.get(root.id) ?? [];
+
+    return {
+      root,
+      items: [root, ...replies],
+    };
+  });
+});
+
+const commentPlaceholder = computed(() => (
+  replyTo.value
+    ? `Ответ для ${replyTo.value.displayName}…`
+    : 'Напишите комментарий…'
+));
+
+function startReply(item: CardComment): void {
+  replyTo.value = { id: item.id, displayName: item.displayName };
+  void nextTick(() => {
+    document.querySelector<HTMLInputElement>('.card-comment-input')?.focus();
+  });
+}
+
+function cancelReply(): void {
+  replyTo.value = null;
+}
+
 function openHoursModal(): void {
   hours.value = 2;
   hoursWorkedAt.value = toDateInput(new Date());
@@ -1256,8 +1305,9 @@ async function sendComment(): Promise<void> {
     return;
   }
 
-  await board.addComment(board.card.id, comment.value);
+  await board.addComment(board.card.id, comment.value, replyTo.value?.id);
   comment.value = '';
+  replyTo.value = null;
 }
 
 async function saveLabels(): Promise<void> {
@@ -2187,41 +2237,76 @@ async function saveLabelName(labelId: string): Promise<void> {
               <div class="card-section-head">
                 <label>Комментарии</label>
               </div>
+              <div
+                v-if="replyTo"
+                class="comment-reply-chip"
+              >
+                <span>Ответ для {{ replyTo.displayName }}</span>
+                <button
+                  type="button"
+                  class="btn btn-ghost"
+                  @click="cancelReply"
+                >
+                  Отмена
+                </button>
+              </div>
               <input
                 v-if="canEdit"
                 v-model="comment"
                 class="input card-comment-input"
-                placeholder="Напишите комментарий…"
+                :placeholder="commentPlaceholder"
                 @keydown.enter="sendComment"
               >
               <div class="card-comments">
-                <div
-                  v-for="item in board.card.comments"
-                  :key="item.id"
-                  class="comment"
+                <template
+                  v-for="thread in commentThreads"
+                  :key="thread.root.id"
                 >
-                  <div class="comment-head">
-                    <div class="who">
-                      <UserAvatar
-                        class="sm"
-                        :name="item.displayName"
-                        :src="item.avatarUrl"
-                      />
-                      {{ item.displayName }}
+                  <div
+                    v-for="item in thread.items"
+                    :key="item.id"
+                    class="comment"
+                    :class="{ 'comment--reply': Boolean(item.parentId) }"
+                  >
+                    <div class="comment-head">
+                      <div class="who">
+                        <UserAvatar
+                          class="sm"
+                          :name="item.displayName"
+                          :src="item.avatarUrl"
+                        />
+                        {{ item.displayName }}
+                      </div>
+                      <div class="comment-actions">
+                        <button
+                          v-if="canEdit"
+                          type="button"
+                          class="btn btn-ghost"
+                          @click="startReply(item)"
+                        >
+                          Ответить
+                        </button>
+                        <button
+                          v-if="canDeleteComment(item.userId)"
+                          type="button"
+                          class="btn btn-ghost"
+                          @click="removeComment(item.id)"
+                        >
+                          Удалить
+                        </button>
+                      </div>
                     </div>
-                    <button
-                      v-if="canDeleteComment(item.userId)"
-                      type="button"
-                      class="btn btn-ghost"
-                      @click="removeComment(item.id)"
+                    <div
+                      v-if="item.parentId"
+                      class="comment-reply-to"
                     >
-                      Удалить
-                    </button>
+                      в ответ {{ thread.root.displayName }}
+                    </div>
+                    <div>{{ item.body }}</div>
                   </div>
-                  <div>{{ item.body }}</div>
-                </div>
+                </template>
                 <p
-                  v-if="board.card.comments.length === 0"
+                  v-if="commentThreads.length === 0"
                   class="muted"
                 >
                   Комментариев пока нет
@@ -3026,6 +3111,25 @@ h2.card-modal-title {
   margin-bottom: 12px;
 }
 
+.comment-reply-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--hover);
+  color: var(--muted);
+  font-size: 12px;
+
+  .btn {
+    height: auto;
+    padding: 2px 8px;
+    font-size: 12px;
+  }
+}
+
 .card-comments {
   display: flex;
   flex-direction: column;
@@ -3080,6 +3184,18 @@ h2.card-modal-title {
   }
 }
 
+.comment--reply {
+  margin-left: 16px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
+}
+
+.comment-reply-to {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .comment-head {
   display: flex;
   justify-content: space-between;
@@ -3091,6 +3207,13 @@ h2.card-modal-title {
     padding: 2px 8px;
     font-size: 12px;
   }
+}
+
+.comment-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .label-picks {

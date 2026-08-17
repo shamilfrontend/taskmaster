@@ -337,6 +337,7 @@ cardsRouter.get(
         userId: comment.userId.toString(),
         displayName: userName(comment.userId),
         avatarUrl: userAvatar(comment.userId),
+        parentId: comment.parentId ? comment.parentId.toString() : null,
         body: comment.body,
         createdAt: comment.createdAt,
       })),
@@ -634,9 +635,25 @@ cardsRouter.post(
     assertRole(membership.role, ['owner', 'admin', 'member']);
 
     const body = readString(req.body, 'body');
+    const parentRaw = readOptionalString(req.body, 'parentId');
+    let parentId: mongoose.Types.ObjectId | null = null;
+
+    if (parentRaw) {
+      const parent = await CommentModel.findById(
+        asObjectId(parentRaw, 'parentId'),
+      );
+
+      if (!parent || parent.cardId.toString() !== cardId) {
+        throw new AppError(400, 'Родительский комментарий не найден');
+      }
+
+      parentId = parent.parentId ?? parent._id;
+    }
+
     const comment = await CommentModel.create({
       cardId: asObjectId(cardId),
       userId: asObjectId(req.userId),
+      parentId,
       body,
     });
 
@@ -680,6 +697,10 @@ cardsRouter.delete(
 
     if (!isAuthor) {
       assertRole(membership.role, ['owner', 'admin']);
+    }
+
+    if (!comment.parentId) {
+      await CommentModel.deleteMany({ parentId: comment._id });
     }
 
     await comment.deleteOne();

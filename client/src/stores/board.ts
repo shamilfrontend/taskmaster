@@ -182,9 +182,16 @@ export const useBoardStore = defineStore('board', () => {
     }
   }
 
-  async function addComment(cardId: string, body: string): Promise<void> {
+  async function addComment(
+    cardId: string,
+    body: string,
+    parentId?: string,
+  ): Promise<void> {
     try {
-      await http.post(`/cards/${cardId}/comments`, { body });
+      await http.post(`/cards/${cardId}/comments`, {
+        body,
+        ...(parentId ? { parentId } : {}),
+      });
       await fetchCard(cardId);
       toastSuccess('Комментарий добавлен');
     } catch (err: unknown) {
