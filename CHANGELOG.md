@@ -7,6 +7,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Unit-тесты клиента на Vitest: снепшот `App.vue`, job в CI после линта.
+
 ## [0.2.2] — 2026-08-17
 
 ### Changed

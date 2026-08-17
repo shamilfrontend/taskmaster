@@ -1,0 +1,7 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`App > matches snapshot 1`] = `
+"<!--v-if-->
+<div class="route-stub">route</div>
+<notifications-stub group="" width="300" reverse="false" position="top right" classes="vue-notification" animationtype="css" animation="[object Object]" animationname="vn-fade" speed="300" duration="4000" delay="0" max="Infinity" ignoreduplicates="false" closeonclick="true" pauseonhover="false" dangerouslysetinnerhtml="false"></notifications-stub>"
+`;
