@@ -21,9 +21,8 @@ export function useProjectTabs(
         id: 'releases',
         label: 'Релизы',
         to: {
-          name: 'project',
+          name: 'project-releases',
           params: { projectId: projectId.value },
-          query: { tab: 'releases' },
         },
       });
     }
@@ -39,9 +38,8 @@ export function useProjectTabs(
         id: 'settings',
         label: 'Настройки',
         to: {
-          name: 'project',
+          name: 'project-settings',
           params: { projectId: projectId.value },
-          query: { tab: 'settings' },
         },
       });
     }

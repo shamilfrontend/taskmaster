@@ -3,10 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import VChart from 'vue-echarts';
 import { useProjectStore } from '../stores/project.ts';
-import {
-  boardBackgroundStyle,
-  findBoardBackground,
-} from '../composables/board-backgrounds.ts';
+import { findBoardBackground } from '../composables/board-backgrounds.ts';
 import {
   statusPieOption,
   weeksLineOption,
@@ -14,8 +11,6 @@ import {
   workloadChartHeight,
 } from '../composables/analytics-charts.ts';
 import { formatMoney } from '../composables/format.ts';
-import { useProjectTabs } from '../composables/project-tabs.ts';
-import PageTabs from '../components/PageTabs.vue';
 import type { AnalyticsPeriod, AnalyticsRiskKind } from '../types/index.ts';
 
 const route = useRoute();
@@ -79,10 +74,7 @@ async function requestAnalytics(): Promise<void> {
 
 async function load(): Promise<void> {
   projects.analytics = null;
-  await Promise.all([
-    projects.fetchOne(projectId.value),
-    requestAnalytics(),
-  ]);
+  await requestAnalytics();
 }
 
 async function setPeriod(next: AnalyticsPeriod): Promise<void> {
@@ -173,24 +165,6 @@ const selectedBackground = computed(
 
 const hasBoardPhoto = computed(() => Boolean(findBoardBackground(selectedBackground.value).full));
 
-const boardStyle = computed(() => {
-  if (!hasBoardPhoto.value) {
-    return undefined;
-  }
-
-  return boardBackgroundStyle(selectedBackground.value);
-});
-
-const tabs = useProjectTabs(
-  projectId,
-  computed(() => projects.current?.role ?? projects.analytics?.role),
-  computed(
-    () => projects.current?.releasesEnabled
-      ?? projects.analytics?.releasesEnabled
-      ?? false,
-  ),
-);
-
 const statusOption = computed(() => {
   const rows = projects.analytics?.byStatus ?? [];
 
@@ -246,433 +220,417 @@ const hasBurnMeter = computed(() => {
 </script>
 
 <template>
-  <section class="screen is-active">
-    <div
-      class="board-screen"
-      :class="{ 'has-photo': hasBoardPhoto }"
-      :style="boardStyle"
-    >
-      <div class="page-head">
-        <h1>{{ projects.current?.name ?? 'Аналитика' }}</h1>
-      </div>
-      <PageTabs :tabs="tabs" />
-      <div class="analytics-bar">
-        <div class="filter">
-          <button
-            type="button"
-            class="btn btn-ghost"
-            :class="{ 'is-active': period === 'today' }"
-            :disabled="projects.isLoading"
-            @click="setPeriod('today')"
-          >
-            Сегодня
-          </button>
-          <button
-            type="button"
-            class="btn btn-ghost"
-            :class="{ 'is-active': period === '7d' }"
-            :disabled="projects.isLoading"
-            @click="setPeriod('7d')"
-          >
-            7 дней
-          </button>
-          <button
-            type="button"
-            class="btn btn-ghost"
-            :class="{ 'is-active': period === '30d' }"
-            :disabled="projects.isLoading"
-            @click="setPeriod('30d')"
-          >
-            30 дней
-          </button>
-          <button
-            type="button"
-            class="btn btn-ghost"
-            :class="{ 'is-active': period === 'quarter' }"
-            :disabled="projects.isLoading"
-            @click="setPeriod('quarter')"
-          >
-            Квартал
-          </button>
-          <button
-            type="button"
-            class="btn btn-ghost"
-            :class="{ 'is-active': period === 'year' }"
-            :disabled="projects.isLoading"
-            @click="setPeriod('year')"
-          >
-            Год
-          </button>
-          <button
-            type="button"
-            class="btn btn-ghost"
-            :class="{ 'is-active': period === '3y' }"
-            :disabled="projects.isLoading"
-            @click="setPeriod('3y')"
-          >
-            3 года
-          </button>
-          <button
-            type="button"
-            class="btn btn-ghost"
-            :class="{ 'is-active': period === '5y' }"
-            :disabled="projects.isLoading"
-            @click="setPeriod('5y')"
-          >
-            5 лет
-          </button>
-        </div>
-        <div
-          v-if="projects.analytics"
-          class="analytics-range"
-          :class="{ 'is-active': period === 'custom' }"
+  <div :class="{ 'has-photo': hasBoardPhoto }">
+    <div class="analytics-bar">
+      <div class="filter">
+        <button
+          type="button"
+          class="btn btn-ghost"
+          :class="{ 'is-active': period === 'today' }"
+          :disabled="projects.isLoading"
+          @click="setPeriod('today')"
         >
-          <input
-            v-model="rangeFrom"
-            class="input"
-            type="date"
-            :max="rangeTo || undefined"
-            :disabled="projects.isLoading"
-            aria-label="Дата начала"
-            @change="applyCustomRange"
-          >
-          <span class="muted">–</span>
-          <input
-            v-model="rangeTo"
-            class="input"
-            type="date"
-            :min="rangeFrom || undefined"
-            :disabled="projects.isLoading"
-            aria-label="Дата конца"
-            @change="applyCustomRange"
-          >
+          Сегодня
+        </button>
+        <button
+          type="button"
+          class="btn btn-ghost"
+          :class="{ 'is-active': period === '7d' }"
+          :disabled="projects.isLoading"
+          @click="setPeriod('7d')"
+        >
+          7 дней
+        </button>
+        <button
+          type="button"
+          class="btn btn-ghost"
+          :class="{ 'is-active': period === '30d' }"
+          :disabled="projects.isLoading"
+          @click="setPeriod('30d')"
+        >
+          30 дней
+        </button>
+        <button
+          type="button"
+          class="btn btn-ghost"
+          :class="{ 'is-active': period === 'quarter' }"
+          :disabled="projects.isLoading"
+          @click="setPeriod('quarter')"
+        >
+          Квартал
+        </button>
+        <button
+          type="button"
+          class="btn btn-ghost"
+          :class="{ 'is-active': period === 'year' }"
+          :disabled="projects.isLoading"
+          @click="setPeriod('year')"
+        >
+          Год
+        </button>
+        <button
+          type="button"
+          class="btn btn-ghost"
+          :class="{ 'is-active': period === '3y' }"
+          :disabled="projects.isLoading"
+          @click="setPeriod('3y')"
+        >
+          3 года
+        </button>
+        <button
+          type="button"
+          class="btn btn-ghost"
+          :class="{ 'is-active': period === '5y' }"
+          :disabled="projects.isLoading"
+          @click="setPeriod('5y')"
+        >
+          5 лет
+        </button>
+      </div>
+      <div
+        v-if="projects.analytics"
+        class="analytics-range"
+        :class="{ 'is-active': period === 'custom' }"
+      >
+        <input
+          v-model="rangeFrom"
+          class="input"
+          type="date"
+          :max="rangeTo || undefined"
+          :disabled="projects.isLoading"
+          aria-label="Дата начала"
+          @change="applyCustomRange"
+        >
+        <span class="muted">–</span>
+        <input
+          v-model="rangeTo"
+          class="input"
+          type="date"
+          :min="rangeFrom || undefined"
+          :disabled="projects.isLoading"
+          aria-label="Дата конца"
+          @change="applyCustomRange"
+        >
+      </div>
+    </div>
+    <p
+      v-if="projects.isLoading && !projects.analytics"
+      class="muted"
+    >
+      Загрузка…
+    </p>
+    <template v-else-if="projects.analytics">
+      <div class="stats-grid mb-16">
+        <button
+          type="button"
+          class="panel stat"
+          @click="openBoard()"
+        >
+          <div class="label">
+            Карточки
+          </div>
+          <div class="value">
+            {{ projects.analytics.summary.cards }}
+          </div>
+        </button>
+        <button
+          type="button"
+          class="panel stat"
+          @click="openBoard({ due: 'overdue' })"
+        >
+          <div class="label">
+            Просрочено
+          </div>
+          <div class="value neg">
+            {{ projects.analytics.summary.overdue }}
+          </div>
+        </button>
+        <button
+          type="button"
+          class="panel stat"
+          @click="openBoard({ assignee: 'none' })"
+        >
+          <div class="label">
+            Без исполнителя
+          </div>
+          <div class="value">
+            {{ projects.analytics.summary.noAssignee }}
+          </div>
+        </button>
+        <button
+          type="button"
+          class="panel stat"
+          @click="openBoard({ estimate: 'none' })"
+        >
+          <div class="label">
+            Без оценки
+          </div>
+          <div class="value">
+            {{ projects.analytics.summary.noEstimate }}
+          </div>
+        </button>
+        <button
+          v-if="projects.analytics.releasesEnabled"
+          type="button"
+          class="panel stat"
+          @click="openBoard({ release: 'none' })"
+        >
+          <div class="label">
+            Без релиза
+          </div>
+          <div class="value">
+            {{ projects.analytics.summary.noRelease }}
+          </div>
+        </button>
+        <div
+          v-if="projects.analytics.summary.factAmount !== undefined"
+          class="panel stat"
+        >
+          <div class="label">
+            Факт за период
+          </div>
+          <div class="value">
+            {{ formatMoney(projects.analytics.summary.factAmount) }}
+          </div>
         </div>
       </div>
-      <p
-        v-if="projects.error"
-        class="warn"
-      >
-        {{ projects.error }}
-      </p>
-      <p
-        v-if="projects.isLoading && !projects.analytics"
-        class="muted"
-      >
-        Загрузка…
-      </p>
-      <template v-else-if="projects.analytics">
-        <div class="stats-grid mb-16">
-          <button
-            type="button"
-            class="panel stat"
-            @click="openBoard()"
-          >
-            <div class="label">
-              Карточки
-            </div>
-            <div class="value">
-              {{ projects.analytics.summary.cards }}
-            </div>
-          </button>
-          <button
-            type="button"
-            class="panel stat"
-            @click="openBoard({ due: 'overdue' })"
-          >
-            <div class="label">
-              Просрочено
-            </div>
-            <div class="value neg">
-              {{ projects.analytics.summary.overdue }}
-            </div>
-          </button>
-          <button
-            type="button"
-            class="panel stat"
-            @click="openBoard({ assignee: 'none' })"
-          >
-            <div class="label">
-              Без исполнителя
-            </div>
-            <div class="value">
-              {{ projects.analytics.summary.noAssignee }}
-            </div>
-          </button>
-          <button
-            type="button"
-            class="panel stat"
-            @click="openBoard({ estimate: 'none' })"
-          >
-            <div class="label">
-              Без оценки
-            </div>
-            <div class="value">
-              {{ projects.analytics.summary.noEstimate }}
-            </div>
-          </button>
-          <button
-            v-if="projects.analytics.releasesEnabled"
-            type="button"
-            class="panel stat"
-            @click="openBoard({ release: 'none' })"
-          >
-            <div class="label">
-              Без релиза
-            </div>
-            <div class="value">
-              {{ projects.analytics.summary.noRelease }}
-            </div>
-          </button>
-          <div
-            v-if="projects.analytics.summary.factAmount !== undefined"
-            class="panel stat"
-          >
-            <div class="label">
-              Факт за период
-            </div>
-            <div class="value">
-              {{ formatMoney(projects.analytics.summary.factAmount) }}
-            </div>
+      <div class="grid-2 mb-16">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Задачи по статусам</h2>
           </div>
+          <VChart
+            v-if="statusOption"
+            class="chart"
+            :option="statusOption"
+            autoresize
+            @click="onStatusClick"
+          />
+          <p
+            v-else
+            class="muted"
+          >
+            Нет карточек
+          </p>
         </div>
-        <div class="grid-2 mb-16">
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Задачи по статусам</h2>
-            </div>
-            <VChart
-              v-if="statusOption"
-              class="chart"
-              :option="statusOption"
-              autoresize
-              @click="onStatusClick"
-            />
-            <p
-              v-else
-              class="muted"
-            >
-              Нет карточек
-            </p>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Списания по неделям</h2>
           </div>
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Списания по неделям</h2>
-            </div>
-            <VChart
-              v-if="weeksOption"
-              class="chart"
-              :option="weeksOption"
-              autoresize
-            />
-            <p
-              v-else
-              class="muted"
-            >
-              Нет списаний за период
-            </p>
-          </div>
-        </div>
-        <div class="grid-2 mb-16">
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Загрузка участников</h2>
-            </div>
-            <VChart
-              v-if="workloadOption"
-              class="chart"
-              :style="{ height: `${workloadHeight}px` }"
-              :option="workloadOption"
-              autoresize
-            />
-            <p
-              v-else
-              class="muted"
-            >
-              Нет списаний за период
-            </p>
-          </div>
-          <div class="panel">
-            <div class="panel-head">
-              <h2>План и факт</h2>
-            </div>
-            <div class="meter">
-              <div class="meter-head">
-                <span>Часы</span>
-                <span>
-                  {{ projects.analytics.planVsFact.factHours }}
-                  /
-                  {{ projects.analytics.planVsFact.planHours }} ч
-                </span>
-              </div>
-              <div class="meter-track">
-                <div
-                  class="meter-fill"
-                  :class="{
-                    'is-over':
-                      projects.analytics.planVsFact.factHours >
-                      projects.analytics.planVsFact.planHours
-                  }"
-                  :style="{
-                    width: barWidth(
-                      projects.analytics.planVsFact.factHours,
-                      projects.analytics.planVsFact.planHours
-                    )
-                  }"
-                />
-              </div>
-            </div>
-            <div
-              v-if="showPlanMoney"
-              class="meter"
-            >
-              <div class="meter-head">
-                <span>Сумма</span>
-                <span>
-                  {{ formatMoney(projects.analytics.planVsFact.factAmount) }}
-                  /
-                  {{ formatMoney(projects.analytics.planVsFact.planAmount) }}
-                </span>
-              </div>
-              <div class="meter-track">
-                <div
-                  class="meter-fill"
-                  :class="{
-                    'is-over':
-                      (projects.analytics.planVsFact.factAmount ?? 0) >
-                      (projects.analytics.planVsFact.planAmount ?? 0)
-                  }"
-                  :style="{
-                    width: barWidth(
-                      projects.analytics.planVsFact.factAmount ?? 0,
-                      projects.analytics.planVsFact.planAmount ?? 0
-                    )
-                  }"
-                />
-              </div>
-            </div>
-            <p class="muted tight">
-              План — все карточки, факт — выбранный период
-            </p>
-            <div
-              v-if="hasBurnMeter && projects.analytics.burn"
-              class="meter"
-            >
-              <div class="meter-head">
-                <span>Бюджет</span>
-                <span>
-                  {{ formatMoney(projects.analytics.burn.totalFact) }}
-                  /
-                  {{ formatMoney(projects.analytics.burn.limit) }}
-                </span>
-              </div>
-              <div class="meter-track">
-                <div
-                  class="meter-fill"
-                  :class="{
-                    'is-over':
-                      (projects.analytics.burn.totalFact ?? 0) >
-                      (projects.analytics.burn.limit ?? 0)
-                  }"
-                  :style="{
-                    width: barWidth(
-                      projects.analytics.burn.totalFact ?? 0,
-                      projects.analytics.burn.limit ?? 0
-                    )
-                  }"
-                />
-              </div>
-            </div>
-            <p
-              v-if="projects.analytics.burn"
-              class="muted tight"
-              :class="{ neg: projects.analytics.burn.remainder < 0 }"
-            >
-              Остаток {{ formatMoney(projects.analytics.burn.remainder) }}
-            </p>
-          </div>
-        </div>
-        <div :class="{ 'grid-2': projects.analytics.releasesEnabled }">
-          <div
-            v-if="projects.analytics.releasesEnabled"
-            class="panel"
+          <VChart
+            v-if="weeksOption"
+            class="chart"
+            :option="weeksOption"
+            autoresize
+          />
+          <p
+            v-else
+            class="muted"
           >
-            <div class="panel-head">
-              <h2>Релизы</h2>
-            </div>
-            <div
-              v-for="row in projects.analytics.releases"
-              :key="row.id ?? 'none'"
-              class="release-row"
-            >
-              <div class="release-head">
-                <span>{{ row.name }}</span>
-                <span
-                  v-if="row.status"
-                  class="badge"
-                  :class="
-                    row.status === 'released'
-                      ? 'badge-released'
-                      : 'badge-planned'
-                  "
-                >
-                  {{ row.status }}
-                </span>
-              </div>
-              <div class="bar-track">
-                <div
-                  class="bar-fill"
-                  :style="{ width: barWidth(row.done, row.total) }"
-                />
-              </div>
-              <div class="muted">
-                {{ row.done }}/{{ row.total }} ·
-                {{ row.planHours }}/{{ row.factHours }} ч
-              </div>
-            </div>
-            <p
-              v-if="!projects.analytics.releases.length"
-              class="muted"
-            >
-              Нет релизов
-            </p>
+            Нет списаний за период
+          </p>
+        </div>
+      </div>
+      <div class="grid-2 mb-16">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Загрузка участников</h2>
           </div>
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Риски</h2>
+          <VChart
+            v-if="workloadOption"
+            class="chart"
+            :style="{ height: `${workloadHeight}px` }"
+            :option="workloadOption"
+            autoresize
+          />
+          <p
+            v-else
+            class="muted"
+          >
+            Нет списаний за период
+          </p>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>План и факт</h2>
+          </div>
+          <div class="meter">
+            <div class="meter-head">
+              <span>Часы</span>
+              <span>
+                {{ projects.analytics.planVsFact.factHours }}
+                /
+                {{ projects.analytics.planVsFact.planHours }} ч
+              </span>
             </div>
-            <button
-              v-for="(risk, index) in projects.analytics.risks"
-              :key="`${risk.cardId}-${risk.kind}-${index}`"
-              type="button"
-              class="list-row"
-              @click="openRisk(risk.cardId)"
-            >
-              <span
-                class="kind-dot"
-                :class="`kind-dot--${risk.kind}`"
+            <div class="meter-track">
+              <div
+                class="meter-fill"
+                :class="{
+                  'is-over':
+                    projects.analytics.planVsFact.factHours >
+                    projects.analytics.planVsFact.planHours
+                }"
+                :style="{
+                  width: barWidth(
+                    projects.analytics.planVsFact.factHours,
+                    projects.analytics.planVsFact.planHours
+                  )
+                }"
               />
-              <div class="grow">
-                <div>{{ risk.title }}</div>
-                <div class="muted">
-                  {{
-                    risk.kind === 'gaps'
-                      ? risk.detail
-                      : riskKindLabel(risk.kind)
-                  }}
-                </div>
-              </div>
-            </button>
-            <p
-              v-if="!projects.analytics.risks.length"
-              class="muted"
-            >
-              Рисков нет
-            </p>
+            </div>
           </div>
+          <div
+            v-if="showPlanMoney"
+            class="meter"
+          >
+            <div class="meter-head">
+              <span>Сумма</span>
+              <span>
+                {{ formatMoney(projects.analytics.planVsFact.factAmount) }}
+                /
+                {{ formatMoney(projects.analytics.planVsFact.planAmount) }}
+              </span>
+            </div>
+            <div class="meter-track">
+              <div
+                class="meter-fill"
+                :class="{
+                  'is-over':
+                    (projects.analytics.planVsFact.factAmount ?? 0) >
+                    (projects.analytics.planVsFact.planAmount ?? 0)
+                }"
+                :style="{
+                  width: barWidth(
+                    projects.analytics.planVsFact.factAmount ?? 0,
+                    projects.analytics.planVsFact.planAmount ?? 0
+                  )
+                }"
+              />
+            </div>
+          </div>
+          <p class="muted tight">
+            План — все карточки, факт — выбранный период
+          </p>
+          <div
+            v-if="hasBurnMeter && projects.analytics.burn"
+            class="meter"
+          >
+            <div class="meter-head">
+              <span>Бюджет</span>
+              <span>
+                {{ formatMoney(projects.analytics.burn.totalFact) }}
+                /
+                {{ formatMoney(projects.analytics.burn.limit) }}
+              </span>
+            </div>
+            <div class="meter-track">
+              <div
+                class="meter-fill"
+                :class="{
+                  'is-over':
+                    (projects.analytics.burn.totalFact ?? 0) >
+                    (projects.analytics.burn.limit ?? 0)
+                }"
+                :style="{
+                  width: barWidth(
+                    projects.analytics.burn.totalFact ?? 0,
+                    projects.analytics.burn.limit ?? 0
+                  )
+                }"
+              />
+            </div>
+          </div>
+          <p
+            v-if="projects.analytics.burn"
+            class="muted tight"
+            :class="{ neg: projects.analytics.burn.remainder < 0 }"
+          >
+            Остаток {{ formatMoney(projects.analytics.burn.remainder) }}
+          </p>
         </div>
-      </template>
-    </div>
-  </section>
+      </div>
+      <div :class="{ 'grid-2': projects.analytics.releasesEnabled }">
+        <div
+          v-if="projects.analytics.releasesEnabled"
+          class="panel"
+        >
+          <div class="panel-head">
+            <h2>Релизы</h2>
+          </div>
+          <div
+            v-for="row in projects.analytics.releases"
+            :key="row.id ?? 'none'"
+            class="release-row"
+          >
+            <div class="release-head">
+              <span>{{ row.name }}</span>
+              <span
+                v-if="row.status"
+                class="badge"
+                :class="
+                  row.status === 'released'
+                    ? 'badge-released'
+                    : 'badge-planned'
+                "
+              >
+                {{ row.status }}
+              </span>
+            </div>
+            <div class="bar-track">
+              <div
+                class="bar-fill"
+                :style="{ width: barWidth(row.done, row.total) }"
+              />
+            </div>
+            <div class="muted">
+              {{ row.done }}/{{ row.total }} ·
+              {{ row.planHours }}/{{ row.factHours }} ч
+            </div>
+          </div>
+          <p
+            v-if="!projects.analytics.releases.length"
+            class="muted"
+          >
+            Нет релизов
+          </p>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Риски</h2>
+          </div>
+          <button
+            v-for="(risk, index) in projects.analytics.risks"
+            :key="`${risk.cardId}-${risk.kind}-${index}`"
+            type="button"
+            class="list-row"
+            @click="openRisk(risk.cardId)"
+          >
+            <span
+              class="kind-dot"
+              :class="`kind-dot--${risk.kind}`"
+            />
+            <div class="grow">
+              <div>{{ risk.title }}</div>
+              <div class="muted">
+                {{
+                  risk.kind === 'gaps'
+                    ? risk.detail
+                    : riskKindLabel(risk.kind)
+                }}
+              </div>
+            </div>
+          </button>
+          <p
+            v-if="!projects.analytics.risks.length"
+            class="muted"
+          >
+            Рисков нет
+          </p>
+        </div>
+      </div>
+    </template>
+  </div>
 </template>
 
 <style lang="scss" scoped>
@@ -833,7 +791,7 @@ button.stat:hover {
   }
 }
 
-.board-screen.has-photo {
+.has-photo {
   .analytics-bar .muted {
     color: rgb(255 255 255 / 80%);
   }

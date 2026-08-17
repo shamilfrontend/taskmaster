@@ -1,25 +1,19 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useBoardStore } from '../stores/board.ts';
 import { useProjectStore } from '../stores/project.ts';
 import { http } from '../api/http.ts';
-import {
-  boardBackgroundStyle,
-  findBoardBackground,
-} from '../composables/board-backgrounds.ts';
 import { formatDate } from '../composables/format.ts';
-import { useProjectTabs } from '../composables/project-tabs.ts';
 import type { BoardCard } from '../types/index.ts';
 import ModalDialog from '../components/ModalDialog.vue';
-import PageTabs from '../components/PageTabs.vue';
 
 const route = useRoute();
 const router = useRouter();
 const board = useBoardStore();
 const projects = useProjectStore();
 const releaseId = computed(() => String(route.params.releaseId));
-const projectId = computed(() => board.release?.projectId ?? '');
+const projectId = computed(() => String(route.params.projectId));
 const attachOpen = ref(false);
 const editOpen = ref(false);
 const statusOpen = ref(false);
@@ -29,14 +23,23 @@ const editName = ref('');
 const editDate = ref('');
 const projectCards = ref<BoardCard[]>([]);
 
-onMounted(async () => {
-  await board.fetchRelease(releaseId.value);
+watch(releaseId, async (id) => {
+  await board.fetchRelease(id);
 
   if (!board.release) {
     return;
   }
 
-  await projects.fetchOne(board.release.projectId);
+  if (board.release.projectId !== projectId.value) {
+    await router.replace({
+      name: 'release',
+      params: {
+        projectId: board.release.projectId,
+        releaseId: id,
+      },
+    });
+    return;
+  }
 
   const boardId = projects.current?.board.id;
 
@@ -48,27 +51,7 @@ onMounted(async () => {
     `/boards/${boardId}`,
   );
   projectCards.value = boardRes.data.cards;
-});
-
-const selectedBackground = computed(
-  () => projects.current?.boardBackground ?? 'default',
-);
-
-const hasBoardPhoto = computed(() => Boolean(findBoardBackground(selectedBackground.value).full));
-
-const boardStyle = computed(() => {
-  if (!hasBoardPhoto.value) {
-    return undefined;
-  }
-
-  return boardBackgroundStyle(selectedBackground.value);
-});
-
-const tabs = useProjectTabs(
-  projectId,
-  computed(() => projects.current?.role ?? board.release?.role),
-  computed(() => Boolean(projects.current?.releasesEnabled)),
-);
+}, { immediate: true });
 
 const canAdmin = computed(() => {
   const role = board.release?.role;
@@ -157,260 +140,250 @@ async function detach(cardId: string): Promise<void> {
 }
 
 async function remove(): Promise<void> {
-  const nextProjectId = board.release?.projectId;
+  const nextProjectId = board.release?.projectId ?? projectId.value;
   await board.deleteRelease(releaseId.value);
   deleteOpen.value = false;
 
   if (nextProjectId) {
-    await router.push({ name: 'project', params: { projectId: nextProjectId } });
+    await router.push({
+      name: 'project-releases',
+      params: { projectId: nextProjectId },
+    });
   }
 }
 </script>
 
 <template>
-  <section
-    v-if="board.release"
-    class="screen is-active"
-  >
-    <div
-      class="board-screen"
-      :class="{ 'has-photo': hasBoardPhoto }"
-      :style="boardStyle"
-    >
-      <div class="page-head">
-        <h1>{{ projects.current?.name ?? board.release.name }}</h1>
-      </div>
-      <PageTabs :tabs="tabs" />
-      <div class="page-head">
-        <div>
-          <h1>
-            {{ board.release.name }}
-            <span
-              class="badge"
-              :class="board.release.status === 'released' ? 'badge-released' : 'badge-planned'"
-            >
-              {{ board.release.status }}
-            </span>
-          </h1>
-          <p class="muted">
-            {{ formatDate(board.release.date) || 'без даты' }}
-          </p>
-        </div>
-        <div class="actions">
-          <button
-            v-if="canAdmin"
-            type="button"
-            class="btn btn-ghost"
-            @click="openEdit"
+  <div v-if="board.release">
+    <div class="page-head">
+      <div>
+        <h1>
+          {{ board.release.name }}
+          <span
+            class="badge"
+            :class="board.release.status === 'released' ? 'badge-released' : 'badge-planned'"
           >
-            Изменить
-          </button>
-          <button
-            v-if="canEdit"
-            type="button"
-            class="btn"
-            @click="attachOpen = true"
-          >
-            Прикрепить карточку
-          </button>
-        </div>
-      </div>
-      <div class="panel">
-        <div class="panel-head">
-          <h2>Карточки релиза</h2>
-          <button
-            v-if="canAdmin && board.release.status !== 'released'"
-            type="button"
-            class="btn btn-ghost"
-            :disabled="!board.release.cards.length"
-            @click="statusOpen = true"
-          >
-            Отметить как released
-          </button>
-        </div>
-        <p
-          v-if="!board.release.cards.length"
-          class="muted"
-        >
-          Нет задач
+            {{ board.release.status }}
+          </span>
+        </h1>
+        <p class="muted">
+          {{ formatDate(board.release.date) || 'без даты' }}
         </p>
-        <div
-          v-for="card in board.release.cards"
-          :key="card.id"
-          class="list-row"
-        >
-          <div class="grow">
-            <div>{{ card.title }}</div>
-            <div class="muted">
-              {{ card.boardName }} · {{ card.columnName }}
-            </div>
-          </div>
-          <span class="muted">{{ card.assigneeName }}</span>
-          <button
-            v-if="canEdit"
-            type="button"
-            class="btn btn-ghost"
-            @click="detach(card.id)"
-          >
-            Открепить
-          </button>
-        </div>
-        <div
+      </div>
+      <div class="actions">
+        <button
           v-if="canAdmin"
-          class="actions pt-12"
+          type="button"
+          class="btn btn-ghost"
+          @click="openEdit"
         >
-          <button
-            type="button"
-            class="btn btn-danger"
-            @click="deleteOpen = true"
-          >
-            Удалить
-          </button>
-        </div>
+          Изменить
+        </button>
+        <button
+          v-if="canEdit"
+          type="button"
+          class="btn"
+          @click="attachOpen = true"
+        >
+          Прикрепить карточку
+        </button>
       </div>
     </div>
-
-    <ModalDialog
-      :open="editOpen"
-      title="Изменить релиз"
-      @close="editOpen = false"
-    >
-      <p
-        v-if="board.error"
-        class="warn"
-      >
-        {{ board.error }}
-      </p>
-      <div class="field">
-        <label>Название</label>
-        <input
-          v-model="editName"
-          class="input"
-          type="text"
-          placeholder="Название релиза…"
-        >
-      </div>
-      <div class="field">
-        <label>Дата релиза</label>
-        <input
-          v-model="editDate"
-          class="input"
-          type="date"
-        >
-      </div>
-      <div class="modal-foot">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Карточки релиза</h2>
         <button
+          v-if="canAdmin && board.release.status !== 'released'"
           type="button"
           class="btn btn-ghost"
-          @click="editOpen = false"
-        >
-          Отмена
-        </button>
-        <button
-          type="button"
-          class="btn"
-          :disabled="!editName.trim()"
-          @click="saveEdit"
-        >
-          Сохранить
-        </button>
-      </div>
-    </ModalDialog>
-
-    <ModalDialog
-      :open="statusOpen"
-      title="Статус релиза"
-      @close="statusOpen = false"
-    >
-      <p class="muted mb-16">
-        Карточки не переместятся по колонкам.
-      </p>
-      <div class="modal-foot">
-        <button
-          type="button"
-          class="btn btn-ghost"
-          @click="statusOpen = false"
-        >
-          Отмена
-        </button>
-        <button
-          type="button"
-          class="btn"
-          @click="markReleased"
+          :disabled="!board.release.cards.length"
+          @click="statusOpen = true"
         >
           Отметить как released
         </button>
       </div>
-    </ModalDialog>
-
-    <ModalDialog
-      :open="attachOpen"
-      title="Прикрепить карточку"
-      @close="closeAttach"
-    >
-      <div class="choice-list">
-        <p
-          v-if="!availableCards.length"
-          class="muted"
-        >
-          Нет свободных карточек.
-        </p>
-        <label
-          v-for="card in availableCards"
-          :key="card.id"
-          class="choice"
-        >
-          <input
-            v-model="selectedCardIds"
-            type="checkbox"
-            :value="card.id"
-          >
-          <span>{{ card.title }}</span>
-        </label>
-      </div>
-      <div class="modal-foot">
-        <button
-          type="button"
-          class="btn btn-ghost"
-          @click="closeAttach"
-        >
-          Отмена
-        </button>
-        <button
-          type="button"
-          class="btn"
-          :disabled="!selectedCardIds.length"
-          @click="attach"
-        >
-          Прикрепить
-        </button>
-      </div>
-    </ModalDialog>
-
-    <ModalDialog
-      :open="deleteOpen"
-      title="Удалить релиз"
-      @close="deleteOpen = false"
-    >
-      <p class="muted mb-16">
-        Карточки останутся на доске без релиза.
+      <p
+        v-if="!board.release.cards.length"
+        class="muted"
+      >
+        Нет задач
       </p>
-      <div class="modal-foot">
+      <div
+        v-for="card in board.release.cards"
+        :key="card.id"
+        class="list-row"
+      >
+        <div class="grow">
+          <div>{{ card.title }}</div>
+          <div class="muted">
+            {{ card.boardName }} · {{ card.columnName }}
+          </div>
+        </div>
+        <span class="muted">{{ card.assigneeName }}</span>
         <button
+          v-if="canEdit"
           type="button"
           class="btn btn-ghost"
-          @click="deleteOpen = false"
+          @click="detach(card.id)"
         >
-          Отмена
+          Открепить
         </button>
+      </div>
+      <div
+        v-if="canAdmin"
+        class="actions pt-12"
+      >
         <button
           type="button"
           class="btn btn-danger"
-          @click="remove"
+          @click="deleteOpen = true"
         >
           Удалить
         </button>
       </div>
-    </ModalDialog>
-  </section>
+    </div>
+  </div>
+
+  <ModalDialog
+    :open="editOpen"
+    title="Изменить релиз"
+    @close="editOpen = false"
+  >
+    <p
+      v-if="board.error"
+      class="warn"
+    >
+      {{ board.error }}
+    </p>
+    <div class="field">
+      <label>Название</label>
+      <input
+        v-model="editName"
+        class="input"
+        type="text"
+        placeholder="Название релиза…"
+      >
+    </div>
+    <div class="field">
+      <label>Дата релиза</label>
+      <input
+        v-model="editDate"
+        class="input"
+        type="date"
+      >
+    </div>
+    <div class="modal-foot">
+      <button
+        type="button"
+        class="btn btn-ghost"
+        @click="editOpen = false"
+      >
+        Отмена
+      </button>
+      <button
+        type="button"
+        class="btn"
+        :disabled="!editName.trim()"
+        @click="saveEdit"
+      >
+        Сохранить
+      </button>
+    </div>
+  </ModalDialog>
+
+  <ModalDialog
+    :open="statusOpen"
+    title="Статус релиза"
+    @close="statusOpen = false"
+  >
+    <p class="muted mb-16">
+      Карточки не переместятся по колонкам.
+    </p>
+    <div class="modal-foot">
+      <button
+        type="button"
+        class="btn btn-ghost"
+        @click="statusOpen = false"
+      >
+        Отмена
+      </button>
+      <button
+        type="button"
+        class="btn"
+        @click="markReleased"
+      >
+        Отметить как released
+      </button>
+    </div>
+  </ModalDialog>
+
+  <ModalDialog
+    :open="attachOpen"
+    title="Прикрепить карточку"
+    @close="closeAttach"
+  >
+    <div class="choice-list">
+      <p
+        v-if="!availableCards.length"
+        class="muted"
+      >
+        Нет свободных карточек.
+      </p>
+      <label
+        v-for="card in availableCards"
+        :key="card.id"
+        class="choice"
+      >
+        <input
+          v-model="selectedCardIds"
+          type="checkbox"
+          :value="card.id"
+        >
+        <span>{{ card.title }}</span>
+      </label>
+    </div>
+    <div class="modal-foot">
+      <button
+        type="button"
+        class="btn btn-ghost"
+        @click="closeAttach"
+      >
+        Отмена
+      </button>
+      <button
+        type="button"
+        class="btn"
+        :disabled="!selectedCardIds.length"
+        @click="attach"
+      >
+        Прикрепить
+      </button>
+    </div>
+  </ModalDialog>
+
+  <ModalDialog
+    :open="deleteOpen"
+    title="Удалить релиз"
+    @close="deleteOpen = false"
+  >
+    <p class="muted mb-16">
+      Карточки останутся на доске без релиза.
+    </p>
+    <div class="modal-foot">
+      <button
+        type="button"
+        class="btn btn-ghost"
+        @click="deleteOpen = false"
+      >
+        Отмена
+      </button>
+      <button
+        type="button"
+        class="btn btn-danger"
+        @click="remove"
+      >
+        Удалить
+      </button>
+    </div>
+  </ModalDialog>
 </template>

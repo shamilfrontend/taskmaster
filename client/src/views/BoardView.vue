@@ -343,14 +343,9 @@ function syncFiltersToQuery(): void {
 
   const query: Record<string, string> = { ...next };
   const card = queryParam('card');
-  const tab = queryParam('tab');
 
   if (card) {
     query.card = card;
-  }
-
-  if (tab) {
-    query.tab = tab;
   }
 
   void router.replace({ query });
