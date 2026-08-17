@@ -9,7 +9,11 @@
 
 ### Added
 
-- Unit-тесты клиента на Vitest: снепшот `App.vue`, job в CI после линта.
+- Unit-тесты клиента на Vitest (`jsdom`, `@vue/test-utils`): снепшот `App.vue`, скрипты `npm test` / `npm run test:watch`.
+
+### Changed
+
+- CI: после линта запускаются unit-тесты клиента; деплой на `main` зависит от успешного `test`.
 
 ## [0.2.2] — 2026-08-17
 
