@@ -197,11 +197,9 @@ projectsRouter.patch(
       throw new AppError(404, 'Проект не найден');
     }
 
-    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : undefined;
-
-    if (name) {
+    if (req.body?.name !== undefined) {
       assertRole(membership.role, ['owner', 'admin']);
-      project.name = name;
+      project.name = readString(req.body, 'name');
     }
 
     if (req.body?.releasesEnabled !== undefined) {

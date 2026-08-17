@@ -10,6 +10,7 @@
 ### Added
 
 - Unit-тесты клиента на Vitest (`jsdom`, `@vue/test-utils`): снепшот `App.vue`, скрипты `npm test` / `npm run test:watch`.
+- Переименование проекта из меню действий в списке команды и из вкладки «Настройки».
 
 ### Changed
 

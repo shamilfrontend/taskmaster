@@ -175,6 +175,7 @@ export interface BoardCard {
   title: string;
   assigneeId: string | null;
   assigneeName: string | null;
+  assigneeAvatarUrl: string | null;
   dueDate: string | null;
   estimateHours: number;
   factHours: number;

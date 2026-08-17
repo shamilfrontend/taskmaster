@@ -127,6 +127,7 @@ boardsRouter.get(
           title: card.title,
           assigneeId: card.assigneeId?.toString() ?? null,
           assigneeName: assignee?.displayName ?? null,
+          assigneeAvatarUrl: assignee?.avatarUrl ?? null,
           dueDate: card.dueDate,
           estimateHours: card.estimateHours,
           factHours,

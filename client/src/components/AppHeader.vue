@@ -2,8 +2,8 @@
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.ts';
 import { useBreadcrumbs } from '../composables/breadcrumbs.ts';
-import { initials } from '../composables/format.ts';
 import ProductSwitcher from './ProductSwitcher.vue';
+import UserAvatar from './UserAvatar.vue';
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -51,13 +51,11 @@ async function logout(): Promise<void> {
       </template>
     </nav>
     <div class="header-right">
-      <span
+      <UserAvatar
         v-if="auth.user"
-        class="avatar"
-        :title="auth.user.displayName"
-      >
-        {{ initials(auth.user.displayName) }}
-      </span>
+        :name="auth.user.displayName"
+        :src="auth.user.avatarUrl"
+      />
       <button
         type="button"
         class="btn btn-ghost"
@@ -86,6 +84,7 @@ async function logout(): Promise<void> {
 
   .btn-ghost {
     color: #fff;
+    font-size: 16px;
 
     &:hover:not(:disabled) {
       background: rgb(255 255 255 / 20%);
@@ -108,7 +107,7 @@ async function logout(): Promise<void> {
   background: none;
   color: #fff;
   font-weight: 600;
-  font-size: 14px;
+  font-size: 16px;
 
   &:hover {
     background: rgb(255 255 255 / 20%);
@@ -129,7 +128,7 @@ async function logout(): Promise<void> {
   min-width: 0;
   overflow: hidden;
   color: rgb(255 255 255 / 80%);
-  font-size: 14px;
+  font-size: 16px;
 
   a,
   button {

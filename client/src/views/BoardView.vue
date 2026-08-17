@@ -8,12 +8,12 @@ import { useBoardStore } from '../stores/board.ts';
 import { useProjectStore } from '../stores/project.ts';
 import {
   formatDate,
-  initials,
   isOverdue,
   labelClass,
   linkifyText,
 } from '../composables/format.ts';
 import ModalDialog from '../components/ModalDialog.vue';
+import UserAvatar from '../components/UserAvatar.vue';
 import type {
   BoardCard,
   BoardColumn,
@@ -1505,12 +1505,12 @@ async function saveLabelName(labelId: string): Promise<void> {
                 >{{ card.releaseName }}</span>
                 <div class="task-foot">
                   <div class="task-meta">
-                    <span
+                    <UserAvatar
                       v-if="card.assigneeName"
-                      class="avatar sm"
-                    >
-                      {{ initials(card.assigneeName) }}
-                    </span>
+                      class="sm"
+                      :name="card.assigneeName"
+                      :src="card.assigneeAvatarUrl ?? ''"
+                    />
                     <span :class="{ 'is-overdue': isOverdue(card.dueDate, column.isDone) }">
                       {{ formatDate(card.dueDate) }}
                     </span>

@@ -29,6 +29,7 @@ const ratesOpen = ref(false);
 const deleteOpen = ref(false);
 const releasesDraft = ref(false);
 const budgetDraft = ref(false);
+const projectNameDraft = ref('');
 const roleRates = ref<Record<TeamRole, number>>({
   owner: 0,
   admin: 0,
@@ -41,6 +42,10 @@ function syncFeatureDrafts(): void {
   budgetDraft.value = Boolean(projects.current?.budgetEnabled);
 }
 
+function syncProjectNameDraft(): void {
+  projectNameDraft.value = projects.current?.name ?? '';
+}
+
 watch(projectId, async (id) => {
   if (projects.current?.id !== id) {
     projects.current = null;
@@ -49,6 +54,7 @@ watch(projectId, async (id) => {
 
   await projects.fetchOne(id);
   syncFeatureDrafts();
+  syncProjectNameDraft();
 
   if (projects.current?.roleRates) {
     roleRates.value = { ...projects.current.roleRates };
@@ -62,6 +68,11 @@ watch(projectId, async (id) => {
 const canAdmin = computed(() => {
   const role = projects.current?.role;
   return role === 'owner' || role === 'admin';
+});
+
+const canSaveProjectName = computed(() => {
+  const draft = projectNameDraft.value.trim();
+  return Boolean(draft) && draft !== projects.current?.name;
 });
 
 const isReleases = computed(
@@ -120,6 +131,20 @@ const tabs = useProjectTabs(
   computed(() => projects.current?.role),
   computed(() => Boolean(projects.current?.releasesEnabled)),
 );
+
+async function saveProjectName(): Promise<void> {
+  const name = projectNameDraft.value.trim();
+
+  if (!name || name === projects.current?.name) {
+    return;
+  }
+
+  const ok = await projects.renameProject(projectId.value, name);
+
+  if (ok) {
+    projectNameDraft.value = projects.current?.name ?? name;
+  }
+}
 
 async function saveBudget(): Promise<void> {
   await projects.updateBudget(projectId.value, Number(budgetLimit.value));
@@ -253,6 +278,30 @@ async function removeProject(): Promise<void> {
         v-else-if="isSettings"
         class="stack"
       >
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Общие</h2>
+          </div>
+          <div class="field">
+            <label>Название проекта</label>
+            <input
+              v-model="projectNameDraft"
+              class="input"
+              type="text"
+              placeholder="Название проекта…"
+            >
+          </div>
+          <div class="actions actions--start">
+            <button
+              type="button"
+              class="btn"
+              :disabled="!canSaveProjectName || projects.isLoading"
+              @click="saveProjectName"
+            >
+              Сохранить
+            </button>
+          </div>
+        </div>
         <div
           v-if="projects.current.budgetEnabled && projects.current.roleRates"
           class="panel"

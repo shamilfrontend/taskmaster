@@ -10,6 +10,7 @@ import type {
   ProjectDetails,
   TeamRole,
 } from '../types/index.ts';
+import { useTeamsStore } from './teams.ts';
 
 interface ProjectPayload extends Omit<ProjectDetails, 'board'> {
   board?: { id: string };
@@ -41,6 +42,43 @@ export const useProjectStore = defineStore('project', () => {
       current.value = toProjectDetails(data);
     } catch (err: unknown) {
       error.value = errorMessage(err);
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  async function renameProject(
+    projectId: string,
+    name: string,
+  ): Promise<boolean> {
+    isLoading.value = true;
+    error.value = null;
+
+    try {
+      const { data } = await http.patch<{ id: string; name: string }>(
+        `/projects/${projectId}`,
+        { name },
+      );
+
+      if (current.value?.id === projectId) {
+        current.value = { ...current.value, name: data.name };
+      }
+
+      const teams = useTeamsStore();
+      const item = teams.current?.projects.find(
+        (project) => project.id === projectId,
+      );
+
+      if (item) {
+        item.name = data.name;
+      }
+
+      toastSuccess('Проект переименован');
+      return true;
+    } catch (err: unknown) {
+      error.value = errorMessage(err);
+      toastError('Ошибка при переименовании проекта', err);
+      return false;
     } finally {
       isLoading.value = false;
     }
@@ -191,6 +229,7 @@ export const useProjectStore = defineStore('project', () => {
     isLoading,
     error,
     fetchOne,
+    renameProject,
     updateBudget,
     updateSettings,
     createRelease,
