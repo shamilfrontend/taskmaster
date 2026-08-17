@@ -9,6 +9,7 @@ import type {
   LabelColor,
   ReleaseDetails,
 } from '../types/index.ts';
+import { useProjectStore } from './project.ts';
 
 interface CardPatch {
   title?: string;
@@ -30,6 +31,65 @@ export const useBoardStore = defineStore('board', () => {
   function reset(): void {
     current.value = null;
     error.value = null;
+  }
+
+  function syncReleaseCaches(): void {
+    const details = release.value;
+    const projects = useProjectStore();
+
+    if (details && projects.current?.id === details.projectId) {
+      projects.current = {
+        ...projects.current,
+        releases: projects.current.releases.map((item) => (
+          item.id === details.id
+            ? {
+              ...item,
+              name: details.name,
+              date: details.date,
+              status: details.status,
+              cardCount: details.cards.length,
+            }
+            : item
+        )),
+      };
+    }
+
+    if (details && current.value) {
+      current.value = {
+        ...current.value,
+        releases: current.value.releases.map((item) => (
+          item.id === details.id
+            ? { ...item, name: details.name, status: details.status }
+            : item
+        )),
+      };
+    }
+  }
+
+  function removeReleaseFromCaches(releaseId: string): void {
+    const projects = useProjectStore();
+
+    if (projects.current) {
+      projects.current = {
+        ...projects.current,
+        releases: projects.current.releases.filter(
+          (item) => item.id !== releaseId,
+        ),
+      };
+    }
+
+    if (current.value) {
+      current.value = {
+        ...current.value,
+        releases: current.value.releases.filter(
+          (item) => item.id !== releaseId,
+        ),
+      };
+    }
+
+    if (release.value?.id === releaseId) {
+      release.value = null;
+    }
   }
 
   async function fetchBoard(boardId: string): Promise<void> {
@@ -433,6 +493,7 @@ export const useBoardStore = defineStore('board', () => {
     try {
       await http.patch(`/releases/${releaseId}`, { status });
       await fetchRelease(releaseId);
+      syncReleaseCaches();
       toastSuccess('Статус релиза обновлён');
     } catch (err: unknown) {
       toastError('Ошибка при обновлении статуса', err);
@@ -449,6 +510,7 @@ export const useBoardStore = defineStore('board', () => {
     try {
       await http.patch(`/releases/${releaseId}`, payload);
       await fetchRelease(releaseId);
+      syncReleaseCaches();
       toastSuccess('Релиз обновлён');
       return true;
     } catch (err: unknown) {
@@ -468,6 +530,7 @@ export const useBoardStore = defineStore('board', () => {
       );
 
       await fetchRelease(releaseId);
+      syncReleaseCaches();
       toastSuccess('Карточки прикреплены');
     } catch (err: unknown) {
       toastError('Ошибка при прикреплении карточек', err);
@@ -479,6 +542,7 @@ export const useBoardStore = defineStore('board', () => {
     try {
       await http.delete(`/releases/${releaseId}/cards/${cardId}`);
       await fetchRelease(releaseId);
+      syncReleaseCaches();
       toastSuccess('Карточка откреплена');
     } catch (err: unknown) {
       toastError('Ошибка при откреплении карточки', err);
@@ -489,6 +553,7 @@ export const useBoardStore = defineStore('board', () => {
   async function deleteRelease(releaseId: string): Promise<void> {
     try {
       await http.delete(`/releases/${releaseId}`);
+      removeReleaseFromCaches(releaseId);
       toastSuccess('Релиз удалён');
     } catch (err: unknown) {
       toastError('Ошибка при удалении релиза', err);
