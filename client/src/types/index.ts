@@ -215,6 +215,7 @@ export interface CardComment {
   id: string;
   userId: string;
   displayName: string;
+  avatarUrl: string;
   body: string;
   createdAt?: string;
 }

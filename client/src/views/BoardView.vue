@@ -2202,6 +2202,11 @@ async function saveLabelName(labelId: string): Promise<void> {
                 >
                   <div class="comment-head">
                     <div class="who">
+                      <UserAvatar
+                        class="sm"
+                        :name="item.displayName"
+                        :src="item.avatarUrl"
+                      />
                       {{ item.displayName }}
                     </div>
                     <button
@@ -3067,6 +3072,9 @@ h2.card-modal-title {
   }
 
   .who {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-weight: 600;
     font-size: 13px;
   }

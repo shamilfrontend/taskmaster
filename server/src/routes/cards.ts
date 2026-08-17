@@ -284,9 +284,14 @@ cardsRouter.get(
       ...(card.assigneeId ? [card.assigneeId] : []),
     ];
     const users = await UserModel.find({ _id: { $in: userIds } }).lean();
-    const userName = (id: mongoose.Types.ObjectId): string => (
+    const userById = (id: mongoose.Types.ObjectId) => (
       users.find((user) => user._id.toString() === id.toString())
-        ?.displayName ?? ''
+    );
+    const userName = (id: mongoose.Types.ObjectId): string => (
+      userById(id)?.displayName ?? ''
+    );
+    const userAvatar = (id: mongoose.Types.ObjectId): string => (
+      userById(id)?.avatarUrl ?? ''
     );
 
     const board = await BoardModel.findById(card.boardId).lean();
@@ -331,6 +336,7 @@ cardsRouter.get(
         id: comment._id.toString(),
         userId: comment.userId.toString(),
         displayName: userName(comment.userId),
+        avatarUrl: userAvatar(comment.userId),
         body: comment.body,
         createdAt: comment.createdAt,
       })),
