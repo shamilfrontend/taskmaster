@@ -1,3 +1,4 @@
+import { isAxiosError } from 'axios';
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { http, errorMessage, setDemoMode } from '../api/http.ts';
@@ -20,6 +21,11 @@ export const useAuthStore = defineStore('auth', () => {
     } catch (err: unknown) {
       user.value = null;
       setDemoMode(false);
+
+      if (isAxiosError(err) && err.response?.status === 401) {
+        return false;
+      }
+
       error.value = errorMessage(err);
       return false;
     } finally {
