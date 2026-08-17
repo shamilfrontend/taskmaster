@@ -3,7 +3,7 @@ import mongoose, { Schema } from 'mongoose';
 export const ACTIVITY_KINDS = [
   'card_created',
   'card_moved',
-  'comment_added'
+  'comment_added',
 ] as const;
 
 export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
@@ -30,9 +30,9 @@ const activityEventSchema = new Schema<ActivityEventPojo>(
     actorId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     kind: { type: String, enum: ACTIVITY_KINDS, required: true },
     cardTitle: { type: String, required: true },
-    detail: { type: String, default: '' }
+    detail: { type: String, default: '' },
   },
-  { timestamps: { createdAt: true, updatedAt: false } }
+  { timestamps: { createdAt: true, updatedAt: false } },
 );
 
 activityEventSchema.index({ teamId: 1, createdAt: -1 });
@@ -40,5 +40,5 @@ activityEventSchema.index({ boardId: 1 });
 
 export const ActivityEventModel = mongoose.model<ActivityEventPojo>(
   'ActivityEvent',
-  activityEventSchema
+  activityEventSchema,
 );

@@ -6,7 +6,7 @@ import { useProjectStore } from '../stores/project.ts';
 import {
   BOARD_BACKGROUNDS,
   boardBackgroundStyle,
-  findBoardBackground
+  findBoardBackground,
 } from '../composables/board-backgrounds.ts';
 import { useProjectTabs } from '../composables/project-tabs.ts';
 import ModalDialog from '../components/ModalDialog.vue';
@@ -33,7 +33,7 @@ const roleRates = ref<Record<TeamRole, number>>({
   owner: 0,
   admin: 0,
   member: 0,
-  viewer: 0
+  viewer: 0,
 });
 
 function syncFeatureDrafts(): void {
@@ -65,24 +65,47 @@ const canAdmin = computed(() => {
 });
 
 const isReleases = computed(
-  () =>
-    route.query.tab === 'releases' &&
-    Boolean(projects.current?.releasesEnabled)
+  () => route.query.tab === 'releases'
+    && Boolean(projects.current?.releasesEnabled),
 );
 
 const isSettings = computed(
-  () => route.query.tab === 'settings' && canAdmin.value
+  () => route.query.tab === 'settings' && canAdmin.value,
 );
 
 const isBoard = computed(() => !isReleases.value && !isSettings.value);
 
+const BACKGROUND_PREVIEW_COUNT = 12;
+const showAllBackgrounds = ref(false);
+
 const selectedBackground = computed(
-  () => projects.current?.boardBackground ?? 'default'
+  () => projects.current?.boardBackground ?? 'default',
 );
 
-const hasBoardPhoto = computed(() =>
-  Boolean(findBoardBackground(selectedBackground.value).full)
+const orderedBackgrounds = computed(() => {
+  const selected = BOARD_BACKGROUNDS.find(
+    (option) => option.id === selectedBackground.value,
+  );
+
+  if (!selected) {
+    return BOARD_BACKGROUNDS;
+  }
+
+  return [
+    selected,
+    ...BOARD_BACKGROUNDS.filter((option) => option.id !== selected.id),
+  ];
+});
+
+const hasMoreBackgrounds = computed(
+  () => orderedBackgrounds.value.length > BACKGROUND_PREVIEW_COUNT,
 );
+
+const visibleBackgrounds = computed(() => (showAllBackgrounds.value
+  ? orderedBackgrounds.value
+  : orderedBackgrounds.value.slice(0, BACKGROUND_PREVIEW_COUNT)));
+
+const hasBoardPhoto = computed(() => Boolean(findBoardBackground(selectedBackground.value).full));
 
 const boardStyle = computed(() => {
   if (!hasBoardPhoto.value) {
@@ -95,7 +118,7 @@ const boardStyle = computed(() => {
 const tabs = useProjectTabs(
   projectId,
   computed(() => projects.current?.role),
-  computed(() => Boolean(projects.current?.releasesEnabled))
+  computed(() => Boolean(projects.current?.releasesEnabled)),
 );
 
 async function saveBudget(): Promise<void> {
@@ -112,7 +135,7 @@ async function createRelease(): Promise<void> {
   const id = await projects.createRelease(
     projectId.value,
     releaseName.value,
-    releaseDate.value || undefined
+    releaseDate.value || undefined,
   );
 
   if (id) {
@@ -129,7 +152,7 @@ async function saveRates(): Promise<void> {
 async function saveFeatures(): Promise<void> {
   await projects.updateSettings(projectId.value, {
     releasesEnabled: releasesDraft.value,
-    budgetEnabled: budgetDraft.value
+    budgetEnabled: budgetDraft.value,
   });
   syncFeatureDrafts();
 }
@@ -157,7 +180,10 @@ async function removeProject(): Promise<void> {
 </script>
 
 <template>
-  <section v-if="projects.current" class="screen is-active">
+  <section
+    v-if="projects.current"
+    class="screen is-active"
+  >
     <div
       class="board-screen"
       :class="{ 'has-photo': hasBoardPhoto }"
@@ -166,17 +192,29 @@ async function removeProject(): Promise<void> {
       <div class="page-head">
         <div>
           <h1>{{ projects.current.name }}</h1>
-          <p v-if="projects.current.budgetEnabled && !isBoard">валюта RUB</p>
         </div>
       </div>
       <PageTabs :tabs="tabs" />
-      <p v-if="projects.error" class="warn">{{ projects.error }}</p>
+      <p
+        v-if="projects.error"
+        class="warn"
+      >
+        {{ projects.error }}
+      </p>
       <BoardView
         v-if="isBoard && projects.current.board.id"
         :key="projects.current.board.id"
       />
-      <p v-else-if="isBoard" class="muted">Загрузка…</p>
-      <div v-else-if="isReleases" class="stack">
+      <p
+        v-else-if="isBoard"
+        class="muted"
+      >
+        Загрузка…
+      </p>
+      <div
+        v-else-if="isReleases"
+        class="stack"
+      >
         <div class="panel">
           <div class="panel-head">
             <h2>Релизы</h2>
@@ -198,7 +236,9 @@ async function removeProject(): Promise<void> {
           >
             <div class="grow">
               <div>{{ release.name }}</div>
-              <div class="muted">{{ release.cardCount }} карточки</div>
+              <div class="muted">
+                {{ release.cardCount }} карточки
+              </div>
             </div>
             <span
               class="badge"
@@ -209,11 +249,21 @@ async function removeProject(): Promise<void> {
           </button>
         </div>
       </div>
-      <div v-else-if="isSettings" class="stack">
-        <div v-if="projects.current.budgetEnabled && projects.current.roleRates" class="panel">
+      <div
+        v-else-if="isSettings"
+        class="stack"
+      >
+        <div
+          v-if="projects.current.budgetEnabled && projects.current.roleRates"
+          class="panel"
+        >
           <div class="panel-head">
             <h2>Ставки, ₽/час</h2>
-            <button type="button" class="btn btn-ghost" @click="ratesOpen = true">
+            <button
+              type="button"
+              class="btn btn-ghost"
+              @click="ratesOpen = true"
+            >
               Ставки ролей
             </button>
           </div>
@@ -226,7 +276,10 @@ async function removeProject(): Promise<void> {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="row in projects.current.rates" :key="row.userId">
+              <tr
+                v-for="row in projects.current.rates"
+                :key="row.userId"
+              >
                 <td>{{ row.displayName }}</td>
                 <td class="muted">
                   {{ row.source === 'personal' ? 'персональная' : 'роль ' + row.role }}
@@ -242,7 +295,7 @@ async function removeProject(): Promise<void> {
           </div>
           <div class="bg-picker">
             <button
-              v-for="option in BOARD_BACKGROUNDS"
+              v-for="option in visibleBackgrounds"
               :key="option.id"
               type="button"
               class="bg-pick"
@@ -253,6 +306,18 @@ async function removeProject(): Promise<void> {
               @click="selectBackground(option.id)"
             >
               <span>{{ option.label }}</span>
+            </button>
+          </div>
+          <div
+            v-if="hasMoreBackgrounds"
+            class="actions actions--start mt-16"
+          >
+            <button
+              type="button"
+              class="btn btn-ghost"
+              @click="showAllBackgrounds = !showAllBackgrounds"
+            >
+              {{ showAllBackgrounds ? 'Свернуть' : 'Показать все' }}
             </button>
           </div>
         </div>
@@ -270,11 +335,17 @@ async function removeProject(): Promise<void> {
           </div>
           <div class="choice-list">
             <label class="choice">
-              <input v-model="releasesDraft" type="checkbox">
+              <input
+                v-model="releasesDraft"
+                type="checkbox"
+              >
               <span>Релизы</span>
             </label>
             <label class="choice">
-              <input v-model="budgetDraft" type="checkbox">
+              <input
+                v-model="budgetDraft"
+                type="checkbox"
+              >
               <span>Введение бюджета</span>
             </label>
           </div>
@@ -294,7 +365,11 @@ async function removeProject(): Promise<void> {
             <h2>Опасная зона</h2>
           </div>
           <div class="actions actions--start">
-            <button type="button" class="btn btn-danger" @click="deleteOpen = true">
+            <button
+              type="button"
+              class="btn btn-danger"
+              @click="deleteOpen = true"
+            >
               Удалить проект
             </button>
           </div>
@@ -302,7 +377,11 @@ async function removeProject(): Promise<void> {
       </div>
     </div>
 
-    <ModalDialog :open="budgetOpen" title="Бюджет проекта" @close="budgetOpen = false">
+    <ModalDialog
+      :open="budgetOpen"
+      title="Бюджет проекта"
+      @close="budgetOpen = false"
+    >
       <div class="field">
         <label>Лимит, ₽</label>
         <input
@@ -314,12 +393,28 @@ async function removeProject(): Promise<void> {
         >
       </div>
       <div class="modal-foot">
-        <button type="button" class="btn btn-ghost" @click="budgetOpen = false">Отмена</button>
-        <button type="button" class="btn" @click="saveBudget">Сохранить</button>
+        <button
+          type="button"
+          class="btn btn-ghost"
+          @click="budgetOpen = false"
+        >
+          Отмена
+        </button>
+        <button
+          type="button"
+          class="btn"
+          @click="saveBudget"
+        >
+          Сохранить
+        </button>
       </div>
     </ModalDialog>
 
-    <ModalDialog :open="releaseOpen" title="Создать релиз" @close="releaseOpen = false">
+    <ModalDialog
+      :open="releaseOpen"
+      title="Создать релиз"
+      @close="releaseOpen = false"
+    >
       <div class="field">
         <label>Название</label>
         <input
@@ -331,17 +426,43 @@ async function removeProject(): Promise<void> {
       </div>
       <div class="field">
         <label>Дата релиза</label>
-        <input v-model="releaseDate" class="input" type="date">
+        <input
+          v-model="releaseDate"
+          class="input"
+          type="date"
+        >
       </div>
-      <p class="muted mb-16">При создании статус всегда planned.</p>
+      <p class="muted mb-16">
+        При создании статус всегда planned.
+      </p>
       <div class="modal-foot">
-        <button type="button" class="btn btn-ghost" @click="releaseOpen = false">Отмена</button>
-        <button type="button" class="btn" @click="createRelease">Создать</button>
+        <button
+          type="button"
+          class="btn btn-ghost"
+          @click="releaseOpen = false"
+        >
+          Отмена
+        </button>
+        <button
+          type="button"
+          class="btn"
+          @click="createRelease"
+        >
+          Создать
+        </button>
       </div>
     </ModalDialog>
 
-    <ModalDialog :open="ratesOpen" title="Ставки ролей" @close="ratesOpen = false">
-      <div v-for="role in (['owner', 'admin', 'member', 'viewer'] as TeamRole[])" :key="role" class="field">
+    <ModalDialog
+      :open="ratesOpen"
+      title="Ставки ролей"
+      @close="ratesOpen = false"
+    >
+      <div
+        v-for="role in (['owner', 'admin', 'member', 'viewer'] as TeamRole[])"
+        :key="role"
+        class="field"
+      >
         <label>{{ role }}</label>
         <input
           v-model.number="roleRates[role]"
@@ -352,16 +473,46 @@ async function removeProject(): Promise<void> {
         >
       </div>
       <div class="modal-foot">
-        <button type="button" class="btn btn-ghost" @click="ratesOpen = false">Отмена</button>
-        <button type="button" class="btn" @click="saveRates">Сохранить</button>
+        <button
+          type="button"
+          class="btn btn-ghost"
+          @click="ratesOpen = false"
+        >
+          Отмена
+        </button>
+        <button
+          type="button"
+          class="btn"
+          @click="saveRates"
+        >
+          Сохранить
+        </button>
       </div>
     </ModalDialog>
 
-    <ModalDialog :open="deleteOpen" title="Удалить проект" @close="deleteOpen = false">
-      <p class="muted mb-16">Каскадом удалятся доски, карточки и релизы.</p>
+    <ModalDialog
+      :open="deleteOpen"
+      title="Удалить проект"
+      @close="deleteOpen = false"
+    >
+      <p class="muted mb-16">
+        Каскадом удалятся доски, карточки и релизы.
+      </p>
       <div class="modal-foot">
-        <button type="button" class="btn btn-ghost" @click="deleteOpen = false">Отмена</button>
-        <button type="button" class="btn btn-danger" @click="removeProject">Удалить</button>
+        <button
+          type="button"
+          class="btn btn-ghost"
+          @click="deleteOpen = false"
+        >
+          Отмена
+        </button>
+        <button
+          type="button"
+          class="btn btn-danger"
+          @click="removeProject"
+        >
+          Удалить
+        </button>
       </div>
     </ModalDialog>
   </section>

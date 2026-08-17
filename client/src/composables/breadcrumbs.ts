@@ -16,7 +16,7 @@ export function useBreadcrumbs(): { crumbs: ComputedRef<Crumb[]> } {
   const board = useBoardStore();
 
   async function loadParents(): Promise<void> {
-    const name = route.name;
+    const { name } = route;
 
     // TeamView owns fetch for route `team`
     if (name === 'team') {
@@ -65,35 +65,33 @@ export function useBreadcrumbs(): { crumbs: ComputedRef<Crumb[]> } {
     () => {
       void loadParents();
     },
-    { immediate: true }
+    { immediate: true },
   );
 
   const crumbs = computed((): Crumb[] => {
-    const name = route.name;
+    const { name } = route;
     const teamId = teams.current?.id;
     const teamName = teams.current?.name;
     const projectId = project.current?.id;
     const projectName = project.current?.name;
-    const teamCrumb: Crumb | null =
-      teamId && teamName
-        ? { label: teamName, to: { name: 'team', params: { teamId } } }
-        : null;
-    const projectCrumb: Crumb | null =
-      projectId && projectName
-        ? { label: projectName, to: { name: 'project', params: { projectId } } }
-        : null;
+    const teamCrumb: Crumb | null = teamId && teamName
+      ? { label: teamName, to: { name: 'team', params: { teamId } } }
+      : null;
+    const projectCrumb: Crumb | null = projectId && projectName
+      ? { label: projectName, to: { name: 'project', params: { projectId } } }
+      : null;
 
     if (name === 'team' && teamName && teamId === String(route.params.teamId)) {
       return [{ label: teamName }];
     }
 
     if (
-      name === 'project' &&
-      teamCrumb &&
-      projectCrumb &&
-      projectName &&
-      projectId === String(route.params.projectId) &&
-      project.current?.teamId === teamId
+      name === 'project'
+      && teamCrumb
+      && projectCrumb
+      && projectName
+      && projectId === String(route.params.projectId)
+      && project.current?.teamId === teamId
     ) {
       if (route.query.tab === 'releases' && project.current?.releasesEnabled) {
         return [teamCrumb, projectCrumb, { label: 'Релизы' }];
@@ -103,23 +101,23 @@ export function useBreadcrumbs(): { crumbs: ComputedRef<Crumb[]> } {
     }
 
     if (
-      name === 'analytics' &&
-      teamCrumb &&
-      projectCrumb &&
-      projectId === String(route.params.projectId) &&
-      project.current?.teamId === teamId
+      name === 'analytics'
+      && teamCrumb
+      && projectCrumb
+      && projectId === String(route.params.projectId)
+      && project.current?.teamId === teamId
     ) {
       return [teamCrumb, projectCrumb, { label: 'Аналитика' }];
     }
 
     if (
-      name === 'release' &&
-      teamCrumb &&
-      projectCrumb &&
-      board.release &&
-      board.release.id === String(route.params.releaseId) &&
-      board.release.projectId === projectId &&
-      project.current?.teamId === teamId
+      name === 'release'
+      && teamCrumb
+      && projectCrumb
+      && board.release
+      && board.release.id === String(route.params.releaseId)
+      && board.release.projectId === projectId
+      && project.current?.teamId === teamId
     ) {
       return [teamCrumb, projectCrumb, { label: board.release.name }];
     }

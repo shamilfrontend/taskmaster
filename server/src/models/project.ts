@@ -1,9 +1,8 @@
 import mongoose, { Schema } from 'mongoose';
 import {
   DEFAULT_BOARD_BACKGROUND,
-  TEAM_ROLES,
   type BoardBackground,
-  type TeamRole
+  type TeamRole,
 } from '../constants.js';
 
 export interface ProjectPojo {
@@ -27,16 +26,16 @@ const projectSchema = new Schema<ProjectPojo>(
     boardBackground: {
       type: String,
       required: true,
-      default: DEFAULT_BOARD_BACKGROUND
+      default: DEFAULT_BOARD_BACKGROUND,
     },
     roleRates: {
       owner: { type: Number, required: true, default: 0 },
       admin: { type: Number, required: true, default: 0 },
       member: { type: Number, required: true, default: 0 },
-      viewer: { type: Number, required: true, default: 0 }
-    }
+      viewer: { type: Number, required: true, default: 0 },
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 projectSchema.index({ teamId: 1 });

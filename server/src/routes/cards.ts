@@ -7,7 +7,7 @@ import { requireAuth } from '../middleware/auth.js';
 import {
   requireMembership,
   teamIdFromBoard,
-  teamIdFromCard
+  teamIdFromCard,
 } from '../middleware/access.js';
 import { BoardModel } from '../models/board.js';
 import { CardModel, type CardPojo, type ChecklistPojo } from '../models/card.js';
@@ -31,7 +31,7 @@ import {
   readHours,
   readOptionalDate,
   readOptionalString,
-  readString
+  readString,
 } from '../utils/validate.js';
 import type { TeamRole } from '../constants.js';
 
@@ -74,14 +74,14 @@ function mapChecklists(checklists: ChecklistPojo[] | undefined) {
           id: String(item._id),
           text: item.text,
           done: item.done,
-          position: item.position
-        }))
+          position: item.position,
+        })),
     }));
 }
 
 async function requireEditableCard(
   req: Request,
-  cardId: string
+  cardId: string,
 ): Promise<mongoose.HydratedDocument<CardPojo>> {
   const teamId = await teamIdFromCard(cardId);
   const membership = await requireMembership(teamId, req.userId);
@@ -149,7 +149,7 @@ function canEditCards(role: TeamRole): boolean {
 function canLogOnCard(
   role: TeamRole,
   assigneeId: string | null,
-  userId: string
+  userId: string,
 ): boolean {
   if (role === 'owner' || role === 'admin') {
     return true;
@@ -175,7 +175,7 @@ cardsRouter.post(
     const columnId = readString(req.body, 'columnId');
     const column = await ColumnModel.findOne({
       _id: asObjectId(columnId, 'columnId'),
-      boardId: board._id
+      boardId: board._id,
     }).lean();
 
     if (!column) {
@@ -188,10 +188,9 @@ cardsRouter.post(
 
     const assigneeRaw = readOptionalString(req.body, 'assigneeId');
     const releaseRaw = readOptionalString(req.body, 'releaseId');
-    const estimateHours =
-      req.body?.estimateHours === undefined || req.body?.estimateHours === ''
-        ? 0
-        : readEstimate(req.body, 'estimateHours');
+    const estimateHours = req.body?.estimateHours === undefined || req.body?.estimateHours === ''
+      ? 0
+      : readEstimate(req.body, 'estimateHours');
 
     const card = await CardModel.create({
       boardId: board._id,
@@ -205,7 +204,7 @@ cardsRouter.post(
       labelIds: [],
       checklists: [],
       position: (last?.position ?? -1) + 1,
-      planAmount: 0
+      planAmount: 0,
     });
 
     if (Array.isArray(req.body?.labelIds)) {
@@ -214,7 +213,7 @@ cardsRouter.post(
         .map((id) => asObjectId(id, 'labelId'));
       const labels = await LabelModel.find({
         _id: { $in: ids },
-        boardId: board._id
+        boardId: board._id,
       }).lean();
       card.labelIds = labels.map((label) => label._id);
       await card.save();
@@ -231,7 +230,7 @@ cardsRouter.post(
 
       const release = await ReleaseModel.findOne({
         _id: card.releaseId,
-        projectId: board.projectId
+        projectId: board.projectId,
       }).lean();
 
       if (!release) {
@@ -250,15 +249,15 @@ cardsRouter.post(
       actorId: req.userId,
       kind: 'card_created',
       cardTitle: card.title,
-      detail: column.name
+      detail: column.name,
     });
 
     res.status(201).json({
       id: card._id.toString(),
       title: card.title,
-      planAmount: fresh?.planAmount ?? 0
+      planAmount: fresh?.planAmount ?? 0,
     });
-  })
+  }),
 );
 
 cardsRouter.get(
@@ -282,12 +281,13 @@ cardsRouter.get(
     const userIds = [
       ...entries.map((entry) => entry.userId),
       ...comments.map((comment) => comment.userId),
-      ...(card.assigneeId ? [card.assigneeId] : [])
+      ...(card.assigneeId ? [card.assigneeId] : []),
     ];
     const users = await UserModel.find({ _id: { $in: userIds } }).lean();
-    const userName = (id: mongoose.Types.ObjectId): string =>
+    const userName = (id: mongoose.Types.ObjectId): string => (
       users.find((user) => user._id.toString() === id.toString())
-        ?.displayName ?? '';
+        ?.displayName ?? ''
+    );
 
     const board = await BoardModel.findById(card.boardId).lean();
     const project = board
@@ -295,9 +295,8 @@ cardsRouter.get(
       : null;
     const budgetEnabled = isFeatureOn(project?.budgetEnabled);
     const isOwn = card.assigneeId?.toString() === req.userId;
-    const showAllMoney =
-      budgetEnabled &&
-      (membership.role === 'owner' || membership.role === 'admin');
+    const showAllMoney = budgetEnabled
+      && (membership.role === 'owner' || membership.role === 'admin');
     const showOwnMoney = budgetEnabled && membership.role === 'member' && isOwn;
 
     res.json({
@@ -315,9 +314,8 @@ cardsRouter.get(
       planAmount: showAllMoney || showOwnMoney ? card.planAmount : undefined,
       timeEntries: entries.map((entry) => {
         const own = entry.userId.toString() === req.userId;
-        const showMoney =
-          budgetEnabled &&
-          (showAllMoney || (membership.role === 'member' && own));
+        const showMoney = budgetEnabled
+          && (showAllMoney || (membership.role === 'member' && own));
 
         return {
           id: entry._id.toString(),
@@ -326,7 +324,7 @@ cardsRouter.get(
           hours: entry.hours,
           rateSnapshot: showMoney ? entry.rateSnapshot : undefined,
           amount: showMoney ? entry.amount : undefined,
-          workedAt: entry.workedAt
+          workedAt: entry.workedAt,
         };
       }),
       comments: comments.map((comment) => ({
@@ -334,10 +332,10 @@ cardsRouter.get(
         userId: comment.userId.toString(),
         displayName: userName(comment.userId),
         body: comment.body,
-        createdAt: comment.createdAt
-      }))
+        createdAt: comment.createdAt,
+      })),
     });
-  })
+  }),
 );
 
 cardsRouter.patch(
@@ -385,7 +383,7 @@ cardsRouter.patch(
     if (req.body?.columnId) {
       const column = await ColumnModel.findOne({
         _id: asObjectId(String(req.body.columnId), 'columnId'),
-        boardId: card.boardId
+        boardId: card.boardId,
       }).lean();
 
       if (!column) {
@@ -405,8 +403,7 @@ cardsRouter.patch(
 
     if ('assigneeId' in (req.body as object)) {
       const raw = req.body.assigneeId;
-      card.assigneeId =
-        typeof raw === 'string' && raw ? asObjectId(raw, 'assigneeId') : null;
+      card.assigneeId = typeof raw === 'string' && raw ? asObjectId(raw, 'assigneeId') : null;
     }
 
     if ('dueDate' in (req.body as object)) {
@@ -431,7 +428,7 @@ cardsRouter.patch(
 
         const release = await ReleaseModel.findOne({
           _id: asObjectId(raw, 'releaseId'),
-          projectId: board.projectId
+          projectId: board.projectId,
         }).lean();
 
         if (!release) {
@@ -450,7 +447,7 @@ cardsRouter.patch(
         .map((id) => asObjectId(id, 'labelId'));
       const labels = await LabelModel.find({
         _id: { $in: ids },
-        boardId: card.boardId
+        boardId: card.boardId,
       }).lean();
       card.labelIds = labels.map((label) => label._id);
     }
@@ -467,12 +464,12 @@ cardsRouter.patch(
         actorId: req.userId,
         kind: 'card_moved',
         cardTitle: card.title,
-        detail: movedToColumnName
+        detail: movedToColumnName,
       });
     }
 
     res.json({ ok: true });
-  })
+  }),
 );
 
 cardsRouter.delete(
@@ -488,7 +485,7 @@ cardsRouter.delete(
     }
 
     const entryCount = await TimeEntryModel.countDocuments({
-      cardId: card._id
+      cardId: card._id,
     });
 
     if (entryCount > 0) {
@@ -501,7 +498,7 @@ cardsRouter.delete(
     await CommentModel.deleteMany({ cardId: card._id });
     await CardModel.deleteOne({ _id: card._id });
     res.json({ ok: true });
-  })
+  }),
 );
 
 cardsRouter.post(
@@ -520,7 +517,7 @@ cardsRouter.post(
       !canLogOnCard(
         membership.role,
         card.assigneeId?.toString() ?? null,
-        req.userId
+        req.userId,
       )
     ) {
       throw new AppError(403, 'Можно списывать только на своих карточках');
@@ -542,16 +539,16 @@ cardsRouter.post(
       hours,
       rateSnapshot: rate,
       amount: calcAmount(hours, rate),
-      workedAt
+      workedAt,
     });
 
     res.status(201).json({
       id: entry._id.toString(),
       hours: entry.hours,
       amount: entry.amount,
-      rateSnapshot: entry.rateSnapshot
+      rateSnapshot: entry.rateSnapshot,
     });
-  })
+  }),
 );
 
 cardsRouter.patch(
@@ -586,7 +583,7 @@ cardsRouter.patch(
     entry.amount = calcAmount(entry.hours, entry.rateSnapshot);
     await entry.save();
     res.json({ ok: true, amount: entry.amount });
-  })
+  }),
 );
 
 cardsRouter.delete(
@@ -619,7 +616,7 @@ cardsRouter.delete(
 
     await entry.deleteOne();
     res.json({ ok: true });
-  })
+  }),
 );
 
 cardsRouter.post(
@@ -634,7 +631,7 @@ cardsRouter.post(
     const comment = await CommentModel.create({
       cardId: asObjectId(cardId),
       userId: asObjectId(req.userId),
-      body
+      body,
     });
 
     const card = await CardModel.findById(asObjectId(cardId)).lean();
@@ -651,12 +648,12 @@ cardsRouter.post(
         actorId: req.userId,
         kind: 'comment_added',
         cardTitle: card.title,
-        detail: truncateDetail(body)
+        detail: truncateDetail(body),
       });
     }
 
     res.status(201).json({ id: comment._id.toString(), body: comment.body });
-  })
+  }),
 );
 
 cardsRouter.delete(
@@ -664,7 +661,7 @@ cardsRouter.delete(
   asyncHandler(async (req: Request, res: Response) => {
     const commentId = req.params.commentId as string;
     const comment = await CommentModel.findById(
-      asObjectId(commentId, 'commentId')
+      asObjectId(commentId, 'commentId'),
     );
 
     if (!comment) {
@@ -681,7 +678,7 @@ cardsRouter.delete(
 
     await comment.deleteOne();
     res.json({ ok: true });
-  })
+  }),
 );
 
 cardsRouter.post(
@@ -697,13 +694,13 @@ cardsRouter.post(
 
     const last = card.checklists.reduce(
       (max, list) => Math.max(max, list.position),
-      -1
+      -1,
     );
 
     card.checklists.push({
       title,
       position: last + 1,
-      items: []
+      items: [],
     });
     card.markModified('checklists');
     await card.save();
@@ -713,9 +710,9 @@ cardsRouter.post(
     res.status(201).json({
       id: created?._id ? String(created._id) : undefined,
       title,
-      position: last + 1
+      position: last + 1,
     });
-  })
+  }),
 );
 
 cardsRouter.patch(
@@ -728,13 +725,13 @@ cardsRouter.patch(
     const title = assertMaxLength(
       readString(req.body, 'title'),
       'title',
-      CHECKLIST_TITLE_MAX
+      CHECKLIST_TITLE_MAX,
     );
     checklist.title = title;
     card.markModified('checklists');
     await card.save();
     res.json({ ok: true });
-  })
+  }),
 );
 
 cardsRouter.delete(
@@ -755,7 +752,7 @@ cardsRouter.delete(
     card.markModified('checklists');
     await card.save();
     res.json({ ok: true });
-  })
+  }),
 );
 
 cardsRouter.post(
@@ -768,17 +765,17 @@ cardsRouter.post(
     const text = assertMaxLength(
       readString(req.body, 'text'),
       'text',
-      CHECKLIST_ITEM_MAX
+      CHECKLIST_ITEM_MAX,
     );
     const last = checklist.items.reduce(
       (max, item) => Math.max(max, item.position),
-      -1
+      -1,
     );
 
     checklist.items.push({
       text,
       done: false,
-      position: last + 1
+      position: last + 1,
     });
     card.markModified('checklists');
     await card.save();
@@ -789,9 +786,9 @@ cardsRouter.post(
       id: created?._id ? String(created._id) : undefined,
       text,
       done: false,
-      position: last + 1
+      position: last + 1,
     });
-  })
+  }),
 );
 
 cardsRouter.patch(
@@ -805,7 +802,7 @@ cardsRouter.patch(
       item.text = assertMaxLength(
         readString(req.body, 'text'),
         'text',
-        CHECKLIST_ITEM_MAX
+        CHECKLIST_ITEM_MAX,
       );
     }
 
@@ -816,7 +813,7 @@ cardsRouter.patch(
     card.markModified('checklists');
     await card.save();
     res.json({ ok: true });
-  })
+  }),
 );
 
 cardsRouter.delete(
@@ -826,9 +823,7 @@ cardsRouter.delete(
     const { card, checklist, item } = await findCardByItem(itemId);
     await requireEditableCard(req, card._id.toString());
 
-    const index = checklist.items.findIndex((row) =>
-      row._id?.equals(item._id)
-    );
+    const index = checklist.items.findIndex((row) => row._id?.equals(item._id));
 
     if (index === -1) {
       throw new AppError(404, 'Пункт не найден');
@@ -838,5 +833,5 @@ cardsRouter.delete(
     card.markModified('checklists');
     await card.save();
     res.json({ ok: true });
-  })
+  }),
 );

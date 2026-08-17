@@ -5,7 +5,11 @@ import { UserModel } from '../models/user.js';
 import { verifyToken } from '../utils/crypto.js';
 import { asyncHandler } from './async-handler.js';
 
-export const requireAuth = asyncHandler(async (req: Request, _res: Response, next: NextFunction) => {
+export const requireAuth = asyncHandler(async (
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+) => {
   const token = req.cookies?.[config.cookieName];
 
   if (typeof token !== 'string' || !token) {

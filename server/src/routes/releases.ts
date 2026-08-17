@@ -6,7 +6,7 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import {
   requireMembership,
-  teamIdFromRelease
+  teamIdFromRelease,
 } from '../middleware/access.js';
 import { BoardModel } from '../models/board.js';
 import { CardModel } from '../models/card.js';
@@ -21,11 +21,11 @@ import {
   assertRole,
   readOptionalDate,
   readOptionalString,
-  readString
+  readString,
 } from '../utils/validate.js';
 
 async function assertProjectReleasesOn(
-  projectId: Types.ObjectId
+  projectId: Types.ObjectId,
 ): Promise<void> {
   const project = await ProjectModel.findById(projectId).lean();
 
@@ -55,13 +55,13 @@ releasesRouter.get(
 
     const cards = await CardModel.find({ releaseId: release._id }).lean();
     const boards = await BoardModel.find({
-      _id: { $in: cards.map((card) => card.boardId) }
+      _id: { $in: cards.map((card) => card.boardId) },
     }).lean();
     const columns = await ColumnModel.find({
-      _id: { $in: cards.map((card) => card.columnId) }
+      _id: { $in: cards.map((card) => card.columnId) },
     }).lean();
     const users = await UserModel.find({
-      _id: { $in: cards.map((card) => card.assigneeId).filter(Boolean) }
+      _id: { $in: cards.map((card) => card.assigneeId).filter(Boolean) },
     }).lean();
 
     res.json({
@@ -73,13 +73,13 @@ releasesRouter.get(
       role: membership.role,
       cards: cards.map((card) => {
         const board = boards.find(
-          (item) => item._id.toString() === card.boardId.toString()
+          (item) => item._id.toString() === card.boardId.toString(),
         );
         const column = columns.find(
-          (item) => item._id.toString() === card.columnId.toString()
+          (item) => item._id.toString() === card.columnId.toString(),
         );
         const assignee = users.find(
-          (item) => item._id.toString() === card.assigneeId?.toString()
+          (item) => item._id.toString() === card.assigneeId?.toString(),
         );
 
         return {
@@ -87,11 +87,11 @@ releasesRouter.get(
           title: card.title,
           boardName: board?.name ?? '',
           columnName: column?.name ?? '',
-          assigneeName: assignee?.displayName ?? null
+          assigneeName: assignee?.displayName ?? null,
         };
-      })
+      }),
     });
-  })
+  }),
 );
 
 releasesRouter.patch(
@@ -117,7 +117,7 @@ releasesRouter.patch(
       const exists = await ReleaseModel.findOne({
         projectId: release.projectId,
         nameNormalized,
-        _id: { $ne: release._id }
+        _id: { $ne: release._id },
       }).lean();
 
       if (exists) {
@@ -141,9 +141,9 @@ releasesRouter.patch(
       id: release._id.toString(),
       name: release.name,
       date: release.date,
-      status: release.status
+      status: release.status,
     });
-  })
+  }),
 );
 
 releasesRouter.delete(
@@ -164,11 +164,11 @@ releasesRouter.delete(
 
     await CardModel.updateMany(
       { releaseId: asObjectId(releaseId) },
-      { $set: { releaseId: null } }
+      { $set: { releaseId: null } },
     );
     await ReleaseModel.deleteOne({ _id: asObjectId(releaseId) });
     res.json({ ok: true });
-  })
+  }),
 );
 
 releasesRouter.post(
@@ -203,7 +203,7 @@ releasesRouter.post(
     card.releaseId = release._id;
     await card.save();
     res.json({ ok: true });
-  })
+  }),
 );
 
 releasesRouter.delete(
@@ -226,11 +226,11 @@ releasesRouter.delete(
     await CardModel.updateOne(
       {
         _id: asObjectId(cardId, 'cardId'),
-        releaseId: asObjectId(releaseId)
+        releaseId: asObjectId(releaseId),
       },
-      { $set: { releaseId: null } }
+      { $set: { releaseId: null } },
     );
 
     res.json({ ok: true });
-  })
+  }),
 );

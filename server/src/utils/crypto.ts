@@ -8,7 +8,7 @@ interface JwtPayload {
 
 export function signToken(userId: string): string {
   return jwt.sign({ userId } satisfies JwtPayload, config.jwtSecret, {
-    expiresIn: '7d'
+    expiresIn: '7d',
   });
 }
 

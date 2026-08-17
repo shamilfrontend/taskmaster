@@ -1,19 +1,24 @@
 import { acceptHMRUpdate, defineStore } from 'pinia';
 import { ref } from 'vue';
-import { http, errorMessage } from '../api/http.ts';
+import {
+  http, errorMessage, toastError, toastSuccess,
+} from '../api/http.ts';
 import type {
+  ActivityItem,
   InviteRole,
+  TeamActivityPage,
   TeamDetails,
   TeamListItem,
-  TeamOverview,
-  TeamRole
+  TeamRole,
 } from '../types/index.ts';
 
 export const useTeamsStore = defineStore('teams', () => {
   const list = ref<TeamListItem[]>([]);
   const current = ref<TeamDetails | null>(null);
-  const overview = ref<TeamOverview | null>(null);
+  const activity = ref<ActivityItem[]>([]);
+  const activityHasMore = ref(false);
   const isLoading = ref(false);
+  const isActivityLoading = ref(false);
   const error = ref<string | null>(null);
 
   async function fetchList(): Promise<void> {
@@ -48,15 +53,38 @@ export const useTeamsStore = defineStore('teams', () => {
     }
   }
 
-  async function fetchOverview(teamId: string): Promise<void> {
+  async function fetchActivity(
+    teamId: string,
+    reset = true,
+  ): Promise<void> {
+    isActivityLoading.value = true;
     error.value = null;
 
     try {
-      const { data } = await http.get<TeamOverview>(`/teams/${teamId}/overview`);
-      overview.value = data;
+      const last = activity.value[activity.value.length - 1];
+      const { data } = await http.get<TeamActivityPage>(
+        `/teams/${teamId}/activity`,
+        {
+          params: !reset && last ? { before: last.createdAt } : undefined,
+        },
+      );
+
+      if (reset) {
+        activity.value = data.items;
+      } else {
+        activity.value = [...activity.value, ...data.items];
+      }
+
+      activityHasMore.value = data.hasMore;
     } catch (err: unknown) {
       error.value = errorMessage(err);
-      overview.value = null;
+
+      if (reset) {
+        activity.value = [];
+        activityHasMore.value = false;
+      }
+    } finally {
+      isActivityLoading.value = false;
     }
   }
 
@@ -67,9 +95,11 @@ export const useTeamsStore = defineStore('teams', () => {
     try {
       const { data } = await http.post<{ id: string }>('/teams', { name });
       await fetchList();
+      toastSuccess('Команда создана');
       return data.id;
     } catch (err: unknown) {
       error.value = errorMessage(err);
+      toastError('Ошибка при создании команды', err);
       return null;
     } finally {
       isLoading.value = false;
@@ -83,12 +113,14 @@ export const useTeamsStore = defineStore('teams', () => {
     try {
       const { data } = await http.post<{ token: string }>(
         `/teams/${teamId}/invites`,
-        { role }
+        { role },
       );
       await fetchOne(teamId);
+      toastSuccess('Приглашение создано');
       return data.token;
     } catch (err: unknown) {
       error.value = errorMessage(err);
+      toastError('Ошибка при создании приглашения', err);
       return null;
     } finally {
       isLoading.value = false;
@@ -101,7 +133,7 @@ export const useTeamsStore = defineStore('teams', () => {
     try {
       const { data } = await http.patch<{ id: string; name: string }>(
         `/teams/${teamId}`,
-        { name }
+        { name },
       );
 
       if (current.value?.id === teamId) {
@@ -114,25 +146,29 @@ export const useTeamsStore = defineStore('teams', () => {
         item.name = data.name;
       }
 
+      toastSuccess('Команда обновлена');
       return true;
     } catch (err: unknown) {
       error.value = errorMessage(err);
+      toastError('Ошибка при обновлении команды', err);
       return false;
     }
   }
 
   async function revokeInvite(
     teamId: string,
-    inviteId: string
+    inviteId: string,
   ): Promise<boolean> {
     error.value = null;
 
     try {
       await http.delete(`/teams/${teamId}/invites/${inviteId}`);
       await fetchOne(teamId);
+      toastSuccess('Приглашение отозвано');
       return true;
     } catch (err: unknown) {
       error.value = errorMessage(err);
+      toastError('Ошибка при отзыве приглашения', err);
       return false;
     }
   }
@@ -149,9 +185,11 @@ export const useTeamsStore = defineStore('teams', () => {
         current.value = null;
       }
 
+      toastSuccess('Команда удалена');
       return true;
     } catch (err: unknown) {
       error.value = errorMessage(err);
+      toastError('Ошибка при удалении команды', err);
       return false;
     } finally {
       isLoading.value = false;
@@ -161,16 +199,18 @@ export const useTeamsStore = defineStore('teams', () => {
   async function changeRole(
     teamId: string,
     userId: string,
-    role: TeamRole
+    role: TeamRole,
   ): Promise<boolean> {
     error.value = null;
 
     try {
       await http.patch(`/teams/${teamId}/members/${userId}`, { role });
       await fetchOne(teamId);
+      toastSuccess('Роль обновлена');
       return true;
     } catch (err: unknown) {
       error.value = errorMessage(err);
+      toastError('Ошибка при изменении роли', err);
       return false;
     }
   }
@@ -178,7 +218,7 @@ export const useTeamsStore = defineStore('teams', () => {
   async function removeMember(
     teamId: string,
     userId: string,
-    refresh = true
+    refresh = true,
   ): Promise<boolean> {
     error.value = null;
 
@@ -195,9 +235,11 @@ export const useTeamsStore = defineStore('teams', () => {
         }
       }
 
+      toastSuccess('Участник исключён');
       return true;
     } catch (err: unknown) {
       error.value = errorMessage(err);
+      toastError('Ошибка при исключении участника', err);
       return false;
     }
   }
@@ -205,7 +247,6 @@ export const useTeamsStore = defineStore('teams', () => {
   async function createProject(
     teamId: string,
     name: string,
-    budgetLimit?: number
   ): Promise<string | null> {
     isLoading.value = true;
     error.value = null;
@@ -213,63 +254,57 @@ export const useTeamsStore = defineStore('teams', () => {
     try {
       const { data } = await http.post<{ id: string }>(
         `/teams/${teamId}/projects`,
-        { name, budgetLimit }
+        { name },
       );
       await fetchOne(teamId);
+      toastSuccess('Проект создан');
       return data.id;
     } catch (err: unknown) {
       error.value = errorMessage(err);
+      toastError('Ошибка при создании проекта', err);
       return null;
     } finally {
       isLoading.value = false;
     }
   }
 
-  async function duplicateProject(projectId: string): Promise<string | null> {
+  async function createProjectFromTrello(
+    teamId: string,
+    name: string,
+    board: unknown,
+  ): Promise<string | null> {
+    isLoading.value = true;
     error.value = null;
 
     try {
       const { data } = await http.post<{ id: string }>(
-        `/projects/${projectId}/duplicate`
+        `/teams/${teamId}/projects/from-trello`,
+        { name, board },
+        { timeout: 60000 },
       );
-
-      if (current.value) {
-        await fetchOne(current.value.id);
-      }
-
+      await fetchOne(teamId);
+      toastSuccess('Проект импортирован');
       return data.id;
     } catch (err: unknown) {
       error.value = errorMessage(err);
+      toastError('Ошибка при импорте проекта', err);
       return null;
-    }
-  }
-
-  async function deleteProject(projectId: string): Promise<boolean> {
-    error.value = null;
-
-    try {
-      await http.delete(`/projects/${projectId}`);
-
-      if (current.value) {
-        await fetchOne(current.value.id);
-      }
-
-      return true;
-    } catch (err: unknown) {
-      error.value = errorMessage(err);
-      return false;
+    } finally {
+      isLoading.value = false;
     }
   }
 
   return {
     list,
     current,
-    overview,
+    activity,
+    activityHasMore,
     isLoading,
+    isActivityLoading,
     error,
     fetchList,
     fetchOne,
-    fetchOverview,
+    fetchActivity,
     createTeam,
     renameTeam,
     createInvite,
@@ -278,8 +313,7 @@ export const useTeamsStore = defineStore('teams', () => {
     changeRole,
     removeMember,
     createProject,
-    duplicateProject,
-    deleteProject
+    createProjectFromTrello,
   };
 });
 

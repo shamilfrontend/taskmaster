@@ -9,9 +9,9 @@ export interface BoardPojo {
 const boardSchema = new Schema<BoardPojo>(
   {
     projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
-    name: { type: String, required: true }
+    name: { type: String, required: true },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 boardSchema.index({ projectId: 1 });

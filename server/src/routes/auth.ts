@@ -5,6 +5,7 @@ import { AppError } from '../errors/app-error.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { UserModel } from '../models/user.js';
+import { ensureDemoData } from '../services/demo-seed.js';
 import { signToken } from '../utils/crypto.js';
 
 export const authRouter = Router();
@@ -15,7 +16,7 @@ function cookieOptions(): CookieOptions {
     secure: config.cookieSecure,
     sameSite: 'lax',
     path: '/',
-    maxAge: config.jwtTtlSeconds * 1000
+    maxAge: config.jwtTtlSeconds * 1000,
   };
 }
 
@@ -32,15 +33,14 @@ interface YandexProfile {
 }
 
 authRouter.get('/yandex', (req: Request, res: Response) => {
-  const next =
-    typeof req.query.next === 'string' && req.query.next.startsWith('/')
-      ? req.query.next
-      : '/';
+  const next = typeof req.query.next === 'string' && req.query.next.startsWith('/')
+    ? req.query.next
+    : '/';
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: config.yandexClientId,
     redirect_uri: config.yandexRedirectUri,
-    state: next
+    state: next,
   });
 
   res.redirect(`https://oauth.yandex.ru/authorize?${params.toString()}`);
@@ -49,7 +49,7 @@ authRouter.get('/yandex', (req: Request, res: Response) => {
 authRouter.get(
   '/yandex/callback',
   asyncHandler(async (req: Request, res: Response) => {
-    const code = req.query.code;
+    const { code } = req.query;
 
     if (typeof code !== 'string' || !code) {
       throw new AppError(400, 'Нет кода авторизации');
@@ -62,8 +62,8 @@ authRouter.get(
         grant_type: 'authorization_code',
         code,
         client_id: config.yandexClientId,
-        client_secret: config.yandexClientSecret
-      })
+        client_secret: config.yandexClientSecret,
+      }),
     });
 
     const tokenJson = (await tokenRes.json()) as YandexTokenResponse;
@@ -73,7 +73,7 @@ authRouter.get(
     }
 
     const profileRes = await fetch('https://login.yandex.ru/info?format=json', {
-      headers: { Authorization: `OAuth ${tokenJson.access_token}` }
+      headers: { Authorization: `OAuth ${tokenJson.access_token}` },
     });
     const profile = (await profileRes.json()) as YandexProfile;
 
@@ -82,16 +82,13 @@ authRouter.get(
     }
 
     const yandexId = String(profile.id);
-    const displayName =
-      (typeof profile.display_name === 'string' && profile.display_name) ||
-      (typeof profile.real_name === 'string' && profile.real_name) ||
-      'Пользователь';
-    const email =
-      typeof profile.default_email === 'string' ? profile.default_email : '';
-    const avatarId =
-      typeof profile.default_avatar_id === 'string'
-        ? profile.default_avatar_id
-        : '';
+    const displayName = (typeof profile.display_name === 'string' && profile.display_name)
+      || (typeof profile.real_name === 'string' && profile.real_name)
+      || 'Пользователь';
+    const email = typeof profile.default_email === 'string' ? profile.default_email : '';
+    const avatarId = typeof profile.default_avatar_id === 'string'
+      ? profile.default_avatar_id
+      : '';
     const avatarUrl = avatarId
       ? `https://avatars.yandex.net/get-yapic/${avatarId}/islands-200`
       : '';
@@ -99,7 +96,7 @@ authRouter.get(
     const user = await UserModel.findOneAndUpdate(
       { yandexId },
       { $set: { displayName, email, avatarUrl } },
-      { upsert: true, new: true }
+      { upsert: true, new: true },
     ).lean();
 
     if (!user) {
@@ -108,13 +105,42 @@ authRouter.get(
 
     res.cookie(config.cookieName, signToken(user._id.toString()), cookieOptions());
 
-    const next =
-      typeof req.query.state === 'string' && req.query.state.startsWith('/')
-        ? req.query.state
-        : '/';
+    const next = typeof req.query.state === 'string' && req.query.state.startsWith('/')
+      ? req.query.state
+      : '/';
 
     res.redirect(`${config.frontendUrl}${next}`);
-  })
+  }),
+);
+
+authRouter.post(
+  '/demo',
+  asyncHandler(async (_req: Request, res: Response) => {
+    const user = await UserModel.findOneAndUpdate(
+      { yandexId: 'demo' },
+      {
+        $setOnInsert: {
+          yandexId: 'demo',
+          displayName: 'Демо',
+          email: '',
+          avatarUrl: '',
+        },
+      },
+      { upsert: true, new: true },
+    ).lean();
+
+    if (!user) {
+      throw new AppError(500, 'Не удалось создать демо-пользователя');
+    }
+
+    await ensureDemoData(user._id);
+    res.cookie(
+      config.cookieName,
+      signToken(user._id.toString()),
+      cookieOptions(),
+    );
+    res.json({ ok: true });
+  }),
 );
 
 authRouter.get(
@@ -131,9 +157,10 @@ authRouter.get(
       id: user._id.toString(),
       displayName: user.displayName,
       email: user.email,
-      avatarUrl: user.avatarUrl
+      avatarUrl: user.avatarUrl,
+      isDemo: user.yandexId === 'demo',
     });
-  })
+  }),
 );
 
 authRouter.post('/logout', (req: Request, res: Response) => {
@@ -141,7 +168,7 @@ authRouter.post('/logout', (req: Request, res: Response) => {
     httpOnly: true,
     secure: config.cookieSecure,
     sameSite: 'lax',
-    path: '/'
+    path: '/',
   });
   res.json({ ok: true });
 });

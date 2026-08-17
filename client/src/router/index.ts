@@ -16,67 +16,84 @@ export const router = createRouter({
     {
       path: '/login',
       name: 'login',
+      redirect: (to) => {
+        const { next } = to.query;
+
+        if (typeof next === 'string') {
+          return { path: '/landing', query: { next } };
+        }
+
+        return { path: '/landing' };
+      },
+    },
+    {
+      path: '/landing',
+      name: 'landing',
       component: () => import('../views/LoginView.vue'),
-      meta: { chrome: false, public: true }
+      meta: { chrome: false, public: true },
     },
     {
       path: '/invite/:token',
       name: 'invite',
       component: () => import('../views/InviteView.vue'),
-      meta: { chrome: false, public: true }
+      meta: { chrome: false, public: true },
     },
     {
       path: '/',
       name: 'teams',
       component: () => import('../views/TeamsView.vue'),
-      meta: { chrome: true }
+      meta: { chrome: true },
     },
     {
       path: '/teams/:teamId',
       name: 'team',
       component: () => import('../views/TeamView.vue'),
-      meta: { chrome: true }
+      meta: { chrome: true },
     },
     {
       path: '/projects/:projectId',
       name: 'project',
       component: () => import('../views/ProjectView.vue'),
-      meta: { chrome: true }
+      meta: { chrome: true },
     },
     {
       path: '/projects/:projectId/analytics',
       name: 'analytics',
       component: () => import('../views/AnalyticsView.vue'),
-      meta: { chrome: true }
+      meta: { chrome: true },
     },
     {
       path: '/boards/:boardId',
       name: 'board',
-      component: () => import('../views/BoardView.vue'),
+      component: {
+        setup() {
+          return () => null;
+        },
+      },
       meta: { chrome: true },
       beforeEnter: async (to) => {
         try {
           const { data } = await http.get<{ projectId: string }>(
-            `/boards/${String(to.params.boardId)}`
+            `/boards/${String(to.params.boardId)}`,
           );
 
           return {
             name: 'project',
             params: { projectId: data.projectId },
-            query: to.query
+            query: to.query,
           };
         } catch {
           return { name: 'teams' };
         }
-      }
+      },
     },
     {
       path: '/releases/:releaseId',
       name: 'release',
       component: () => import('../views/ReleaseView.vue'),
-      meta: { chrome: true }
-    }
-  ]
+      meta: { chrome: true },
+    },
+  ],
 });
 
 router.beforeEach(async (to) => {
@@ -87,9 +104,8 @@ router.beforeEach(async (to) => {
   }
 
   if (to.meta.public) {
-    if (to.name === 'login' && auth.user) {
-      const next =
-        typeof to.query.next === 'string' ? to.query.next : '/';
+    if (to.name === 'landing' && auth.user) {
+      const next = typeof to.query.next === 'string' ? to.query.next : '/';
       return next;
     }
 
@@ -97,9 +113,13 @@ router.beforeEach(async (to) => {
   }
 
   if (!auth.user) {
+    if (to.name === 'teams') {
+      return { name: 'landing' };
+    }
+
     return {
-      name: 'login',
-      query: { next: to.fullPath }
+      name: 'landing',
+      query: { next: to.fullPath },
     };
   }
 
@@ -107,7 +127,7 @@ router.beforeEach(async (to) => {
 });
 
 router.afterEach((to) => {
-  const ym = window.ym;
+  const { ym } = window;
   if (typeof ym === 'function') {
     ym(YANDEX_METRIKA_ID, 'hit', to.fullPath);
   }

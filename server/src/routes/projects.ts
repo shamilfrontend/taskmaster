@@ -6,7 +6,7 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import {
   requireMembership,
-  teamIdFromProject
+  teamIdFromProject,
 } from '../middleware/access.js';
 import { BoardModel } from '../models/board.js';
 import { CardModel } from '../models/card.js';
@@ -20,7 +20,7 @@ import { deleteProjectCascade } from '../services/cascade.js';
 import { recalcAssigneePlans, recalcRolePlans } from '../services/plan.js';
 import {
   createDefaultBoard,
-  resolveProjectBoard
+  resolveProjectBoard,
 } from '../services/project-setup.js';
 import { normalizeName } from '../utils/crypto.js';
 import { resolveRate } from '../utils/rates.js';
@@ -35,7 +35,7 @@ import {
   readNumber,
   readOptionalDate,
   readOptionalNumber,
-  readString
+  readString,
 } from '../utils/validate.js';
 
 export const projectsRouter = Router();
@@ -43,13 +43,13 @@ projectsRouter.use(requireAuth);
 
 async function projectFact(projectId: string): Promise<number> {
   const boards = await BoardModel.find({
-    projectId: asObjectId(projectId)
+    projectId: asObjectId(projectId),
   }).lean();
   const cards = await CardModel.find({
-    boardId: { $in: boards.map((board) => board._id) }
+    boardId: { $in: boards.map((board) => board._id) },
   }).lean();
   const entries = await TimeEntryModel.find({
-    cardId: { $in: cards.map((card) => card._id) }
+    cardId: { $in: cards.map((card) => card._id) },
   }).lean();
 
   return entries.reduce((sum, entry) => sum + entry.amount, 0);
@@ -76,7 +76,7 @@ projectsRouter.post(
 
     const exists = await ReleaseModel.findOne({
       projectId: asObjectId(projectId),
-      nameNormalized
+      nameNormalized,
     }).lean();
 
     if (exists) {
@@ -88,16 +88,16 @@ projectsRouter.post(
       name,
       nameNormalized,
       date: readOptionalDate(req.body, 'date') ?? null,
-      status: 'planned'
+      status: 'planned',
     });
 
     res.status(201).json({
       id: release._id.toString(),
       name: release.name,
       date: release.date,
-      status: release.status
+      status: release.status,
     });
-  })
+  }),
 );
 
 projectsRouter.get(
@@ -117,36 +117,33 @@ projectsRouter.get(
     const releases = await ReleaseModel.find({ projectId: project._id }).lean();
     const members = await TeamMemberModel.find({ teamId: project.teamId }).lean();
     const users = await UserModel.find({
-      _id: { $in: members.map((item) => item.userId) }
+      _id: { $in: members.map((item) => item.userId) },
     }).lean();
     const personalRates = await ProjectMemberRateModel.find({
-      projectId: project._id
+      projectId: project._id,
     }).lean();
     const fact = await projectFact(projectId);
     const remainder = project.budgetLimit - fact;
     const releasesEnabled = isFeatureOn(project.releasesEnabled);
     const budgetEnabled = isFeatureOn(project.budgetEnabled);
 
-    const canSeeBudget =
-      budgetEnabled &&
-      (membership.role === 'owner' || membership.role === 'admin');
-    const canSeeRates =
-      membership.role === 'owner' || membership.role === 'admin';
-    const canSeeRemainder =
-      budgetEnabled &&
-      (canSeeBudget || membership.role === 'member');
+    const canSeeBudget = budgetEnabled
+      && (membership.role === 'owner' || membership.role === 'admin');
+    const canSeeRates = membership.role === 'owner' || membership.role === 'admin';
+    const canSeeRemainder = budgetEnabled
+      && (canSeeBudget || membership.role === 'member');
 
     const rates = members.map((member) => {
       const personal = personalRates.find(
-        (item) => item.userId.toString() === member.userId.toString()
+        (item) => item.userId.toString() === member.userId.toString(),
       );
       const user = users.find(
-        (item) => item._id.toString() === member.userId.toString()
+        (item) => item._id.toString() === member.userId.toString(),
       );
       const amount = resolveRate({
         roleRates: project.roleRates,
         personalAmount: personal ? personal.amount : null,
-        role: member.role
+        role: member.role,
       });
       const source = personal ? 'personal' : 'role';
 
@@ -155,7 +152,7 @@ projectsRouter.get(
         displayName: user?.displayName ?? '',
         role: member.role,
         source,
-        amount: canSeeRates ? amount : undefined
+        amount: canSeeRates ? amount : undefined,
       };
     });
 
@@ -175,17 +172,17 @@ projectsRouter.get(
       board: { id: board._id.toString() },
       releases: releasesEnabled
         ? releases.map((release) => ({
-            id: release._id.toString(),
-            name: release.name,
-            date: release.date,
-            status: release.status,
-            cardCount: cards.filter(
-              (card) => card.releaseId?.toString() === release._id.toString()
-            ).length
-          }))
-        : []
+          id: release._id.toString(),
+          name: release.name,
+          date: release.date,
+          status: release.status,
+          cardCount: cards.filter(
+            (card) => card.releaseId?.toString() === release._id.toString(),
+          ).length,
+        }))
+        : [],
     });
-  })
+  }),
 );
 
 projectsRouter.patch(
@@ -235,9 +232,9 @@ projectsRouter.patch(
       budgetLimit: project.budgetLimit,
       releasesEnabled: project.releasesEnabled,
       budgetEnabled: project.budgetEnabled,
-      boardBackground: project.boardBackground
+      boardBackground: project.boardBackground,
     });
-  })
+  }),
 );
 
 projectsRouter.post(
@@ -261,13 +258,13 @@ projectsRouter.post(
       budgetEnabled: source.budgetEnabled,
       releasesEnabled: source.releasesEnabled,
       roleRates: { ...source.roleRates },
-      boardBackground: source.boardBackground
+      boardBackground: source.boardBackground,
     });
 
     await createDefaultBoard(project._id);
 
     const memberRates = await ProjectMemberRateModel.find({
-      projectId: source._id
+      projectId: source._id,
     }).lean();
 
     if (memberRates.length > 0) {
@@ -275,13 +272,13 @@ projectsRouter.post(
         memberRates.map((rate) => ({
           projectId: project._id,
           userId: rate.userId,
-          amount: rate.amount
-        }))
+          amount: rate.amount,
+        })),
       );
     }
 
     res.status(201).json({ id: project._id.toString() });
-  })
+  }),
 );
 
 projectsRouter.delete(
@@ -300,7 +297,7 @@ projectsRouter.delete(
 
     await deleteProjectCascade(project._id);
     res.json({ ok: true });
-  })
+  }),
 );
 
 projectsRouter.put(
@@ -331,12 +328,12 @@ projectsRouter.put(
 
     await project.save();
 
-    for (const role of roles) {
-      await recalcRolePlans(project._id, role);
-    }
+    await Promise.all(
+      roles.map((role) => recalcRolePlans(project._id, role)),
+    );
 
     res.json({ roleRates: project.roleRates });
-  })
+  }),
 );
 
 projectsRouter.put(
@@ -355,7 +352,7 @@ projectsRouter.put(
     if (amount === undefined) {
       await ProjectMemberRateModel.deleteOne({
         projectId: projectOid,
-        userId: userOid
+        userId: userOid,
       });
     } else {
       if (amount < 0) {
@@ -365,12 +362,11 @@ projectsRouter.put(
       await ProjectMemberRateModel.findOneAndUpdate(
         { projectId: projectOid, userId: userOid },
         { $set: { amount } },
-        { upsert: true }
+        { upsert: true },
       );
     }
 
     await recalcAssigneePlans(projectOid, userOid);
     res.json({ ok: true });
-  })
+  }),
 );
-

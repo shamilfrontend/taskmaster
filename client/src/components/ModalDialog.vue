@@ -15,10 +15,18 @@ const emit = defineEmits<{
     :class="{ 'is-open': open }"
     @click.self="emit('close')"
   >
-    <div class="modal" role="dialog">
+    <div
+      class="modal"
+      role="dialog"
+    >
       <div class="modal-head">
         <h2>{{ title }}</h2>
-        <button type="button" class="icon-btn" aria-label="Закрыть" @click="emit('close')">
+        <button
+          type="button"
+          class="icon-btn"
+          aria-label="Закрыть"
+          @click="emit('close')"
+        >
           ×
         </button>
       </div>

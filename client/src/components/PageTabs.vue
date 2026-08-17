@@ -42,6 +42,10 @@ function isActive(tab: PageTab): boolean {
     return route.name === 'analytics';
   }
 
+  if (tab.id === 'releases' && route.name === 'release') {
+    return true;
+  }
+
   if (queryTab) {
     return route.name === name && currentTab === queryTab;
   }

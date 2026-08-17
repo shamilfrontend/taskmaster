@@ -7,77 +7,73 @@ export interface BoardBackgroundOption {
   full: string | null;
 }
 
-function unsplash(photoId: string, width: number): string {
-  return `https://images.unsplash.com/photo-${photoId}?auto=format&fit=crop&w=${width}&q=80`;
-}
-
 function photo(
   id: BoardBackgroundId,
   label: string,
-  photoId: string
+  fileId: string,
 ): BoardBackgroundOption {
   return {
     id,
     label,
-    thumb: unsplash(photoId, 400),
-    full: unsplash(photoId, 1920)
+    thumb: `/backgrounds/${fileId}-thumb.jpg`,
+    full: `/backgrounds/${fileId}.jpg`,
   };
 }
 
 export const BOARD_BACKGROUNDS: BoardBackgroundOption[] = [
-  photo('default', 'Горный хребет', '1464822759023-fed622ff2c3b'),
-  photo('bg-01', 'Горный хребет', '1464822759023-fed622ff2c3b'),
-  photo('bg-02', 'Ночные вершины', '1519681393784-d120267933ba'),
-  photo('bg-03', 'Снежная вершина', '1483728642387-6c3bdd6c93e5'),
-  photo('bg-04', 'Горное озеро', '1506905925346-21bda4d32df4'),
-  photo('bg-05', 'Альпы', '1454496522488-7a8e488e8606'),
-  photo('bg-06', 'Гребень', '1486870591958-9b9d0d1dda99'),
-  photo('bg-07', 'Долина на закате', '1469474968028-56623f02e42e'),
-  photo('bg-08', 'Зелёные склоны', '1482192505345-5655af888cc4'),
-  photo('bg-09', 'Туманные холмы', '1470071459604-3b5ec3a7fe05'),
-  photo('bg-10', 'Скалы', '1426604966848-d7adac402bff'),
-  photo('bg-11', 'Пустынные горы', '1500534314209-a25ddb2bd429'),
-  photo('bg-12', 'Лесной туман', '1418065460487-3e41a6c84dc5'),
-  photo('bg-13', 'Озеро в горах', '1501785888041-af3ef285b470'),
-  photo('bg-14', 'Тихая заводь', '1470770841072-f978cf4d019e'),
-  photo('bg-15', 'Глубина океана', '1505118380757-91f5f5632de0'),
-  photo('bg-16', 'Тропический берег', '1507525428034-b723cf961d3e'),
-  photo('bg-17', 'Гладкая вода', '1439066615861-d1af74d3bb02'),
-  photo('bg-18', 'Бирюза', '1505142468610-359e7d316be0'),
-  photo('bg-19', 'Закат у моря', '1471922694854-ff1b63b20054'),
-  photo('bg-20', 'Открытый океан', '1518837695005-2083093ee35b'),
-  photo('bg-21', 'Горизонт', '1468581264429-2548fb9d2adf'),
-  photo('bg-22', 'Волны', '1513553404607-988bf2703777'),
-  photo('bg-23', 'Побережье', '1476673160081-cf065307f649'),
-  photo('bg-24', 'Тропики', '1473116763249-2faa1670543a'),
-  photo('bg-25', 'Океан сверху', '1559827260-dc66d52bef19'),
-  photo('bg-26', 'Риф', '1540206395-68808572332d'),
-  photo('bg-27', 'Лес', '1441974231531-c6227db76b6e'),
-  photo('bg-28', 'Тропа', '1511497584788-876760111969'),
-  photo('bg-29', 'Сосны', '1448375240586-882707db888b'),
-  photo('bg-30', 'Чаща', '1518173946687-a4c8892ce6f4'),
-  photo('bg-31', 'Кроны', '1542273917363-3b1817f69a2d'),
-  photo('bg-32', 'Пейзаж', '1472214103451-9374bd1c798e'),
-  photo('bg-33', 'Луг', '1502082553048-f009c37129b9'),
-  photo('bg-34', 'Поле', '1447758902204-48010b87c681'),
-  photo('bg-35', 'Солнце в лесу', '1518495973542-8260c5370d4a'),
-  photo('bg-36', 'Роща', '1476237832082-62712219bb4d')
+  photo('default', 'Горный хребет', 'bg-01'),
+  photo('bg-01', 'Горный хребет', 'bg-01'),
+  photo('bg-02', 'Ночные вершины', 'bg-02'),
+  photo('bg-03', 'Снежная вершина', 'bg-03'),
+  photo('bg-04', 'Горное озеро', 'bg-04'),
+  photo('bg-05', 'Альпы', 'bg-05'),
+  photo('bg-06', 'Гребень', 'bg-06'),
+  photo('bg-07', 'Долина на закате', 'bg-07'),
+  photo('bg-08', 'Зелёные склоны', 'bg-08'),
+  photo('bg-09', 'Туманные холмы', 'bg-09'),
+  photo('bg-10', 'Скалы', 'bg-10'),
+  photo('bg-11', 'Пустынные горы', 'bg-11'),
+  photo('bg-12', 'Лесной туман', 'bg-12'),
+  photo('bg-13', 'Озеро в горах', 'bg-13'),
+  photo('bg-14', 'Тихая заводь', 'bg-14'),
+  photo('bg-15', 'Глубина океана', 'bg-15'),
+  photo('bg-16', 'Тропический берег', 'bg-16'),
+  photo('bg-17', 'Гладкая вода', 'bg-17'),
+  photo('bg-18', 'Бирюза', 'bg-18'),
+  photo('bg-19', 'Закат у моря', 'bg-19'),
+  photo('bg-20', 'Открытый океан', 'bg-20'),
+  photo('bg-21', 'Горизонт', 'bg-21'),
+  photo('bg-22', 'Волны', 'bg-22'),
+  photo('bg-23', 'Побережье', 'bg-23'),
+  photo('bg-24', 'Тропики', 'bg-24'),
+  photo('bg-25', 'Океан сверху', 'bg-25'),
+  photo('bg-26', 'Риф', 'bg-26'),
+  photo('bg-27', 'Лес', 'bg-27'),
+  photo('bg-28', 'Тропа', 'bg-28'),
+  photo('bg-29', 'Сосны', 'bg-29'),
+  photo('bg-30', 'Чаща', 'bg-30'),
+  photo('bg-31', 'Кроны', 'bg-31'),
+  photo('bg-32', 'Пейзаж', 'bg-32'),
+  photo('bg-33', 'Луг', 'bg-33'),
+  photo('bg-34', 'Поле', 'bg-34'),
+  photo('bg-35', 'Солнце в лесу', 'bg-35'),
+  photo('bg-36', 'Роща', 'bg-36'),
 ];
 
 const DEFAULT_OPTION: BoardBackgroundOption = photo(
   'default',
   'Горный хребет',
-  '1464822759023-fed622ff2c3b'
+  'bg-01',
 );
 
 export function findBoardBackground(
-  id: BoardBackgroundId | undefined
+  id: BoardBackgroundId | undefined,
 ): BoardBackgroundOption {
   return BOARD_BACKGROUNDS.find((item) => item.id === id) ?? DEFAULT_OPTION;
 }
 
 export function boardBackgroundStyle(
-  id: BoardBackgroundId | undefined
+  id: BoardBackgroundId | undefined,
 ): Record<string, string> | undefined {
   const option = findBoardBackground(id);
 
@@ -86,6 +82,6 @@ export function boardBackgroundStyle(
   }
 
   return {
-    '--board-image': `url("${option.full}")`
+    '--board-image': `url("${option.full}")`,
   };
 }

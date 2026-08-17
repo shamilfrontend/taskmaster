@@ -9,7 +9,7 @@ import type { TeamRole } from '../constants.js';
 
 export async function rateForUser(
   projectId: mongoose.Types.ObjectId,
-  userId: mongoose.Types.ObjectId
+  userId: mongoose.Types.ObjectId,
 ): Promise<number> {
   const project = await ProjectModel.findById(projectId).lean();
 
@@ -19,7 +19,7 @@ export async function rateForUser(
 
   const member = await TeamMemberModel.findOne({
     teamId: project.teamId,
-    userId
+    userId,
   }).lean();
 
   if (!member) {
@@ -28,18 +28,18 @@ export async function rateForUser(
 
   const personal = await ProjectMemberRateModel.findOne({
     projectId,
-    userId
+    userId,
   }).lean();
 
   return resolveRate({
     roleRates: project.roleRates,
     personalAmount: personal ? personal.amount : null,
-    role: member.role
+    role: member.role,
   });
 }
 
 export async function recalcCardPlan(
-  cardId: mongoose.Types.ObjectId
+  cardId: mongoose.Types.ObjectId,
 ): Promise<number> {
   const card = await CardModel.findById(cardId).lean();
 
@@ -68,7 +68,7 @@ export async function recalcCardPlan(
 
 export async function recalcAssigneePlans(
   projectId: mongoose.Types.ObjectId,
-  userId: mongoose.Types.ObjectId
+  userId: mongoose.Types.ObjectId,
 ): Promise<void> {
   const { BoardModel } = await import('../models/board.js');
   const boards = await BoardModel.find({ projectId }).lean();
@@ -76,7 +76,7 @@ export async function recalcAssigneePlans(
 
   const cards = await CardModel.find({
     boardId: { $in: boardIds },
-    assigneeId: userId
+    assigneeId: userId,
   }).lean();
 
   await Promise.all(cards.map((card) => recalcCardPlan(card._id)));
@@ -84,7 +84,7 @@ export async function recalcAssigneePlans(
 
 export async function recalcRolePlans(
   projectId: mongoose.Types.ObjectId,
-  role: TeamRole
+  role: TeamRole,
 ): Promise<void> {
   const project = await ProjectModel.findById(projectId).lean();
 
@@ -94,10 +94,10 @@ export async function recalcRolePlans(
 
   const members = await TeamMemberModel.find({
     teamId: project.teamId,
-    role
+    role,
   }).lean();
 
   await Promise.all(
-    members.map((member) => recalcAssigneePlans(projectId, member.userId))
+    members.map((member) => recalcAssigneePlans(projectId, member.userId)),
   );
 }

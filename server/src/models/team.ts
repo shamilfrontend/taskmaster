@@ -7,9 +7,9 @@ export interface TeamPojo {
 
 const teamSchema = new Schema<TeamPojo>(
   {
-    name: { type: String, required: true }
+    name: { type: String, required: true },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export const TeamModel = mongoose.model<TeamPojo>('Team', teamSchema);

@@ -2,6 +2,7 @@ import express from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import { config } from './config.js';
+import { blockDemoWrites } from './middleware/demo-guard.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { authRouter } from './routes/auth.js';
 import { teamsRouter } from './routes/teams.js';
@@ -18,11 +19,16 @@ export function createApp() {
   app.use(
     cors({
       origin: config.frontendUrl,
-      credentials: true
-    })
+      credentials: true,
+    }),
+  );
+  app.use(
+    '/api/teams/:teamId/projects/from-trello',
+    express.json({ limit: '10mb' }),
   );
   app.use(express.json());
   app.use(cookieParser());
+  app.use(blockDemoWrites);
 
   app.get('/api/health', (_req, res) => {
     res.json({ ok: true });

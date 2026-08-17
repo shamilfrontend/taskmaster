@@ -12,9 +12,9 @@ const labelSchema = new Schema<LabelPojo>(
   {
     boardId: { type: Schema.Types.ObjectId, ref: 'Board', required: true },
     name: { type: String, required: true },
-    color: { type: String, enum: LABEL_COLORS, required: true }
+    color: { type: String, enum: LABEL_COLORS, required: true },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 labelSchema.index({ boardId: 1 });

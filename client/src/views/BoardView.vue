@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import {
+  computed, nextTick, onMounted, onUnmounted, ref, watch,
+} from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.ts';
 import { useBoardStore } from '../stores/board.ts';
 import { useProjectStore } from '../stores/project.ts';
@@ -9,7 +11,7 @@ import {
   initials,
   isOverdue,
   labelClass,
-  linkifyText
+  linkifyText,
 } from '../composables/format.ts';
 import ModalDialog from '../components/ModalDialog.vue';
 import type {
@@ -17,7 +19,7 @@ import type {
   BoardColumn,
   CardChecklist,
   LabelColor,
-  TimeEntry
+  TimeEntry,
 } from '../types/index.ts';
 
 const CARD_DRAG = 'card:';
@@ -26,6 +28,7 @@ const COLUMN_DRAG = 'column:';
 type DragKind = 'card' | 'column';
 
 const route = useRoute();
+const router = useRouter();
 const dragKind = ref<DragKind | null>(null);
 const dragCardId = ref<string | null>(null);
 const dragColumnId = ref<string | null>(null);
@@ -54,6 +57,7 @@ const newItemText = ref<Record<string, string>>({});
 const comment = ref('');
 const labelName = ref('');
 const labelColor = ref<LabelColor>('blue');
+const labelDrafts = ref<Record<string, string>>({});
 interface MenuPosition {
   top: string;
   right: string;
@@ -76,6 +80,9 @@ const filterQuery = ref('');
 const filterAssignee = ref('');
 const filterLabelId = ref('');
 const filterReleaseId = ref('');
+const filterDue = ref('');
+const filterEstimate = ref('');
+const filterColumnId = ref('');
 
 onMounted(() => {
   document.addEventListener('click', closeMenus);
@@ -100,9 +107,29 @@ watch(boardId, async (id) => {
   addingCardColumnId.value = null;
   addingColumn.value = false;
   cardOpen.value = false;
-  clearFilters();
+  filterQuery.value = '';
+  filterLabelId.value = '';
+  applyFiltersFromQuery();
   await board.fetchBoard(id);
 }, { immediate: true });
+
+watch(
+  () => board.current?.labels,
+  (labels) => {
+    if (!labels) {
+      labelDrafts.value = {};
+      return;
+    }
+
+    labelDrafts.value = Object.fromEntries(
+      labels.map((label) => [
+        label.id,
+        labelDrafts.value[label.id] ?? label.name,
+      ]),
+    );
+  },
+  { immediate: true },
+);
 
 watch(addingCardColumnId, async (id) => {
   if (!id) {
@@ -166,9 +193,9 @@ const canDeleteCard = computed(() => {
   return board.card.timeEntries.length === 0 || canAdmin.value;
 });
 
-const factHours = computed(() =>
-  (board.card?.timeEntries ?? []).reduce((sum, entry) => sum + entry.hours, 0)
-);
+const factHours = computed(() => (
+  board.card?.timeEntries ?? []
+).reduce((sum, entry) => sum + entry.hours, 0));
 
 const factAmount = computed(() => {
   if (!showMoney.value || !board.card) {
@@ -177,7 +204,7 @@ const factAmount = computed(() => {
 
   const total = board.card.timeEntries.reduce(
     (sum, entry) => sum + (entry.amount ?? 0),
-    0
+    0,
   );
 
   return total;
@@ -222,14 +249,15 @@ const columnHasCards = computed(() => {
   return allCardsOf(columnToDelete.value.id).length > 0;
 });
 
-const filtersActive = computed(() => {
-  return (
-    filterQuery.value.trim() !== '' ||
-    filterAssignee.value !== '' ||
-    filterLabelId.value !== '' ||
-    filterReleaseId.value !== ''
-  );
-});
+const filtersActive = computed(() => (
+  filterQuery.value.trim() !== ''
+    || filterAssignee.value !== ''
+    || filterLabelId.value !== ''
+    || filterReleaseId.value !== ''
+    || filterDue.value !== ''
+    || filterEstimate.value !== ''
+    || filterColumnId.value !== ''
+));
 
 function closeMenus(): void {
   menuColumnId.value = null;
@@ -245,11 +273,98 @@ function canDeleteBoardCard(card: BoardCard): boolean {
   return card.factHours === 0 || canAdmin.value;
 }
 
+function queryParam(key: string): string {
+  const value = route.query[key];
+  return typeof value === 'string' ? value : '';
+}
+
+function applyFiltersFromQuery(): void {
+  const due = queryParam('due');
+  filterDue.value = due === 'overdue' ? 'overdue' : '';
+
+  const estimate = queryParam('estimate');
+  filterEstimate.value = estimate === 'none' ? 'none' : '';
+
+  filterAssignee.value = queryParam('assignee');
+  filterReleaseId.value = queryParam('release');
+  filterColumnId.value = queryParam('column');
+}
+
+function filterQueryState(): Record<string, string> {
+  const next: Record<string, string> = {};
+
+  if (filterDue.value) {
+    next.due = filterDue.value;
+  }
+
+  if (filterAssignee.value) {
+    next.assignee = filterAssignee.value;
+  }
+
+  if (filterEstimate.value) {
+    next.estimate = filterEstimate.value;
+  }
+
+  if (filterReleaseId.value) {
+    next.release = filterReleaseId.value;
+  }
+
+  if (filterColumnId.value) {
+    next.column = filterColumnId.value;
+  }
+
+  return next;
+}
+
+function syncFiltersToQuery(): void {
+  const next = filterQueryState();
+  const currentDue = queryParam('due');
+  const currentAssignee = queryParam('assignee');
+  const currentEstimate = queryParam('estimate');
+  const currentRelease = queryParam('release');
+  const currentColumn = queryParam('column');
+
+  if (
+    (next.due ?? '') === currentDue
+    && (next.assignee ?? '') === currentAssignee
+    && (next.estimate ?? '') === currentEstimate
+    && (next.release ?? '') === currentRelease
+    && (next.column ?? '') === currentColumn
+  ) {
+    return;
+  }
+
+  const query: Record<string, string> = { ...next };
+  const card = queryParam('card');
+  const tab = queryParam('tab');
+
+  if (card) {
+    query.card = card;
+  }
+
+  if (tab) {
+    query.tab = tab;
+  }
+
+  void router.replace({ query });
+}
+
+function cardIsOverdue(card: BoardCard): boolean {
+  const column = board.current?.columns.find(
+    (item) => item.id === card.columnId,
+  );
+
+  return isOverdue(card.dueDate, column?.isDone ?? false);
+}
+
 function clearFilters(): void {
   filterQuery.value = '';
   filterAssignee.value = '';
   filterLabelId.value = '';
   filterReleaseId.value = '';
+  filterDue.value = '';
+  filterEstimate.value = '';
+  filterColumnId.value = '';
 }
 
 function matchesFilters(card: BoardCard): boolean {
@@ -264,23 +379,43 @@ function matchesFilters(card: BoardCard): boolean {
   }
 
   if (
-    filterAssignee.value !== '' &&
-    filterAssignee.value !== 'none' &&
-    card.assigneeId !== filterAssignee.value
+    filterAssignee.value !== ''
+    && filterAssignee.value !== 'none'
+    && card.assigneeId !== filterAssignee.value
   ) {
     return false;
   }
 
   if (
-    filterLabelId.value !== '' &&
-    !card.labelIds.includes(filterLabelId.value)
+    filterLabelId.value !== ''
+    && !card.labelIds.includes(filterLabelId.value)
   ) {
     return false;
   }
 
+  if (filterReleaseId.value === 'none' && card.releaseId !== null) {
+    return false;
+  }
+
   if (
-    filterReleaseId.value !== '' &&
-    card.releaseId !== filterReleaseId.value
+    filterReleaseId.value !== ''
+    && filterReleaseId.value !== 'none'
+    && card.releaseId !== filterReleaseId.value
+  ) {
+    return false;
+  }
+
+  if (filterDue.value === 'overdue' && !cardIsOverdue(card)) {
+    return false;
+  }
+
+  if (filterEstimate.value === 'none' && card.estimateHours !== 0) {
+    return false;
+  }
+
+  if (
+    filterColumnId.value !== ''
+    && card.columnId !== filterColumnId.value
   ) {
     return false;
   }
@@ -348,7 +483,27 @@ watch(
     }
 
     await openCard(cardFromQuery);
-  }
+  },
+);
+
+watch(
+  () => [
+    route.query.due,
+    route.query.assignee,
+    route.query.estimate,
+    route.query.release,
+    route.query.column,
+  ],
+  () => {
+    applyFiltersFromQuery();
+  },
+);
+
+watch(
+  [filterDue, filterAssignee, filterEstimate, filterReleaseId, filterColumnId],
+  () => {
+    syncFiltersToQuery();
+  },
 );
 
 async function measureDescription(): Promise<void> {
@@ -390,7 +545,7 @@ function placeMenu(event: MouseEvent): MenuPosition | null {
 
   return {
     top: `${Math.round(rect.bottom + 4)}px`,
-    right: `${Math.round(window.innerWidth - rect.right)}px`
+    right: `${Math.round(window.innerWidth - rect.right)}px`,
   };
 }
 
@@ -452,7 +607,7 @@ async function copyCard(card: BoardCard): Promise<void> {
     ...(card.dueDate ? { dueDate: toDateInput(card.dueDate) } : {}),
     estimateHours: card.estimateHours,
     ...(card.releaseId ? { releaseId: card.releaseId } : {}),
-    ...(card.labelIds.length > 0 ? { labelIds: [...card.labelIds] } : {})
+    ...(card.labelIds.length > 0 ? { labelIds: [...card.labelIds] } : {}),
   });
 }
 
@@ -463,7 +618,7 @@ function openCardDeleteFromModal(): void {
 
   cardToDelete.value = {
     id: board.card.id,
-    title: board.card.title
+    title: board.card.title,
   };
   cardDeleteOpen.value = true;
 }
@@ -529,7 +684,7 @@ async function submitCard(columnId: string): Promise<void> {
   await board.createCard({
     boardId: boardId.value,
     columnId,
-    title
+    title,
   });
   newCardTitle.value = '';
   await nextTick();
@@ -575,9 +730,9 @@ function siblingCards(columnId: string): BoardCard[] {
 
 function isForeignCardDrop(columnId: string): boolean {
   return (
-    dragKind.value === 'card' &&
-    dropColumnId.value === columnId &&
-    dragColumnId.value !== columnId
+    dragKind.value === 'card'
+    && dropColumnId.value === columnId
+    && dragColumnId.value !== columnId
   );
 }
 
@@ -587,7 +742,7 @@ function isNoopDrop(columnId: string): boolean {
   }
 
   const from = allCardsOf(columnId).findIndex(
-    (card) => card.id === dragCardId.value
+    (card) => card.id === dragCardId.value,
   );
 
   return dropIndex.value === from;
@@ -595,14 +750,14 @@ function isNoopDrop(columnId: string): boolean {
 
 function cardDropEdge(
   columnId: string,
-  cardId: string
+  cardId: string,
 ): 'before' | 'after' | null {
   if (
-    dragKind.value !== 'card' ||
-    dropColumnId.value !== columnId ||
-    dropIndex.value === null ||
-    cardId === dragCardId.value ||
-    isNoopDrop(columnId)
+    dragKind.value !== 'card'
+    || dropColumnId.value !== columnId
+    || dropIndex.value === null
+    || cardId === dragCardId.value
+    || isNoopDrop(columnId)
   ) {
     return null;
   }
@@ -619,8 +774,8 @@ function cardDropEdge(
   }
 
   if (
-    dropIndex.value === siblings.length &&
-    index === siblings.length - 1
+    dropIndex.value === siblings.length
+    && index === siblings.length - 1
   ) {
     return 'after';
   }
@@ -630,10 +785,10 @@ function cardDropEdge(
 
 function showEmptyDrop(columnId: string): boolean {
   return (
-    dragKind.value === 'card' &&
-    dropColumnId.value === columnId &&
-    dropIndex.value === 0 &&
-    allCardsOf(columnId).length === 0
+    dragKind.value === 'card'
+    && dropColumnId.value === columnId
+    && dropIndex.value === 0
+    && allCardsOf(columnId).length === 0
   );
 }
 
@@ -652,7 +807,7 @@ function onColumnDragStart(event: DragEvent, columnId: string): void {
 function onCardDragStart(
   event: DragEvent,
   cardId: string,
-  columnId: string
+  columnId: string,
 ): void {
   event.dataTransfer?.setData('text/plain', `${CARD_DRAG}${cardId}`);
   dragKind.value = 'card';
@@ -676,7 +831,7 @@ function onColumnDragOver(event: DragEvent, columnId: string): void {
   }
 
   const tasks = columnEl.querySelectorAll<HTMLElement>(
-    '.column-cards .task:not(.is-dragging)'
+    '.column-cards .task:not(.is-dragging)',
   );
   const lastTask = tasks[tasks.length - 1];
 
@@ -693,7 +848,7 @@ function onColumnDragOver(event: DragEvent, columnId: string): void {
 function onCardDragOver(
   event: DragEvent,
   columnId: string,
-  cardId: string
+  cardId: string,
 ): void {
   event.preventDefault();
   event.stopPropagation();
@@ -772,7 +927,7 @@ async function onDrop(event: DragEvent, targetColumnId: string): Promise<void> {
 
   const cardId = raw.slice(CARD_DRAG.length);
   const others = allCardsOf(targetColumnId).filter(
-    (card) => card.id !== cardId
+    (card) => card.id !== cardId,
   );
   const to = insertAt === null
     ? others.length
@@ -787,7 +942,7 @@ async function onDrop(event: DragEvent, targetColumnId: string): Promise<void> {
   }
 
   await Promise.all(
-    nextIds.map((id, position) => board.moveCard(id, targetColumnId, position))
+    nextIds.map((id, position) => board.moveCard(id, targetColumnId, position)),
   );
   await board.fetchBoard(boardId.value);
 }
@@ -812,7 +967,7 @@ async function saveDueDate(event: Event): Promise<void> {
     return;
   }
 
-  const value = (event.target as HTMLInputElement).value;
+  const { value } = (event.target as HTMLInputElement);
   const next = value || null;
   const current = toDateInput(board.card.dueDate) || null;
 
@@ -842,7 +997,7 @@ async function saveRelease(event: Event): Promise<void> {
     return;
   }
 
-  const value = (event.target as HTMLSelectElement).value;
+  const { value } = (event.target as HTMLSelectElement);
   const next = value || null;
 
   if (next === board.card.releaseId) {
@@ -862,11 +1017,11 @@ function startEditDescription(): void {
 }
 
 function onDescriptionClick(event: MouseEvent): void {
-  const target = event.target;
+  const { target } = event;
 
   if (
-    target instanceof HTMLElement &&
-    target.closest('a')
+    target instanceof HTMLElement
+    && target.closest('a')
   ) {
     return;
   }
@@ -999,7 +1154,7 @@ watch(
   () => board.card,
   () => {
     syncChecklistDrafts();
-  }
+  },
 );
 
 async function toggleLabel(labelId: string): Promise<void> {
@@ -1023,9 +1178,9 @@ function canManageEntry(entry: TimeEntry): boolean {
   }
 
   return (
-    role === 'member' &&
-    entry.userId === auth.user?.id &&
-    board.card?.assigneeId === auth.user?.id
+    role === 'member'
+    && entry.userId === auth.user?.id
+    && board.card?.assigneeId === auth.user?.id
   );
 }
 
@@ -1064,7 +1219,7 @@ async function submitHours(): Promise<void> {
     await board.logHours(
       board.card.id,
       hours.value,
-      hoursWorkedAt.value || undefined
+      hoursWorkedAt.value || undefined,
     );
   }
 
@@ -1113,76 +1268,123 @@ async function saveLabels(): Promise<void> {
   await board.addLabel(board.current.id, labelName.value, labelColor.value);
   labelName.value = '';
 }
+
+function labelDraftChanged(labelId: string, name: string): boolean {
+  const draft = (labelDrafts.value[labelId] ?? '').trim();
+  return Boolean(draft) && draft !== name;
+}
+
+async function saveLabelName(labelId: string): Promise<void> {
+  if (!board.current) {
+    return;
+  }
+
+  const name = (labelDrafts.value[labelId] ?? '').trim();
+  const current = board.current.labels.find((item) => item.id === labelId);
+
+  if (!current || !name || name === current.name) {
+    return;
+  }
+
+  await board.patchLabel(board.current.id, labelId, name);
+}
 </script>
 
 <template>
   <div>
-    <p v-if="board.error" class="warn">{{ board.error }}</p>
-    <p v-else-if="!board.current" class="muted">Загрузка…</p>
+    <p
+      v-if="board.error"
+      class="warn"
+    >
+      {{ board.error }}
+    </p>
+    <p
+      v-else-if="!board.current"
+      class="muted"
+    >
+      Загрузка…
+    </p>
     <template v-if="board.current">
-    <div class="board-toolbar">
-      <div class="board-filters">
-        <input
-          v-model="filterQuery"
-          class="input board-filter-search"
-          type="search"
-          placeholder="Поиск…"
-        >
-        <select v-model="filterAssignee" class="select board-filter-select">
-          <option value="">Все исполнители</option>
-          <option value="none">Без исполнителя</option>
-          <option
-            v-for="row in project.current?.rates ?? []"
-            :key="row.userId"
-            :value="row.userId"
+      <div class="board-toolbar">
+        <div class="board-filters">
+          <input
+            v-model="filterQuery"
+            class="input board-filter-search"
+            type="search"
+            placeholder="Поиск…"
           >
-            {{ row.displayName }}
-          </option>
-        </select>
-        <div class="board-filter-labels">
-          <select v-model="filterLabelId" class="select board-filter-select">
-            <option value="">Все метки</option>
+          <select
+            v-model="filterAssignee"
+            class="select board-filter-select"
+          >
+            <option value="">
+              Все исполнители
+            </option>
+            <option value="none">
+              Без исполнителя
+            </option>
             <option
-              v-for="label in board.current.labels"
-              :key="label.id"
-              :value="label.id"
+              v-for="row in project.current?.rates ?? []"
+              :key="row.userId"
+              :value="row.userId"
             >
-              {{ label.name }}
+              {{ row.displayName }}
+            </option>
+          </select>
+          <div class="board-filter-labels">
+            <select
+              v-model="filterLabelId"
+              class="select board-filter-select"
+            >
+              <option value="">
+                Все метки
+              </option>
+              <option
+                v-for="label in board.current.labels"
+                :key="label.id"
+                :value="label.id"
+              >
+                {{ label.name }}
+              </option>
+            </select>
+            <button
+              v-if="canAdmin"
+              type="button"
+              class="btn btn-ghost"
+              @click="labelsOpen = true"
+            >
+              Управление
+            </button>
+          </div>
+          <select
+            v-if="showReleases"
+            v-model="filterReleaseId"
+            class="select board-filter-select"
+          >
+            <option value="">
+              Все релизы
+            </option>
+            <option value="none">
+              Без релиза
+            </option>
+            <option
+              v-for="release in board.current.releases"
+              :key="release.id"
+              :value="release.id"
+            >
+              {{ release.name }}
             </option>
           </select>
           <button
-            v-if="canAdmin"
+            v-if="filtersActive"
             type="button"
             class="btn btn-ghost"
-            @click="labelsOpen = true"
+            @click="clearFilters"
           >
-            Управление
+            Сбросить
           </button>
         </div>
-        <select
-          v-if="showReleases"
-          v-model="filterReleaseId"
-          class="select board-filter-select"
-        >
-          <option value="">Все релизы</option>
-          <option
-            v-for="release in board.current.releases"
-            :key="release.id"
-            :value="release.id"
-          >
-            {{ release.name }}
-          </option>
-        </select>
-        <button
-          v-if="filtersActive"
-          type="button"
-          class="btn btn-ghost"
-          @click="clearFilters"
-        >
-          Сбросить
-        </button>
       </div>
-    </div>
       <div class="columns">
         <div
           v-for="column in board.current.columns"
@@ -1226,7 +1428,10 @@ async function saveLabels(): Promise<void> {
             </button>
           </div>
           <div class="column-cards">
-            <template v-for="card in visibleCardsOf(column.id)" :key="card.id">
+            <template
+              v-for="card in visibleCardsOf(column.id)"
+              :key="card.id"
+            >
               <div
                 :class="[
                   'task',
@@ -1249,58 +1454,102 @@ async function saveLabels(): Promise<void> {
                 @keydown.enter.prevent="openCard(card.id)"
                 @keydown.space.prevent="openCard(card.id)"
               >
-              <button
-                v-if="canEdit"
-                type="button"
-                class="task-menu-btn"
-                aria-label="Действия карточки"
-                @click.stop="toggleCardMenu($event, card.id)"
-              >
-                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-                  <circle cx="3" cy="8" r="1.5" fill="currentColor" />
-                  <circle cx="8" cy="8" r="1.5" fill="currentColor" />
-                  <circle cx="13" cy="8" r="1.5" fill="currentColor" />
-                </svg>
-              </button>
-              <div class="labels">
-                <span
-                  v-for="labelId in card.labelIds"
-                  :key="labelId"
-                  :class="labelClass(board.current.labels.find((item) => item.id === labelId)?.color ?? 'blue')"
+                <button
+                  v-if="canEdit"
+                  type="button"
+                  class="task-menu-btn"
+                  aria-label="Действия карточки"
+                  @click.stop="toggleCardMenu($event, card.id)"
                 >
-                  {{ board.current.labels.find((item) => item.id === labelId)?.name }}
-                </span>
-              </div>
-              <h3>{{ card.title }}</h3>
-              <span v-if="card.releaseName" class="release-chip">{{ card.releaseName }}</span>
-              <div class="task-foot">
-                <div class="task-meta">
-                  <span v-if="card.assigneeName" class="avatar sm">
-                    {{ initials(card.assigneeName) }}
-                  </span>
-                  <span :class="{ 'is-overdue': isOverdue(card.dueDate, column.isDone) }">
-                    {{ formatDate(card.dueDate) }}
-                  </span>
-                  <span v-if="card.commentCount" class="task-comments">
-                    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-                      <path
-                        fill="currentColor"
-                        d="M2.5 2h11A1.5 1.5 0 0 1 15 3.5v6A1.5 1.5 0 0 1 13.5 11H8.4L5 14.2V11H2.5A1.5 1.5 0 0 1 1 9.5v-6A1.5 1.5 0 0 1 2.5 2z"
-                      />
-                    </svg>
-                    {{ card.commentCount }}
-                  </span>
-                  <span v-if="card.checklistTotal" class="task-checklist">
-                    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-                      <path
-                        fill="currentColor"
-                        d="M3.5 1.5A1.5 1.5 0 0 0 2 3v10a1.5 1.5 0 0 0 1.5 1.5h9A1.5 1.5 0 0 0 14 13V3a1.5 1.5 0 0 0-1.5-1.5h-9zm7.03 4.22 1.06 1.06-4.25 4.25L5.03 8.72l1.06-1.06 1.25 1.25 3.19-3.19z"
-                      />
-                    </svg>
-                    {{ card.checklistDone }}/{{ card.checklistTotal }}
+                  <svg
+                    viewBox="0 0 16 16"
+                    width="14"
+                    height="14"
+                    aria-hidden="true"
+                  >
+                    <circle
+                      cx="3"
+                      cy="8"
+                      r="1.5"
+                      fill="currentColor"
+                    />
+                    <circle
+                      cx="8"
+                      cy="8"
+                      r="1.5"
+                      fill="currentColor"
+                    />
+                    <circle
+                      cx="13"
+                      cy="8"
+                      r="1.5"
+                      fill="currentColor"
+                    />
+                  </svg>
+                </button>
+                <div class="labels">
+                  <span
+                    v-for="labelId in card.labelIds"
+                    :key="labelId"
+                    :class="labelClass(
+                      board.current.labels.find((item) => item.id === labelId)?.color ?? 'blue',
+                    )"
+                  >
+                    {{ board.current.labels.find((item) => item.id === labelId)?.name }}
                   </span>
                 </div>
-              </div>
+                <h3>{{ card.title }}</h3>
+                <span
+                  v-if="card.releaseName"
+                  class="release-chip"
+                >{{ card.releaseName }}</span>
+                <div class="task-foot">
+                  <div class="task-meta">
+                    <span
+                      v-if="card.assigneeName"
+                      class="avatar sm"
+                    >
+                      {{ initials(card.assigneeName) }}
+                    </span>
+                    <span :class="{ 'is-overdue': isOverdue(card.dueDate, column.isDone) }">
+                      {{ formatDate(card.dueDate) }}
+                    </span>
+                    <span
+                      v-if="card.commentCount"
+                      class="task-comments"
+                    >
+                      <svg
+                        viewBox="0 0 16 16"
+                        width="12"
+                        height="12"
+                        aria-hidden="true"
+                      >
+                        <path
+                          fill="currentColor"
+                          d="M2.5 2h11A1.5 1.5 0 0 1 15 3.5v6A1.5 1.5 0 0 1 13.5 11H8.4L5 14.2V11H2.5A1.5 1.5 0 0 1 1 9.5v-6A1.5 1.5 0 0 1 2.5 2z"
+                        />
+                      </svg>
+                      {{ card.commentCount }}
+                    </span>
+                    <span
+                      v-if="card.checklistTotal"
+                      class="task-checklist"
+                    >
+                      <svg
+                        viewBox="0 0 16 16"
+                        width="12"
+                        height="12"
+                        aria-hidden="true"
+                      >
+                        <path
+                          fill="currentColor"
+                          d="M3.5 1.5A1.5 1.5 0 0 0 2 3v10a1.5 1.5 0 0 0 1.5 1.5h9A1.5 1.5 0 0 0 14 13V3a1.5 1.5 0 0 0-1.5-1.5h-9zm7.03 4.22 1.06 1.06-4.25 4.25L5.03 8.72l1.06-1.06 1.25 1.25 3.19-3.19z"
+                        />
+                      </svg>
+                      {{ card.checklistDone }}/{{ card.checklistTotal }}
+                    </span>
+                  </div>
+                </div>
               </div>
             </template>
             <div
@@ -1321,7 +1570,10 @@ async function saveLabels(): Promise<void> {
               Нет совпадений
             </p>
           </div>
-          <div v-if="canEdit" class="composer">
+          <div
+            v-if="canEdit"
+            class="composer"
+          >
             <template v-if="addingCardColumnId === column.id">
               <textarea
                 v-model="newCardTitle"
@@ -1330,10 +1582,18 @@ async function saveLabels(): Promise<void> {
                 @keydown.escape="cancelCardComposer"
               />
               <div class="composer-actions">
-                <button type="button" class="btn" @click="submitCard(column.id)">
+                <button
+                  type="button"
+                  class="btn"
+                  @click="submitCard(column.id)"
+                >
                   Добавить
                 </button>
-                <button type="button" class="icon-btn" @click="cancelCardComposer">
+                <button
+                  type="button"
+                  class="icon-btn"
+                  @click="cancelCardComposer"
+                >
                   ×
                 </button>
               </div>
@@ -1348,8 +1608,14 @@ async function saveLabels(): Promise<void> {
             </button>
           </div>
         </div>
-        <div v-if="canAdmin" class="add-list">
-          <div v-if="addingColumn" class="composer">
+        <div
+          v-if="canAdmin"
+          class="add-list"
+        >
+          <div
+            v-if="addingColumn"
+            class="composer"
+          >
             <input
               v-model="newColumnName"
               class="input"
@@ -1359,10 +1625,18 @@ async function saveLabels(): Promise<void> {
               @keydown.escape="cancelColumnComposer"
             >
             <div class="composer-actions">
-              <button type="button" class="btn" @click="submitColumn">
+              <button
+                type="button"
+                class="btn"
+                @click="submitColumn"
+              >
                 Добавить колонку
               </button>
-              <button type="button" class="icon-btn" @click="cancelColumnComposer">
+              <button
+                type="button"
+                class="icon-btn"
+                @click="cancelColumnComposer"
+              >
                 ×
               </button>
             </div>
@@ -1378,589 +1652,765 @@ async function saveLabels(): Promise<void> {
         </div>
       </div>
 
-    <Teleport to="body">
-      <div
-        v-if="menuColumn && menuPosition"
-        class="column-menu"
-        :style="menuPosition"
-        @click.stop
-      >
-        <button type="button" @click="startRename(menuColumn)">
-          Переименовать
-        </button>
-        <button
-          type="button"
-          class="is-danger"
-          @click="openColumnDelete(menuColumn)"
+      <Teleport to="body">
+        <div
+          v-if="menuColumn && menuPosition"
+          class="column-menu"
+          :style="menuPosition"
+          @click.stop
         >
-          Удалить
-        </button>
-      </div>
-      <div
-        v-else-if="menuCard && menuPosition"
-        class="column-menu"
-        :style="menuPosition"
-        @click.stop
-      >
-        <button type="button" @click="copyCard(menuCard)">
-          Копировать
-        </button>
-        <button
-          v-if="canDeleteBoardCard(menuCard)"
-          type="button"
-          class="is-danger"
-          @click="openCardDelete(menuCard)"
-        >
-          Удалить
-        </button>
-      </div>
-    </Teleport>
-
-    <div class="overlay" :class="{ 'is-open': cardOpen }" @click.self="cardOpen = false">
-      <div
-        v-if="board.card"
-        class="card-modal"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="board.card.title"
-      >
-        <div class="card-modal-top">
-          <div class="card-modal-list" :title="cardColumnName">
-            {{ cardColumnName || 'Колонка' }}
-          </div>
-          <div class="card-modal-top-actions">
-            <button
-              v-if="canDeleteCard"
-              type="button"
-              class="icon-btn is-danger"
-              aria-label="Удалить карточку"
-              @click="openCardDeleteFromModal"
-            >
-              <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
-                <path
-                  fill="currentColor"
-                  d="M6 1.5h4l.75 1.5H14V4.5H2V3h3.25L6 1.5zM3.5 5.5h9l-.6 8.1A1.25 1.25 0 0 1 10.66 14.5H5.34a1.25 1.25 0 0 1-1.24-.9L3.5 5.5zm2.25 1.5v5.5h1.5V7h-1.5zm3 0v5.5h1.5V7h-1.5z"
-                />
-              </svg>
-            </button>
-            <button
-              type="button"
-              class="icon-btn"
-              aria-label="Закрыть"
-              @click="cardOpen = false"
-            >
-              ×
-            </button>
-          </div>
+          <button
+            type="button"
+            @click="startRename(menuColumn)"
+          >
+            Переименовать
+          </button>
+          <button
+            type="button"
+            class="is-danger"
+            @click="openColumnDelete(menuColumn)"
+          >
+            Удалить
+          </button>
         </div>
+        <div
+          v-else-if="menuCard && menuPosition"
+          class="column-menu"
+          :style="menuPosition"
+          @click.stop
+        >
+          <button
+            type="button"
+            @click="copyCard(menuCard)"
+          >
+            Копировать
+          </button>
+          <button
+            v-if="canDeleteBoardCard(menuCard)"
+            type="button"
+            class="is-danger"
+            @click="openCardDelete(menuCard)"
+          >
+            Удалить
+          </button>
+        </div>
+      </Teleport>
 
-        <div class="card-modal-grid">
-          <div class="card-modal-main">
-            <div class="card-modal-title-wrap">
-              <input
-                v-if="canEdit"
-                v-model="cardTitle"
-                class="input card-modal-title"
-                type="text"
-                placeholder="Название карточки…"
-                @keydown.enter.prevent="saveTitle"
-                @blur="saveTitle"
-              >
-              <h2 v-else class="card-modal-title">{{ board.card.title }}</h2>
-            </div>
-
-            <div v-if="canEdit" class="card-actions">
-              <button
-                type="button"
-                class="card-action-btn"
-                @click="focusDueDateField"
-              >
-                Даты
-              </button>
-              <button
-                type="button"
-                class="card-action-btn"
-                @click="addChecklist"
-              >
-                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-                  <path
-                    fill="currentColor"
-                    d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"
-                  />
-                </svg>
-                Чек-лист
-              </button>
-              <button
-                v-if="canLogHours"
-                type="button"
-                class="card-action-btn"
-                @click="openHoursModal"
-              >
-                <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-                  <path
-                    fill="currentColor"
-                    d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"
-                  />
-                </svg>
-                Затраты
-              </button>
-              <button
-                type="button"
-                class="card-action-btn"
-                @click="focusAssigneeField"
-              >
-                Участники
-              </button>
-            </div>
-
-            <div class="field">
-              <label>Метки</label>
-              <div v-if="board.current.labels.length" class="label-picks">
-                <button
-                  v-for="label in board.current.labels"
-                  :key="label.id"
-                  type="button"
-                  :class="[
-                    labelClass(label.color),
-                    { 'is-on': board.card.labelIds.includes(label.id) }
-                  ]"
-                  :disabled="!canEdit"
-                  @click="toggleLabel(label.id)"
-                >
-                  {{ label.name }}
-                </button>
-              </div>
-              <p v-else class="muted">Меток нет</p>
-            </div>
-
-            <div class="field-row">
-              <div class="field">
-                <label>Исполнитель</label>
-                <select
-                  ref="assigneeSelectRef"
-                  class="select"
-                  :value="board.card.assigneeId ?? ''"
-                  :disabled="!canEdit"
-                  @change="board.patchCard(board.card.id, { assigneeId: ($event.target as HTMLSelectElement).value || null })"
-                >
-                  <option value="">Без исполнителя</option>
-                  <option
-                    v-for="row in project.current?.rates ?? []"
-                    :key="row.userId"
-                    :value="row.userId"
-                  >
-                    {{ row.displayName }}
-                  </option>
-                </select>
-              </div>
-              <div class="field">
-                <label>Срок</label>
-                <input
-                  ref="dueDateInputRef"
-                  class="input"
-                  type="date"
-                  :value="toDateInput(board.card.dueDate)"
-                  :disabled="!canEdit"
-                  @change="saveDueDate"
-                >
-              </div>
-            </div>
-
-            <div class="field-row">
-              <div class="field">
-                <label>Оценка, часы</label>
-                <input
-                  class="input"
-                  type="number"
-                  min="0"
-                  max="1000"
-                  step="0.5"
-                  :value="board.card.estimateHours"
-                  :disabled="!canEdit"
-                  @change="saveEstimate"
-                >
-              </div>
-              <div class="field">
-                <label>Потрачено</label>
-                <div class="fake-input">
-                  {{ factHours }} ч
-                </div>
-              </div>
-            </div>
-
-            <div v-if="showMoney" class="field">
-              <label>План / факт, ₽</label>
-              <div class="fake-input">
-                {{ board.card.planAmount ?? '—' }} ₽
-                <template v-if="factAmount !== null">
-                  · факт {{ factAmount }} ₽
-                </template>
-              </div>
-            </div>
-
-            <div v-if="showReleases" class="field">
-              <label>Релиз</label>
-              <select
-                class="select"
-                :value="board.card.releaseId ?? ''"
-                :disabled="!canEdit"
-                @change="saveRelease"
-              >
-                <option value="">Без релиза</option>
-                <option
-                  v-for="item in board.current.releases"
-                  :key="item.id"
-                  :value="item.id"
-                >
-                  {{ item.name }}
-                </option>
-              </select>
-            </div>
-
-            <div class="field desc-field">
-              <div class="card-section-head">
-                <label>Описание</label>
-                <button
-                  v-if="canEdit && !descEditing"
-                  type="button"
-                  class="btn btn-ghost"
-                  @click="startEditDescription"
-                >
-                  Изменить
-                </button>
-              </div>
-              <template v-if="canEdit && descEditing">
-                <textarea
-                  v-model="descDraft"
-                  class="input desc-input"
-                  rows="5"
-                  placeholder="Добавить более подробное описание…"
-                />
-                <div class="desc-actions">
-                  <button type="button" class="btn" @click="saveDescription">
-                    Сохранить
-                  </button>
-                  <button type="button" class="btn btn-ghost" @click="cancelDescription">
-                    Отмена
-                  </button>
-                </div>
-              </template>
-              <template v-else>
-                <div
-                  ref="descBodyRef"
-                  class="desc-view"
-                  :class="{
-                    'is-collapsed': Boolean(board.card.description) && !descExpanded,
-                    'is-readonly': !canEdit
-                  }"
-                  :role="canEdit ? 'button' : undefined"
-                  :tabindex="canEdit ? 0 : undefined"
-                  @click="canEdit ? onDescriptionClick($event) : undefined"
-                  @keydown.enter.prevent="canEdit ? startEditDescription() : undefined"
-                >
-                  <span
-                    v-if="board.card.description"
-                    class="desc-text"
-                    v-html="linkifyText(board.card.description)"
-                  />
-                  <span v-else class="muted">
-                    {{ canEdit ? 'Добавить более подробное описание…' : 'Описания нет' }}
-                  </span>
-                </div>
-                <button
-                  v-if="descNeedsToggle"
-                  type="button"
-                  class="btn btn-ghost desc-toggle"
-                  @click="toggleDescription"
-                >
-                  {{ descExpanded ? 'Свернуть' : 'Читать полностью' }}
-                </button>
-              </template>
-            </div>
-
+      <div
+        class="overlay"
+        :class="{ 'is-open': cardOpen }"
+        @click.self="cardOpen = false"
+      >
+        <div
+          v-if="board.card"
+          class="card-modal"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="board.card.title"
+        >
+          <div class="card-modal-top">
             <div
-              v-for="list in board.card.checklists"
-              :key="list.id"
-              class="checklist"
+              class="card-modal-list"
+              :title="cardColumnName"
             >
-              <div class="checklist-head">
-                <input
-                  v-if="canEdit"
-                  v-model="checklistDrafts[list.id]"
-                  class="input checklist-title"
-                  type="text"
-                  @keydown.enter.prevent="saveChecklistTitle(list.id)"
-                  @blur="saveChecklistTitle(list.id)"
-                >
-                <h3 v-else>{{ list.title }}</h3>
-                <button
-                  v-if="canEdit"
-                  type="button"
-                  class="btn btn-ghost"
-                  @click="board.deleteChecklist(list.id)"
-                >
-                  Удалить
-                </button>
-              </div>
-              <div class="checklist-progress">
-                <span>
-                  {{ checklistDoneCount(list) }}/{{ list.items.length }}
-                </span>
-                <div class="progress-track">
-                  <div
-                    class="progress-fill"
-                    :class="{ 'is-done': checklistPercent(list) === 100 }"
-                    :style="{ width: `${checklistPercent(list)}%` }"
-                  />
-                </div>
-              </div>
-              <div
-                v-for="item in list.items"
-                :key="item.id"
-                class="check-item"
-                :class="{ 'is-done': item.done }"
-              >
-                <input
-                  type="checkbox"
-                  :checked="item.done"
-                  :disabled="!canEdit"
-                  @change="toggleItem(item.id, ($event.target as HTMLInputElement).checked)"
-                >
-                <input
-                  v-if="canEdit"
-                  v-model="itemDrafts[item.id]"
-                  class="input check-item-text"
-                  type="text"
-                  @keydown.enter.prevent="saveItemText(item.id)"
-                  @blur="saveItemText(item.id)"
-                >
-                <span v-else>{{ item.text }}</span>
-                <button
-                  v-if="canEdit"
-                  type="button"
-                  class="btn btn-ghost"
-                  @click="board.deleteChecklistItem(item.id)"
-                >
-                  Удалить
-                </button>
-              </div>
-              <input
-                v-if="canEdit"
-                v-model="newItemText[list.id]"
-                class="input mt-8"
-                type="text"
-                placeholder="Добавить пункт"
-                @keydown.enter.prevent="addItem(list.id)"
-              >
+              {{ cardColumnName || 'Колонка' }}
             </div>
-            <button
-              v-if="canEdit"
-              type="button"
-              class="btn btn-ghost checklist-add"
-              @click="addChecklist"
-            >
-              Добавить чеклист
-            </button>
-
-            <div class="costs">
-              <div class="card-section-head">
-                <label>Затраты</label>
-                <span class="costs-total">{{ factHours }} ч</span>
-              </div>
-              <div
-                v-if="board.card.timeEntries.length"
-                class="costs-table"
+            <div class="card-modal-top-actions">
+              <button
+                v-if="canDeleteCard"
+                type="button"
+                class="icon-btn is-danger"
+                aria-label="Удалить карточку"
+                @click="openCardDeleteFromModal"
               >
-                <div class="costs-row costs-row--head">
-                  <span>Дата</span>
-                  <span>Пользователь</span>
-                  <span>Время</span>
-                  <span class="costs-actions" aria-hidden="true"></span>
-                </div>
-                <div
-                  v-for="entry in board.card.timeEntries"
-                  :key="entry.id"
-                  class="costs-row"
+                <svg
+                  viewBox="0 0 16 16"
+                  width="16"
+                  height="16"
+                  aria-hidden="true"
                 >
-                  <span>{{ formatDate(entry.workedAt) }}</span>
-                  <span class="costs-user">{{ entry.displayName }}</span>
-                  <span>{{ entry.hours }} ч</span>
-                  <div class="costs-actions row-actions">
-                    <template v-if="canManageEntry(entry)">
-                      <button
-                        type="button"
-                        class="btn btn-ghost"
-                        @click="openEditHours(entry)"
-                      >
-                        Изменить
-                      </button>
-                      <button
-                        type="button"
-                        class="btn btn-ghost"
-                        @click="removeTimeEntry(entry.id)"
-                      >
-                        Удалить
-                      </button>
-                    </template>
+                  <path
+                    fill="currentColor"
+                    d="M6 1.5h4l.75 1.5H14V4.5H2V3h3.25L6 1.5zM3.5 5.5h9l-.6 8.1A1.25 1.25 0 0 1 10.66 14.5H5.34a1.25 1.25 0 0 1-1.24-.9L3.5 5.5zm2.25 1.5v5.5h1.5V7h-1.5zm3 0v5.5h1.5V7h-1.5z"
+                  />
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="icon-btn"
+                aria-label="Закрыть"
+                @click="cardOpen = false"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+
+          <div class="card-modal-grid">
+            <div class="card-modal-main">
+              <div class="card-modal-title-wrap">
+                <input
+                  v-if="canEdit"
+                  v-model="cardTitle"
+                  class="input card-modal-title"
+                  type="text"
+                  placeholder="Название карточки…"
+                  @keydown.enter.prevent="saveTitle"
+                  @blur="saveTitle"
+                >
+                <h2
+                  v-else
+                  class="card-modal-title"
+                >
+                  {{ board.card.title }}
+                </h2>
+              </div>
+
+              <div
+                v-if="canEdit"
+                class="card-actions"
+              >
+                <button
+                  type="button"
+                  class="card-action-btn"
+                  @click="focusDueDateField"
+                >
+                  Даты
+                </button>
+                <button
+                  type="button"
+                  class="card-action-btn"
+                  @click="addChecklist"
+                >
+                  <svg
+                    viewBox="0 0 16 16"
+                    width="14"
+                    height="14"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fill="currentColor"
+                      d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"
+                    />
+                  </svg>
+                  Чек-лист
+                </button>
+                <button
+                  v-if="canLogHours"
+                  type="button"
+                  class="card-action-btn"
+                  @click="openHoursModal"
+                >
+                  <svg
+                    viewBox="0 0 16 16"
+                    width="14"
+                    height="14"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fill="currentColor"
+                      d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"
+                    />
+                  </svg>
+                  Затраты
+                </button>
+                <button
+                  type="button"
+                  class="card-action-btn"
+                  @click="focusAssigneeField"
+                >
+                  Участники
+                </button>
+              </div>
+
+              <div class="field">
+                <label>Метки</label>
+                <div
+                  v-if="board.current.labels.length"
+                  class="label-picks"
+                >
+                  <button
+                    v-for="label in board.current.labels"
+                    :key="label.id"
+                    type="button"
+                    :class="[
+                      labelClass(label.color),
+                      { 'is-on': board.card.labelIds.includes(label.id) }
+                    ]"
+                    :disabled="!canEdit"
+                    @click="toggleLabel(label.id)"
+                  >
+                    {{ label.name }}
+                  </button>
+                </div>
+                <p
+                  v-else
+                  class="muted"
+                >
+                  Меток нет
+                </p>
+              </div>
+
+              <div class="field-row">
+                <div class="field">
+                  <label>Исполнитель</label>
+                  <select
+                    ref="assigneeSelectRef"
+                    class="select"
+                    :value="board.card.assigneeId ?? ''"
+                    :disabled="!canEdit"
+                    @change="board.patchCard(board.card.id, {
+                      assigneeId: ($event.target as HTMLSelectElement).value || null,
+                    })"
+                  >
+                    <option value="">
+                      Без исполнителя
+                    </option>
+                    <option
+                      v-for="row in project.current?.rates ?? []"
+                      :key="row.userId"
+                      :value="row.userId"
+                    >
+                      {{ row.displayName }}
+                    </option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label>Срок</label>
+                  <input
+                    ref="dueDateInputRef"
+                    class="input"
+                    type="date"
+                    :value="toDateInput(board.card.dueDate)"
+                    :disabled="!canEdit"
+                    @change="saveDueDate"
+                  >
+                </div>
+              </div>
+
+              <div class="field-row">
+                <div class="field">
+                  <label>Оценка (план), часы</label>
+                  <input
+                    class="input"
+                    type="number"
+                    min="0"
+                    max="1000"
+                    step="0.5"
+                    :value="board.card.estimateHours"
+                    :disabled="!canEdit"
+                    @change="saveEstimate"
+                  >
+                </div>
+                <div class="field">
+                  <label>Потрачено</label>
+                  <button
+                    v-if="canLogHours"
+                    type="button"
+                    class="fake-input fake-input--action"
+                    @click="openHoursModal"
+                  >
+                    {{ factHours }} ч
+                  </button>
+                  <div
+                    v-else
+                    class="fake-input"
+                  >
+                    {{ factHours }} ч
                   </div>
                 </div>
               </div>
-              <p v-else class="muted">Затрат пока нет</p>
-            </div>
-          </div>
 
-          <div class="card-modal-side">
-            <div class="card-section-head">
-              <label>Комментарии</label>
-            </div>
-            <input
-              v-if="canEdit"
-              v-model="comment"
-              class="input card-comment-input"
-              placeholder="Напишите комментарий…"
-              @keydown.enter="sendComment"
-            >
-            <div class="card-comments">
-              <div v-for="item in board.card.comments" :key="item.id" class="comment">
-                <div class="comment-head">
-                  <div class="who">{{ item.displayName }}</div>
+              <div
+                v-if="showMoney"
+                class="field"
+              >
+                <label>План / факт, ₽</label>
+                <div class="fake-input">
+                  {{ board.card.planAmount ?? '—' }} ₽
+                  <template v-if="factAmount !== null">
+                    · факт {{ factAmount }} ₽
+                  </template>
+                </div>
+              </div>
+
+              <div
+                v-if="showReleases"
+                class="field"
+              >
+                <label>Релиз</label>
+                <select
+                  class="select"
+                  :value="board.card.releaseId ?? ''"
+                  :disabled="!canEdit"
+                  @change="saveRelease"
+                >
+                  <option value="">
+                    Без релиза
+                  </option>
+                  <option
+                    v-for="item in board.current.releases"
+                    :key="item.id"
+                    :value="item.id"
+                  >
+                    {{ item.name }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="field desc-field">
+                <div class="card-section-head">
+                  <label>Описание</label>
                   <button
-                    v-if="canDeleteComment(item.userId)"
+                    v-if="canEdit && !descEditing"
                     type="button"
                     class="btn btn-ghost"
-                    @click="removeComment(item.id)"
+                    @click="startEditDescription"
+                  >
+                    Изменить
+                  </button>
+                </div>
+                <template v-if="canEdit && descEditing">
+                  <textarea
+                    v-model="descDraft"
+                    class="input desc-input"
+                    rows="5"
+                    placeholder="Добавить более подробное описание…"
+                  />
+                  <div class="desc-actions">
+                    <button
+                      type="button"
+                      class="btn"
+                      @click="saveDescription"
+                    >
+                      Сохранить
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-ghost"
+                      @click="cancelDescription"
+                    >
+                      Отмена
+                    </button>
+                  </div>
+                </template>
+                <template v-else>
+                  <div
+                    ref="descBodyRef"
+                    class="desc-view"
+                    :class="{
+                      'is-collapsed': Boolean(board.card.description) && !descExpanded,
+                      'is-readonly': !canEdit
+                    }"
+                    :role="canEdit ? 'button' : undefined"
+                    :tabindex="canEdit ? 0 : undefined"
+                    @click="canEdit ? onDescriptionClick($event) : undefined"
+                    @keydown.enter.prevent="canEdit ? startEditDescription() : undefined"
+                  >
+                    <!-- eslint-disable vue/no-v-html --><!-- escaped in linkifyText -->
+                    <span
+                      v-if="board.card.description"
+                      class="desc-text"
+                      v-html="linkifyText(board.card.description)"
+                    />
+                    <!-- eslint-enable vue/no-v-html -->
+                    <span
+                      v-else
+                      class="muted"
+                    >
+                      {{ canEdit ? 'Добавить более подробное описание…' : 'Описания нет' }}
+                    </span>
+                  </div>
+                  <button
+                    v-if="descNeedsToggle"
+                    type="button"
+                    class="btn btn-ghost desc-toggle"
+                    @click="toggleDescription"
+                  >
+                    {{ descExpanded ? 'Свернуть' : 'Читать полностью' }}
+                  </button>
+                </template>
+              </div>
+
+              <div
+                v-for="list in board.card.checklists"
+                :key="list.id"
+                class="checklist"
+              >
+                <div class="checklist-head">
+                  <input
+                    v-if="canEdit"
+                    v-model="checklistDrafts[list.id]"
+                    class="input checklist-title"
+                    type="text"
+                    @keydown.enter.prevent="saveChecklistTitle(list.id)"
+                    @blur="saveChecklistTitle(list.id)"
+                  >
+                  <h3 v-else>
+                    {{ list.title }}
+                  </h3>
+                  <button
+                    v-if="canEdit"
+                    type="button"
+                    class="btn btn-ghost"
+                    @click="board.deleteChecklist(list.id)"
                   >
                     Удалить
                   </button>
                 </div>
-                <div>{{ item.body }}</div>
+                <div class="checklist-progress">
+                  <span>
+                    {{ checklistDoneCount(list) }}/{{ list.items.length }}
+                  </span>
+                  <div class="progress-track">
+                    <div
+                      class="progress-fill"
+                      :class="{ 'is-done': checklistPercent(list) === 100 }"
+                      :style="{ width: `${checklistPercent(list)}%` }"
+                    />
+                  </div>
+                </div>
+                <div
+                  v-for="item in list.items"
+                  :key="item.id"
+                  class="check-item"
+                  :class="{ 'is-done': item.done }"
+                >
+                  <input
+                    type="checkbox"
+                    :checked="item.done"
+                    :disabled="!canEdit"
+                    @change="toggleItem(item.id, ($event.target as HTMLInputElement).checked)"
+                  >
+                  <input
+                    v-if="canEdit"
+                    v-model="itemDrafts[item.id]"
+                    class="input check-item-text"
+                    type="text"
+                    @keydown.enter.prevent="saveItemText(item.id)"
+                    @blur="saveItemText(item.id)"
+                  >
+                  <span v-else>{{ item.text }}</span>
+                  <button
+                    v-if="canEdit"
+                    type="button"
+                    class="btn btn-ghost"
+                    @click="board.deleteChecklistItem(item.id)"
+                  >
+                    Удалить
+                  </button>
+                </div>
+                <input
+                  v-if="canEdit"
+                  v-model="newItemText[list.id]"
+                  class="input mt-8"
+                  type="text"
+                  placeholder="Добавить пункт"
+                  @keydown.enter.prevent="addItem(list.id)"
+                >
               </div>
-              <p v-if="board.card.comments.length === 0" class="muted">
-                Комментариев пока нет
-              </p>
+              <button
+                v-if="canEdit"
+                type="button"
+                class="btn btn-ghost checklist-add"
+                @click="addChecklist"
+              >
+                Добавить чеклист
+              </button>
+
+              <div class="costs">
+                <div class="card-section-head">
+                  <label>Затраты</label>
+                  <span class="costs-total">{{ factHours }} ч</span>
+                </div>
+                <div
+                  v-if="board.card.timeEntries.length"
+                  class="costs-table"
+                >
+                  <div class="costs-row costs-row--head">
+                    <span>Дата</span>
+                    <span>Пользователь</span>
+                    <span>Время</span>
+                    <span
+                      class="costs-actions"
+                      aria-hidden="true"
+                    />
+                  </div>
+                  <div
+                    v-for="entry in board.card.timeEntries"
+                    :key="entry.id"
+                    class="costs-row"
+                  >
+                    <span>{{ formatDate(entry.workedAt) }}</span>
+                    <span class="costs-user">{{ entry.displayName }}</span>
+                    <span>{{ entry.hours }} ч</span>
+                    <div class="costs-actions row-actions">
+                      <template v-if="canManageEntry(entry)">
+                        <button
+                          type="button"
+                          class="btn btn-ghost"
+                          @click="openEditHours(entry)"
+                        >
+                          Изменить
+                        </button>
+                        <button
+                          type="button"
+                          class="btn btn-ghost"
+                          @click="removeTimeEntry(entry.id)"
+                        >
+                          Удалить
+                        </button>
+                      </template>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  v-else
+                  class="costs-empty"
+                >
+                  <p class="muted">
+                    Затрат пока нет
+                  </p>
+                  <button
+                    v-if="canLogHours"
+                    type="button"
+                    class="btn btn-ghost"
+                    @click="openHoursModal"
+                  >
+                    Списать часы
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div class="card-modal-side">
+              <div class="card-section-head">
+                <label>Комментарии</label>
+              </div>
+              <input
+                v-if="canEdit"
+                v-model="comment"
+                class="input card-comment-input"
+                placeholder="Напишите комментарий…"
+                @keydown.enter="sendComment"
+              >
+              <div class="card-comments">
+                <div
+                  v-for="item in board.card.comments"
+                  :key="item.id"
+                  class="comment"
+                >
+                  <div class="comment-head">
+                    <div class="who">
+                      {{ item.displayName }}
+                    </div>
+                    <button
+                      v-if="canDeleteComment(item.userId)"
+                      type="button"
+                      class="btn btn-ghost"
+                      @click="removeComment(item.id)"
+                    >
+                      Удалить
+                    </button>
+                  </div>
+                  <div>{{ item.body }}</div>
+                </div>
+                <p
+                  v-if="board.card.comments.length === 0"
+                  class="muted"
+                >
+                  Комментариев пока нет
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <ModalDialog
-      :open="hoursOpen"
-      :title="editingEntryId ? 'Изменить списание' : 'Списать часы'"
-      @close="hoursOpen = false"
-    >
-      <div class="field">
-        <label>Часы</label>
-        <input
-          v-model.number="hours"
-          class="input"
-          type="number"
-          min="0.5"
-          max="24"
-          step="0.5"
-          placeholder="0.5"
-        >
-      </div>
-      <div v-if="!editingEntryId" class="field">
-        <label>Дата</label>
-        <input v-model="hoursWorkedAt" class="input" type="date">
-      </div>
-      <div class="modal-foot">
-        <button type="button" class="btn btn-ghost" @click="hoursOpen = false">
-          Отмена
-        </button>
-        <button type="button" class="btn" @click="submitHours">
-          {{ editingEntryId ? 'Сохранить' : 'Списать' }}
-        </button>
-      </div>
-    </ModalDialog>
-
-    <ModalDialog :open="labelsOpen" title="Метки" @close="labelsOpen = false">
-      <div v-for="label in board.current.labels" :key="label.id" class="label-row">
-        <span :class="labelClass(label.color)">{{ label.name }}</span>
-        <button type="button" class="btn btn-ghost" @click="board.deleteLabel(board.current!.id, label.id)">
-          Удалить
-        </button>
-      </div>
-      <div class="field-row mt-16">
+      <ModalDialog
+        :open="hoursOpen"
+        :title="editingEntryId ? 'Изменить списание' : 'Списать часы'"
+        @close="hoursOpen = false"
+      >
         <div class="field">
-          <label>Новая метка</label>
+          <label>Часы</label>
           <input
-            v-model="labelName"
+            v-model.number="hours"
             class="input"
-            type="text"
-            placeholder="Название метки…"
+            type="number"
+            min="0.5"
+            max="24"
+            step="0.5"
+            placeholder="0.5"
           >
         </div>
-        <div class="field">
-          <label>Цвет</label>
-          <select v-model="labelColor" class="select">
-            <option value="blue">Синий</option>
-            <option value="green">Зелёный</option>
-            <option value="purple">Фиолетовый</option>
-            <option value="pink">Розовый</option>
-            <option value="amber">Янтарный</option>
-          </select>
+        <div
+          v-if="!editingEntryId"
+          class="field"
+        >
+          <label>Дата</label>
+          <input
+            v-model="hoursWorkedAt"
+            class="input"
+            type="date"
+          >
         </div>
-      </div>
-      <div class="modal-foot">
-        <button type="button" class="btn" @click="saveLabels">Добавить метку</button>
-      </div>
-    </ModalDialog>
+        <div class="modal-foot">
+          <button
+            type="button"
+            class="btn btn-ghost"
+            @click="hoursOpen = false"
+          >
+            Отмена
+          </button>
+          <button
+            type="button"
+            class="btn"
+            @click="submitHours"
+          >
+            {{ editingEntryId ? 'Сохранить' : 'Списать' }}
+          </button>
+        </div>
+      </ModalDialog>
 
-    <ModalDialog
-      :open="cardDeleteOpen"
-      title="Удалить карточку"
-      @close="cardDeleteOpen = false; cardToDelete = null"
-    >
-      <p class="muted mb-16">
-        «{{ cardToDelete?.title }}» будет удалена. Действие нельзя отменить.
-      </p>
-      <div class="modal-foot">
-        <button
-          type="button"
-          class="btn btn-ghost"
-          @click="cardDeleteOpen = false; cardToDelete = null"
+      <ModalDialog
+        :open="labelsOpen"
+        title="Метки"
+        @close="labelsOpen = false"
+      >
+        <div
+          v-for="label in board.current.labels"
+          :key="label.id"
+          class="label-row"
         >
-          Отмена
-        </button>
-        <button type="button" class="btn btn-danger" @click="removeCard">
-          Удалить
-        </button>
-      </div>
-    </ModalDialog>
+          <span
+            :class="labelClass(label.color)"
+            class="label-row-swatch"
+          />
+          <input
+            v-model="labelDrafts[label.id]"
+            class="input"
+            type="text"
+            :aria-label="`Название метки ${label.name}`"
+          >
+          <button
+            type="button"
+            class="btn btn-ghost"
+            :disabled="!labelDraftChanged(label.id, label.name)"
+            @click="saveLabelName(label.id)"
+          >
+            Сохранить
+          </button>
+          <button
+            type="button"
+            class="btn btn-ghost"
+            @click="board.deleteLabel(board.current!.id, label.id)"
+          >
+            Удалить
+          </button>
+        </div>
+        <div class="field-row mt-16">
+          <div class="field">
+            <label>Новая метка</label>
+            <input
+              v-model="labelName"
+              class="input"
+              type="text"
+              placeholder="Название метки…"
+            >
+          </div>
+          <div class="field">
+            <label>Цвет</label>
+            <select
+              v-model="labelColor"
+              class="select"
+            >
+              <option value="blue">
+                Синий
+              </option>
+              <option value="green">
+                Зелёный
+              </option>
+              <option value="purple">
+                Фиолетовый
+              </option>
+              <option value="pink">
+                Розовый
+              </option>
+              <option value="amber">
+                Янтарный
+              </option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-foot">
+          <button
+            type="button"
+            class="btn"
+            @click="saveLabels"
+          >
+            Добавить метку
+          </button>
+        </div>
+      </ModalDialog>
 
-    <ModalDialog
-      :open="columnDeleteOpen"
-      title="Удалить колонку"
-      @close="columnDeleteOpen = false"
-    >
-      <p class="muted mb-16">
-        <template v-if="columnHasCards">
-          Сначала переместите карточки
-        </template>
-        <template v-else>
-          Удалить колонку «{{ columnToDelete?.name }}»?
-        </template>
-      </p>
-      <div class="modal-foot">
-        <button
-          type="button"
-          class="btn btn-ghost"
-          @click="columnDeleteOpen = false"
-        >
-          Отмена
-        </button>
-        <button
-          type="button"
-          class="btn btn-danger"
-          :disabled="columnHasCards"
-          @click="removeColumn"
-        >
-          Удалить
-        </button>
-      </div>
-    </ModalDialog>
+      <ModalDialog
+        :open="cardDeleteOpen"
+        title="Удалить карточку"
+        @close="cardDeleteOpen = false; cardToDelete = null"
+      >
+        <p class="muted mb-16">
+          «{{ cardToDelete?.title }}» будет удалена. Действие нельзя отменить.
+        </p>
+        <div class="modal-foot">
+          <button
+            type="button"
+            class="btn btn-ghost"
+            @click="cardDeleteOpen = false; cardToDelete = null"
+          >
+            Отмена
+          </button>
+          <button
+            type="button"
+            class="btn btn-danger"
+            @click="removeCard"
+          >
+            Удалить
+          </button>
+        </div>
+      </ModalDialog>
+
+      <ModalDialog
+        :open="columnDeleteOpen"
+        title="Удалить колонку"
+        @close="columnDeleteOpen = false"
+      >
+        <p class="muted mb-16">
+          <template v-if="columnHasCards">
+            Сначала переместите карточки
+          </template>
+          <template v-else>
+            Удалить колонку «{{ columnToDelete?.name }}»?
+          </template>
+        </p>
+        <div class="modal-foot">
+          <button
+            type="button"
+            class="btn btn-ghost"
+            @click="columnDeleteOpen = false"
+          >
+            Отмена
+          </button>
+          <button
+            type="button"
+            class="btn btn-danger"
+            :disabled="columnHasCards"
+            @click="removeColumn"
+          >
+            Удалить
+          </button>
+        </div>
+      </ModalDialog>
     </template>
   </div>
 </template>
@@ -2580,12 +3030,31 @@ h2.card-modal-title {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   min-height: 36px;
   padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--input-bg);
+  color: inherit;
+  font: inherit;
   font-size: 14px;
+  text-align: left;
+
+  &--action {
+    cursor: pointer;
+
+    &:hover {
+      border-color: var(--blue);
+      background: var(--hover);
+    }
+
+    &:focus-visible {
+      outline: none;
+      border-color: var(--blue);
+      box-shadow: 0 0 0 2px var(--blue-soft);
+    }
+  }
 }
 
 .comment {
@@ -2789,6 +3258,17 @@ h2.card-modal-title {
   margin-bottom: 8px;
 }
 
+.costs-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  .muted {
+    margin: 0;
+  }
+}
+
 .costs-total {
   color: var(--muted);
   font-size: 12px;
@@ -2855,6 +3335,19 @@ h2.card-modal-title {
   &:last-of-type {
     border-bottom: 0;
   }
+
+  .input {
+    flex: 1;
+    min-width: 0;
+    width: auto;
+  }
+}
+
+.label-row-swatch {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
 }
 
 @media (max-width: 800px) {

@@ -16,9 +16,11 @@ const releaseSchema = new Schema<ReleasePojo>(
     name: { type: String, required: true },
     nameNormalized: { type: String, required: true },
     date: { type: Date, default: null },
-    status: { type: String, enum: RELEASE_STATUSES, required: true, default: 'planned' }
+    status: {
+      type: String, enum: RELEASE_STATUSES, required: true, default: 'planned',
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 releaseSchema.index({ projectId: 1, nameNormalized: 1 }, { unique: true });

@@ -20,9 +20,9 @@ const inviteSchema = new Schema<InvitePojo>(
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     expiresAt: { type: Date, required: true },
     acceptedAt: { type: Date, default: null },
-    revokedAt: { type: Date, default: null }
+    revokedAt: { type: Date, default: null },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export const InviteModel = mongoose.model<InvitePojo>('Invite', inviteSchema);

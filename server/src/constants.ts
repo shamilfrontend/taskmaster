@@ -12,18 +12,26 @@ export const LABEL_COLORS = [
   'green',
   'purple',
   'pink',
-  'amber'
+  'amber',
 ] as const;
 export type LabelColor = (typeof LABEL_COLORS)[number];
 
-export const ANALYTICS_PERIODS = ['7d', '30d', 'quarter'] as const;
+export const ANALYTICS_PERIODS = [
+  'today',
+  '7d',
+  '30d',
+  'quarter',
+  'year',
+  '3y',
+  '5y',
+] as const;
 export type AnalyticsPeriod = (typeof ANALYTICS_PERIODS)[number];
 
 export const DEFAULT_COLUMNS: { name: string; isDone: boolean }[] = [
   { name: 'К выполнению', isDone: false },
   { name: 'В работе', isDone: false },
   { name: 'На проверке', isDone: false },
-  { name: 'Готово', isDone: true }
+  { name: 'Готово', isDone: true },
 ];
 
 export const DEFAULT_BOARD_NAME = 'Основная';
@@ -32,7 +40,7 @@ export const DEFAULT_ROLE_RATES: Record<TeamRole, number> = {
   owner: 0,
   admin: 0,
   member: 0,
-  viewer: 0
+  viewer: 0,
 };
 
 export const BOARD_BACKGROUNDS = [
@@ -72,7 +80,7 @@ export const BOARD_BACKGROUNDS = [
   'bg-33',
   'bg-34',
   'bg-35',
-  'bg-36'
+  'bg-36',
 ] as const;
 export type BoardBackground = (typeof BOARD_BACKGROUNDS)[number];
 export const DEFAULT_BOARD_BACKGROUND: BoardBackground = 'default';
