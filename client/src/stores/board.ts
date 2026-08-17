@@ -200,6 +200,21 @@ export const useBoardStore = defineStore('board', () => {
     }
   }
 
+  async function editComment(commentId: string, body: string): Promise<void> {
+    try {
+      await http.patch(`/cards/comments/${commentId}`, { body });
+
+      if (card.value) {
+        await fetchCard(card.value.id);
+      }
+
+      toastSuccess('Комментарий обновлён');
+    } catch (err: unknown) {
+      toastError('Ошибка при изменении комментария', err);
+      throw err;
+    }
+  }
+
   async function deleteComment(commentId: string): Promise<void> {
     try {
       await http.delete(`/cards/comments/${commentId}`);
@@ -497,6 +512,7 @@ export const useBoardStore = defineStore('board', () => {
     patchTimeEntry,
     deleteTimeEntry,
     addComment,
+    editComment,
     deleteComment,
     addChecklist,
     renameChecklist,

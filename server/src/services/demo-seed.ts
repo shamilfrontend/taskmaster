@@ -14,6 +14,7 @@ import { CardModel } from '../models/card.js';
 import { ColumnModel } from '../models/column.js';
 import { CommentModel } from '../models/comment.js';
 import { LabelModel } from '../models/label.js';
+import { ProjectMemberModel } from '../models/project-member.js';
 import { ProjectModel } from '../models/project.js';
 import { ReleaseModel } from '../models/release.js';
 import { TeamModel } from '../models/team.js';
@@ -980,6 +981,24 @@ async function seedProject(
     budgetEnabled: projectSeed.budgetEnabled ?? false,
     boardBackground: projectSeed.boardBackground ?? 'default',
   });
+
+  const memberDocs = USER_KEYS.flatMap((key) => {
+    const role = roleByUser[key];
+
+    if (!role) {
+      return [];
+    }
+
+    return [{
+      projectId: project._id,
+      userId: users[key],
+      role,
+    }];
+  });
+
+  if (memberDocs.length > 0) {
+    await ProjectMemberModel.insertMany(memberDocs);
+  }
 
   const board = await createDefaultBoard(project._id);
   const columns = await ColumnModel.find({ boardId: board._id })

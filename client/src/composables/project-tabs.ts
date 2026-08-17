@@ -6,6 +6,7 @@ export function useProjectTabs(
   projectId: ComputedRef<string>,
   role: ComputedRef<TeamRole | undefined>,
   releasesEnabled: ComputedRef<boolean>,
+  teamRole: ComputedRef<TeamRole | undefined>,
 ): ComputedRef<PageTab[]> {
   return computed(() => {
     const items: PageTab[] = [
@@ -33,7 +34,11 @@ export function useProjectTabs(
       to: { name: 'analytics', params: { projectId: projectId.value } },
     });
 
-    if (role.value === 'owner' || role.value === 'admin') {
+    if (
+      role.value === 'owner'
+      || role.value === 'admin'
+      || teamRole.value === 'owner'
+    ) {
       items.push({
         id: 'settings',
         label: 'Настройки',

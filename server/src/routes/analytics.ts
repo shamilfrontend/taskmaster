@@ -4,15 +4,14 @@ import { AppError } from '../errors/app-error.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import {
-  requireMembership,
-  teamIdFromProject,
+  requireProjectAccess,
 } from '../middleware/access.js';
 import { BoardModel } from '../models/board.js';
 import { CardModel } from '../models/card.js';
 import { ColumnModel } from '../models/column.js';
 import { ProjectModel } from '../models/project.js';
 import { ReleaseModel } from '../models/release.js';
-import { TeamMemberModel } from '../models/team-member.js';
+import { ProjectMemberModel } from '../models/project-member.js';
 import { TimeEntryModel } from '../models/time-entry.js';
 import { UserModel } from '../models/user.js';
 import {
@@ -27,8 +26,7 @@ analyticsRouter.get(
   '/:projectId/analytics',
   asyncHandler(async (req: Request, res: Response) => {
     const projectId = req.params.projectId as string;
-    const teamId = await teamIdFromProject(projectId);
-    const membership = await requireMembership(teamId, req.userId);
+    const access = await requireProjectAccess(projectId, req.userId);
     const custom = queryDateRange(req.query.from, req.query.to);
     let period: ReturnType<typeof readPeriod> | 'custom';
     let from: Date;
@@ -63,8 +61,8 @@ analyticsRouter.get(
     const periodEntries = allEntries.filter(
       (entry) => entry.workedAt >= from && entry.workedAt <= to,
     );
-    const members = await TeamMemberModel.find({
-      teamId: project.teamId,
+    const members = await ProjectMemberModel.find({
+      projectId: project._id,
     }).lean();
     const users = await UserModel.find({
       _id: { $in: members.map((item) => item.userId) },
@@ -105,15 +103,15 @@ analyticsRouter.get(
       );
       const hours = userEntries.reduce((sum, entry) => sum + entry.hours, 0);
       const amount = userEntries.reduce((sum, entry) => sum + entry.amount, 0);
-      const showMoney = membership.role === 'owner'
-        || membership.role === 'admin'
+      const showMoney = access.role === 'owner'
+        || access.role === 'admin'
         || member.userId.toString() === req.userId;
 
       return {
         userId: member.userId.toString(),
         displayName: user?.displayName ?? '',
         hours,
-        amount: membership.role !== 'viewer' && showMoney ? amount : undefined,
+        amount: access.role !== 'viewer' && showMoney ? amount : undefined,
       };
     });
 
@@ -185,8 +183,8 @@ analyticsRouter.get(
       cursor = end;
     }
 
-    const hideMoney = membership.role === 'viewer';
-    const memberMoney = membership.role === 'member';
+    const hideMoney = access.role === 'viewer';
+    const memberMoney = access.role === 'member';
     const releasesEnabled = isFeatureOn(project.releasesEnabled);
     const budgetEnabled = isFeatureOn(project.budgetEnabled);
 
@@ -258,7 +256,7 @@ analyticsRouter.get(
       period,
       from,
       to,
-      role: membership.role,
+      role: access.role,
       releasesEnabled,
       budgetEnabled,
       summary: {
@@ -282,8 +280,8 @@ analyticsRouter.get(
         hideMoney || !budgetEnabled
           ? undefined
           : {
-            limit: membership.role === 'member' ? undefined : project.budgetLimit,
-            totalFact: membership.role === 'member' ? undefined : totalFact,
+            limit: access.role === 'member' ? undefined : project.budgetLimit,
+            totalFact: access.role === 'member' ? undefined : totalFact,
             remainder: project.budgetLimit - totalFact,
           },
       workload,

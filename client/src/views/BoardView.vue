@@ -57,6 +57,8 @@ const itemDrafts = ref<Record<string, string>>({});
 const newItemText = ref<Record<string, string>>({});
 const comment = ref('');
 const replyTo = ref<{ id: string; displayName: string } | null>(null);
+const editingCommentId = ref<string | null>(null);
+const editingBody = ref('');
 const labelName = ref('');
 const labelColor = ref<LabelColor>('blue');
 const labelDrafts = ref<Record<string, string>>({});
@@ -469,6 +471,8 @@ async function openCard(id: string): Promise<void> {
   descExpanded.value = false;
   comment.value = '';
   replyTo.value = null;
+  editingCommentId.value = null;
+  editingBody.value = '';
   cardOpen.value = true;
   await measureDescription();
 }
@@ -1228,6 +1232,7 @@ const commentPlaceholder = computed(() => (
 ));
 
 function startReply(item: CardComment): void {
+  cancelEditComment();
   replyTo.value = { id: item.id, displayName: item.displayName };
   void nextTick(() => {
     document.querySelector<HTMLInputElement>('.card-comment-input')?.focus();
@@ -1236,6 +1241,33 @@ function startReply(item: CardComment): void {
 
 function cancelReply(): void {
   replyTo.value = null;
+}
+
+function canEditComment(userId: string): boolean {
+  return userId === auth.user?.id;
+}
+
+function startEditComment(item: CardComment): void {
+  cancelReply();
+  editingCommentId.value = item.id;
+  editingBody.value = item.body;
+}
+
+function cancelEditComment(): void {
+  editingCommentId.value = null;
+  editingBody.value = '';
+}
+
+async function saveEditComment(): Promise<void> {
+  const id = editingCommentId.value;
+  const body = editingBody.value.trim();
+
+  if (!id || !body) {
+    return;
+  }
+
+  await board.editComment(id, body);
+  cancelEditComment();
 }
 
 function openHoursModal(): void {
@@ -2271,8 +2303,15 @@ async function saveLabelName(labelId: string): Promise<void> {
                           :src="item.avatarUrl"
                         />
                         {{ item.displayName }}
+                        <span
+                          v-if="item.editedAt"
+                          class="comment-edited"
+                        >изменён</span>
                       </div>
-                      <div class="comment-actions">
+                      <div
+                        v-if="editingCommentId !== item.id"
+                        class="comment-actions"
+                      >
                         <button
                           v-if="canEdit"
                           type="button"
@@ -2280,6 +2319,14 @@ async function saveLabelName(labelId: string): Promise<void> {
                           @click="startReply(item)"
                         >
                           Ответить
+                        </button>
+                        <button
+                          v-if="canEditComment(item.userId)"
+                          type="button"
+                          class="btn btn-ghost"
+                          @click="startEditComment(item)"
+                        >
+                          Изменить
                         </button>
                         <button
                           v-if="canDeleteComment(item.userId)"
@@ -2297,7 +2344,37 @@ async function saveLabelName(labelId: string): Promise<void> {
                     >
                       в ответ {{ thread.root.displayName }}
                     </div>
-                    <div>{{ item.body }}</div>
+                    <div
+                      v-if="editingCommentId === item.id"
+                      class="comment-edit"
+                    >
+                      <textarea
+                        v-model="editingBody"
+                        class="input comment-edit-input"
+                        rows="3"
+                        @keydown.escape.prevent="cancelEditComment"
+                      />
+                      <div class="comment-edit-actions">
+                        <button
+                          type="button"
+                          class="btn btn-ghost"
+                          @click="cancelEditComment"
+                        >
+                          Отмена
+                        </button>
+                        <button
+                          type="button"
+                          class="btn"
+                          :disabled="!editingBody.trim()"
+                          @click="saveEditComment"
+                        >
+                          Сохранить
+                        </button>
+                      </div>
+                    </div>
+                    <div v-else>
+                      {{ item.body }}
+                    </div>
                   </div>
                 </template>
                 <p
@@ -3189,6 +3266,29 @@ h2.card-modal-title {
   margin-bottom: 4px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.comment-edited {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.comment-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.comment-edit-input {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.comment-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .comment-head {

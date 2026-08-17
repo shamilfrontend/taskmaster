@@ -7,7 +7,9 @@ import type {
   AnalyticsPayload,
   AnalyticsPeriod,
   BoardBackgroundId,
+  InviteRole,
   ProjectDetails,
+  ProjectMembersPayload,
   TeamRole,
 } from '../types/index.ts';
 import { useTeamsStore } from './teams.ts';
@@ -23,12 +25,14 @@ function toProjectDetails(data: ProjectPayload): ProjectDetails {
   return {
     ...data,
     boardBackground: data.boardBackground ?? 'default',
+    teamRole: data.teamRole ?? data.role,
     board: { id: boardId },
   };
 }
 
 export const useProjectStore = defineStore('project', () => {
   const current = ref<ProjectDetails | null>(null);
+  const members = ref<ProjectMembersPayload | null>(null);
   const analytics = ref<AnalyticsPayload | null>(null);
   const isLoading = ref(false);
   const error = ref<string | null>(null);
@@ -199,6 +203,64 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
+  async function fetchMembers(projectId: string): Promise<void> {
+    try {
+      const { data } = await http.get<ProjectMembersPayload>(
+        `/projects/${projectId}/members`,
+      );
+      members.value = data;
+    } catch (err: unknown) {
+      toastError('Ошибка при загрузке участников', err);
+    }
+  }
+
+  async function addMember(
+    projectId: string,
+    userId: string,
+    role: InviteRole,
+  ): Promise<boolean> {
+    try {
+      await http.post(`/projects/${projectId}/members`, { userId, role });
+      await Promise.all([fetchOne(projectId), fetchMembers(projectId)]);
+      toastSuccess('Участник добавлен');
+      return true;
+    } catch (err: unknown) {
+      toastError('Ошибка при добавлении участника', err);
+      return false;
+    }
+  }
+
+  async function changeMemberRole(
+    projectId: string,
+    userId: string,
+    role: InviteRole,
+  ): Promise<boolean> {
+    try {
+      await http.patch(`/projects/${projectId}/members/${userId}`, { role });
+      await Promise.all([fetchOne(projectId), fetchMembers(projectId)]);
+      toastSuccess('Роль обновлена');
+      return true;
+    } catch (err: unknown) {
+      toastError('Ошибка при изменении роли', err);
+      return false;
+    }
+  }
+
+  async function removeMember(
+    projectId: string,
+    userId: string,
+  ): Promise<boolean> {
+    try {
+      await http.delete(`/projects/${projectId}/members/${userId}`);
+      await Promise.all([fetchOne(projectId), fetchMembers(projectId)]);
+      toastSuccess('Участник исключён');
+      return true;
+    } catch (err: unknown) {
+      toastError('Ошибка при исключении участника', err);
+      return false;
+    }
+  }
+
   async function fetchAnalytics(
     projectId: string,
     period: AnalyticsPeriod,
@@ -225,10 +287,15 @@ export const useProjectStore = defineStore('project', () => {
 
   return {
     current,
+    members,
     analytics,
     isLoading,
     error,
     fetchOne,
+    fetchMembers,
+    addMember,
+    changeMemberRole,
+    removeMember,
     renameProject,
     updateBudget,
     updateSettings,

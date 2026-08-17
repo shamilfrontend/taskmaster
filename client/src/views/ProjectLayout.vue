@@ -27,7 +27,8 @@ watch(projectId, async (id) => {
 
 const canAdmin = computed(() => {
   const role = projects.current?.role;
-  return role === 'owner' || role === 'admin';
+  const teamRole = projects.current?.teamRole;
+  return role === 'owner' || role === 'admin' || teamRole === 'owner';
 });
 
 watch(
@@ -81,6 +82,7 @@ const tabs = useProjectTabs(
   projectId,
   computed(() => projects.current?.role),
   computed(() => Boolean(projects.current?.releasesEnabled)),
+  computed(() => projects.current?.teamRole),
 );
 
 const isRouteAllowed = computed(() => {
@@ -129,5 +131,13 @@ const isRouteAllowed = computed(() => {
       </p>
       <RouterView v-if="isRouteAllowed" />
     </div>
+  </section>
+  <section
+    v-else-if="projects.error"
+    class="screen is-active"
+  >
+    <p class="warn">
+      {{ projects.error }}
+    </p>
   </section>
 </template>

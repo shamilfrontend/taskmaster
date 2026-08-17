@@ -155,6 +155,16 @@ export function readInviteRole(body: unknown, field: string): InviteRole {
   return value as InviteRole;
 }
 
+export function readNonOwnerRole(body: unknown, field: string): InviteRole {
+  const value = readString(body, field);
+
+  if (!INVITE_ROLES.includes(value as InviteRole)) {
+    throw new AppError(400, 'Роль Owner так не назначается');
+  }
+
+  return value as InviteRole;
+}
+
 export function readBoardBackground(
   body: unknown,
   field: string,

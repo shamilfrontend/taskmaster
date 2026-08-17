@@ -100,6 +100,10 @@ const canManage = computed(() => {
   return role === 'owner' || role === 'admin';
 });
 
+function canManageProject(role: TeamRole): boolean {
+  return role === 'owner' || role === 'admin';
+}
+
 const isOwner = computed(() => teams.current?.role === 'owner');
 
 const canSaveName = computed(() => {
@@ -647,7 +651,7 @@ async function confirmRevoke(): Promise<void> {
                   {{ formatMoney(project.budgetLimit) }}
                 </span>
                 <button
-                  v-if="canManage"
+                  v-if="canManageProject(project.role)"
                   type="button"
                   class="column-menu-btn"
                   aria-label="Действия с проектом"

@@ -3,18 +3,18 @@ import type { Request, Response } from 'express';
 import { AppError } from '../errors/app-error.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireMembership } from '../middleware/access.js';
+import { requireMembership, listAccessibleProjectIds } from '../middleware/access.js';
 import { ActivityEventModel } from '../models/activity-event.js';
 import { BoardModel } from '../models/board.js';
 import { CardModel } from '../models/card.js';
 import { CommentModel } from '../models/comment.js';
 import { InviteModel } from '../models/invite.js';
 import { ProjectModel } from '../models/project.js';
+import { ProjectMemberModel } from '../models/project-member.js';
 import { TeamModel } from '../models/team.js';
 import { TeamMemberModel } from '../models/team-member.js';
 import { UserModel } from '../models/user.js';
 import { deleteTeamCascade, unassignUserInTeam } from '../services/cascade.js';
-import { recalcAssigneePlans } from '../services/plan.js';
 import { createDefaultBoard } from '../services/project-setup.js';
 import { importTrelloBoard } from '../services/trello-import.js';
 import { DEFAULT_ROLE_RATES } from '../constants.js';
@@ -22,6 +22,7 @@ import {
   createInviteToken,
   hashToken,
 } from '../utils/crypto.js';
+import { canManageMember } from '../utils/roles.js';
 import {
   asObjectId,
   assertRole,
@@ -32,7 +33,6 @@ import {
   readString,
   readTeamRole,
 } from '../utils/validate.js';
-import type { TeamRole } from '../constants.js';
 
 export const teamsRouter = Router();
 teamsRouter.use(requireAuth);
@@ -66,18 +66,6 @@ function readActivityBefore(query: Request['query']): Date | undefined {
   return date;
 }
 
-function canManageMember(actor: TeamRole, target: TeamRole): boolean {
-  if (actor === 'owner') {
-    return target !== 'owner';
-  }
-
-  if (actor === 'admin') {
-    return target === 'member' || target === 'viewer';
-  }
-
-  return false;
-}
-
 teamsRouter.get(
   '/',
   asyncHandler(async (req: Request, res: Response) => {
@@ -92,12 +80,28 @@ teamsRouter.get(
     const allMembers = await TeamMemberModel.find({
       teamId: { $in: teamIds },
     }).lean();
+    const projectMemberships = await ProjectMemberModel.find({
+      userId: asObjectId(req.userId),
+      projectId: { $in: projects.map((project) => project._id) },
+    })
+      .select('projectId')
+      .lean();
+    const memberProjectIds = new Set(
+      projectMemberships.map((item) => item.projectId.toString()),
+    );
 
     res.json(
       teams.map((team) => {
         const membership = memberships.find(
           (item) => item.teamId.toString() === team._id.toString(),
         );
+        const teamProjects = projects.filter(
+          (item) => item.teamId.toString() === team._id.toString(),
+        );
+        const accessibleCount = membership?.role === 'owner'
+          ? teamProjects.length
+          : teamProjects.filter((item) => memberProjectIds.has(item._id.toString()))
+            .length;
 
         return {
           id: team._id.toString(),
@@ -106,9 +110,7 @@ teamsRouter.get(
           memberCount: allMembers.filter(
             (item) => item.teamId.toString() === team._id.toString(),
           ).length,
-          projectCount: projects.filter(
-            (item) => item.teamId.toString() === team._id.toString(),
-          ).length,
+          projectCount: accessibleCount,
         };
       }),
     );
@@ -156,6 +158,11 @@ teamsRouter.post(
     });
 
     await createDefaultBoard(project._id);
+    await ProjectMemberModel.create({
+      projectId: project._id,
+      userId: asObjectId(req.userId),
+      role: 'owner',
+    });
 
     res.status(201).json({
       id: project._id.toString(),
@@ -183,6 +190,7 @@ teamsRouter.post(
       teamId: asObjectId(teamId),
       name,
       board,
+      ownerId: asObjectId(req.userId),
     });
 
     res.status(201).json(project);
@@ -193,16 +201,18 @@ teamsRouter.get(
   '/:teamId/activity',
   asyncHandler(async (req: Request, res: Response) => {
     const teamId = req.params.teamId as string;
-    await requireMembership(teamId, req.userId);
+    const membership = await requireMembership(teamId, req.userId);
     const teamObjectId = asObjectId(teamId);
     const before = readActivityBefore(req.query);
     const fetchLimit = ACTIVITY_LIMIT + 1;
+    const accessibleIds = await listAccessibleProjectIds(
+      teamId,
+      req.userId,
+      membership.role,
+    );
 
-    const projects = await ProjectModel.find({ teamId: teamObjectId })
-      .select({ _id: 1 })
-      .lean();
     const boards = await BoardModel.find({
-      projectId: { $in: projects.map((project) => project._id) },
+      projectId: { $in: accessibleIds },
     }).lean();
     const boardIds = boards.map((board) => board._id);
     const boardProjectMap = new Map(
@@ -214,6 +224,7 @@ teamsRouter.get(
 
     const events = await ActivityEventModel.find({
       teamId: teamObjectId,
+      projectId: { $in: accessibleIds },
       kind: { $ne: 'comment_added' },
       ...(before ? { createdAt: { $lt: before } } : {}),
     })
@@ -322,6 +333,16 @@ teamsRouter.get(
     const userMap = new Map(users.map((user) => [user._id.toString(), user]));
 
     const projects = await ProjectModel.find({ teamId: team._id }).lean();
+    const projectMembers = await ProjectMemberModel.find({
+      userId: asObjectId(req.userId),
+      projectId: { $in: projects.map((project) => project._id) },
+    }).lean();
+    const projectRoleById = new Map(
+      projectMembers.map((item) => [item.projectId.toString(), item.role]),
+    );
+    const visibleProjects = membership.role === 'owner'
+      ? projects
+      : projects.filter((project) => projectRoleById.has(project._id.toString()));
     const invites = await InviteModel.find({
       teamId: team._id,
       acceptedAt: null,
@@ -346,9 +367,11 @@ teamsRouter.get(
           avatarUrl: user?.avatarUrl ?? '',
         };
       }),
-      projects: projects.map((project) => ({
+      projects: visibleProjects.map((project) => ({
         id: project._id.toString(),
         name: project.name,
+        role: projectRoleById.get(project._id.toString())
+          ?? (membership.role === 'owner' ? 'owner' : 'viewer'),
         budgetEnabled: isFeatureOn(project.budgetEnabled),
         budgetLimit:
           canSeeBudget && isFeatureOn(project.budgetEnabled)
@@ -431,18 +454,8 @@ teamsRouter.patch(
       throw new AppError(403, 'Недостаточно прав');
     }
 
-    const roleChanged = target.role !== nextRole;
     target.role = nextRole;
     await target.save();
-
-    if (roleChanged) {
-      const projects = await ProjectModel.find({ teamId: target.teamId })
-        .select('_id')
-        .lean();
-      await Promise.all(
-        projects.map((project) => recalcAssigneePlans(project._id, target.userId)),
-      );
-    }
 
     res.json({ ok: true, role: nextRole });
   }),

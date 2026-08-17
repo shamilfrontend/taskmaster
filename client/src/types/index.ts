@@ -78,6 +78,7 @@ export interface TeamMember {
 export interface TeamProject {
   id: string;
   name: string;
+  role: TeamRole;
   budgetEnabled: boolean;
   budgetLimit?: number;
 }
@@ -139,11 +140,34 @@ export interface ProjectRateRow {
   amount?: number;
 }
 
+export interface ProjectMember {
+  userId: string;
+  role: TeamRole;
+  displayName: string;
+  email: string;
+  avatarUrl: string;
+}
+
+export interface ProjectMemberCandidate {
+  userId: string;
+  displayName: string;
+  email: string;
+  avatarUrl: string;
+}
+
+export interface ProjectMembersPayload {
+  role: TeamRole;
+  teamRole: TeamRole;
+  members: ProjectMember[];
+  candidates: ProjectMemberCandidate[];
+}
+
 export interface ProjectDetails {
   id: string;
   teamId: string;
   name: string;
   role: TeamRole;
+  teamRole: TeamRole;
   releasesEnabled: boolean;
   budgetEnabled: boolean;
   boardBackground: BoardBackgroundId;
@@ -219,6 +243,7 @@ export interface CardComment {
   parentId: string | null;
   body: string;
   createdAt?: string;
+  editedAt?: string | null;
 }
 
 export interface ChecklistItem {

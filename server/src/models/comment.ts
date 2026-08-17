@@ -6,7 +6,9 @@ export interface CommentPojo {
   userId: mongoose.Types.ObjectId;
   parentId: mongoose.Types.ObjectId | null;
   body: string;
+  editedAt: Date | null;
   createdAt: Date;
+  updatedAt: Date;
 }
 
 const commentSchema = new Schema<CommentPojo>(
@@ -19,6 +21,7 @@ const commentSchema = new Schema<CommentPojo>(
       default: null,
     },
     body: { type: String, required: true },
+    editedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );

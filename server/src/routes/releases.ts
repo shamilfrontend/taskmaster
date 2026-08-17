@@ -5,8 +5,7 @@ import { AppError } from '../errors/app-error.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import {
-  requireMembership,
-  teamIdFromRelease,
+  requireProjectAccessFromRelease,
 } from '../middleware/access.js';
 import { BoardModel } from '../models/board.js';
 import { CardModel } from '../models/card.js';
@@ -43,8 +42,7 @@ releasesRouter.get(
   '/:releaseId',
   asyncHandler(async (req: Request, res: Response) => {
     const releaseId = req.params.releaseId as string;
-    const teamId = await teamIdFromRelease(releaseId);
-    const membership = await requireMembership(teamId, req.userId);
+    const access = await requireProjectAccessFromRelease(releaseId, req.userId);
     const release = await ReleaseModel.findById(asObjectId(releaseId)).lean();
 
     if (!release) {
@@ -70,7 +68,7 @@ releasesRouter.get(
       name: release.name,
       date: release.date,
       status: release.status,
-      role: membership.role,
+      role: access.role,
       cards: cards.map((card) => {
         const board = boards.find(
           (item) => item._id.toString() === card.boardId.toString(),
@@ -98,9 +96,8 @@ releasesRouter.patch(
   '/:releaseId',
   asyncHandler(async (req: Request, res: Response) => {
     const releaseId = req.params.releaseId as string;
-    const teamId = await teamIdFromRelease(releaseId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin']);
+    const access = await requireProjectAccessFromRelease(releaseId, req.userId);
+    assertRole(access.role, ['owner', 'admin']);
 
     const release = await ReleaseModel.findById(asObjectId(releaseId));
 
@@ -150,9 +147,8 @@ releasesRouter.delete(
   '/:releaseId',
   asyncHandler(async (req: Request, res: Response) => {
     const releaseId = req.params.releaseId as string;
-    const teamId = await teamIdFromRelease(releaseId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin']);
+    const access = await requireProjectAccessFromRelease(releaseId, req.userId);
+    assertRole(access.role, ['owner', 'admin']);
 
     const release = await ReleaseModel.findById(asObjectId(releaseId)).lean();
 
@@ -175,9 +171,8 @@ releasesRouter.post(
   '/:releaseId/cards',
   asyncHandler(async (req: Request, res: Response) => {
     const releaseId = req.params.releaseId as string;
-    const teamId = await teamIdFromRelease(releaseId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin', 'member']);
+    const access = await requireProjectAccessFromRelease(releaseId, req.userId);
+    assertRole(access.role, ['owner', 'admin', 'member']);
 
     const release = await ReleaseModel.findById(asObjectId(releaseId)).lean();
 
@@ -211,9 +206,8 @@ releasesRouter.delete(
   asyncHandler(async (req: Request, res: Response) => {
     const releaseId = req.params.releaseId as string;
     const cardId = req.params.cardId as string;
-    const teamId = await teamIdFromRelease(releaseId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin', 'member']);
+    const access = await requireProjectAccessFromRelease(releaseId, req.userId);
+    assertRole(access.role, ['owner', 'admin', 'member']);
 
     const release = await ReleaseModel.findById(asObjectId(releaseId)).lean();
 
