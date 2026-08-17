@@ -1,10 +1,11 @@
+/* eslint-disable no-await-in-loop -- sequential Mongo writes for demo data */
 import mongoose from 'mongoose';
 import {
   DEFAULT_ROLE_RATES,
   type BoardBackground,
   type LabelColor,
   type ReleaseStatus,
-  type TeamRole
+  type TeamRole,
 } from '../constants.js';
 import { AppError } from '../errors/app-error.js';
 import { ActivityEventModel } from '../models/activity-event.js';
@@ -120,14 +121,14 @@ const COLLEAGUES: Record<Exclude<UserKey, 'demo'>, DemoUserSeed> = {
   anna: { yandexId: 'demo-anna', displayName: 'Анна Козлова' },
   ivan: { yandexId: 'demo-ivan', displayName: 'Иван Петров' },
   maria: { yandexId: 'demo-maria', displayName: 'Мария Соколова' },
-  pavel: { yandexId: 'demo-pavel', displayName: 'Павел Орлов' }
+  pavel: { yandexId: 'demo-pavel', displayName: 'Павел Орлов' },
 };
 
 const AGENCY_RATES: Record<TeamRole, number> = {
   owner: 3500,
   admin: 2800,
   member: 2200,
-  viewer: 0
+  viewer: 0,
 };
 
 const TEAMS: DemoTeamSeed[] = [
@@ -138,7 +139,7 @@ const TEAMS: DemoTeamSeed[] = [
       { user: 'anna', role: 'admin' },
       { user: 'ivan', role: 'member' },
       { user: 'maria', role: 'member' },
-      { user: 'pavel', role: 'viewer' }
+      { user: 'pavel', role: 'viewer' },
     ],
     projects: [
       {
@@ -152,45 +153,45 @@ const TEAMS: DemoTeamSeed[] = [
           { key: 'backend', name: 'Бэкенд', color: 'blue' },
           { key: 'frontend', name: 'Фронт', color: 'green' },
           { key: 'client', name: 'Клиент', color: 'amber' },
-          { key: 'risk', name: 'Риск', color: 'pink' }
+          { key: 'risk', name: 'Риск', color: 'pink' },
         ],
         releases: [
           {
             key: 'mvp',
             name: 'MVP',
             status: 'released',
-            daysOffset: -700
+            daysOffset: -700,
           },
           {
             key: 'funnel',
             name: 'Воронка',
             status: 'released',
-            daysOffset: -480
+            daysOffset: -480,
           },
           {
             key: 'cabinet1',
             name: 'Кабинет 1.0',
             status: 'released',
-            daysOffset: -280
+            daysOffset: -280,
           },
           {
             key: 'reports',
             name: 'Отчёты',
             status: 'released',
-            daysOffset: -90
+            daysOffset: -90,
           },
           {
             key: 'crm2',
             name: 'Кабинет 2.0',
             status: 'planned',
-            daysOffset: 18
+            daysOffset: 18,
           },
           {
             key: 'crm3',
             name: 'Интеграции',
             status: 'planned',
-            daysOffset: 40
-          }
+            daysOffset: 40,
+          },
         ],
         cards: [
           {
@@ -201,7 +202,7 @@ const TEAMS: DemoTeamSeed[] = [
             release: 'crm2',
             createdDaysAgo: 14,
             dueDays: 11,
-            estimateHours: 16
+            estimateHours: 16,
           },
           {
             title: 'Фильтры сделок',
@@ -211,7 +212,7 @@ const TEAMS: DemoTeamSeed[] = [
             release: 'crm2',
             createdDaysAgo: 13,
             dueDays: 9,
-            estimateHours: 10
+            estimateHours: 10,
           },
           {
             title: 'Права менеджера филиала',
@@ -221,7 +222,7 @@ const TEAMS: DemoTeamSeed[] = [
             release: 'crm2',
             createdDaysAgo: 18,
             dueDays: 16,
-            estimateHours: 20
+            estimateHours: 20,
           },
           {
             title: 'Уведомление о просрочке',
@@ -231,7 +232,7 @@ const TEAMS: DemoTeamSeed[] = [
             release: 'crm2',
             createdDaysAgo: 10,
             dueDays: 8,
-            estimateHours: 8
+            estimateHours: 8,
           },
           {
             title: 'Канбан сделок',
@@ -249,20 +250,20 @@ const TEAMS: DemoTeamSeed[] = [
                   { text: 'Новые', done: true },
                   { text: 'В работе', done: true },
                   { text: 'Счёт', done: false },
-                  { text: 'Закрыто', done: false }
-                ]
-              }
+                  { text: 'Закрыто', done: false },
+                ],
+              },
             ],
             timeEntries: [
               { user: 'maria', hours: 6, daysAgo: 2 },
-              { user: 'maria', hours: 5, daysAgo: 5 }
+              { user: 'maria', hours: 5, daysAgo: 5 },
             ],
             comments: [
               {
                 author: 'pavel',
                 body: 'Нужен столбец «Ждём клиента», как в старой CRM.',
-                daysAgo: 1
-              }
+                daysAgo: 1,
+              },
             ],
             activity: [
               { kind: 'card_created', actor: 'demo', daysAgo: 12 },
@@ -270,9 +271,9 @@ const TEAMS: DemoTeamSeed[] = [
                 kind: 'card_moved',
                 actor: 'maria',
                 detail: 'В работе',
-                daysAgo: 6
-              }
-            ]
+                daysAgo: 6,
+              },
+            ],
           },
           {
             title: 'Карточка компании',
@@ -285,8 +286,8 @@ const TEAMS: DemoTeamSeed[] = [
             estimateHours: 18,
             timeEntries: [
               { user: 'anna', hours: 4, daysAgo: 1 },
-              { user: 'anna', hours: 7, daysAgo: 8 }
-            ]
+              { user: 'anna', hours: 7, daysAgo: 8 },
+            ],
           },
           {
             title: 'История звонков',
@@ -297,7 +298,7 @@ const TEAMS: DemoTeamSeed[] = [
             createdDaysAgo: 20,
             dueDays: -2,
             estimateHours: 14,
-            timeEntries: [{ user: 'ivan', hours: 8, daysAgo: 3 }]
+            timeEntries: [{ user: 'ivan', hours: 8, daysAgo: 3 }],
           },
           {
             title: 'Дашборд руководителя',
@@ -310,8 +311,8 @@ const TEAMS: DemoTeamSeed[] = [
             estimateHours: 16,
             timeEntries: [
               { user: 'maria', hours: 4, daysAgo: 4 },
-              { user: 'maria', hours: 6, daysAgo: 11 }
-            ]
+              { user: 'maria', hours: 6, daysAgo: 11 },
+            ],
           },
           {
             title: 'Экспорт в PDF',
@@ -322,7 +323,7 @@ const TEAMS: DemoTeamSeed[] = [
             createdDaysAgo: 16,
             dueDays: 2,
             estimateHours: 8,
-            timeEntries: [{ user: 'ivan', hours: 3, daysAgo: 6 }]
+            timeEntries: [{ user: 'ivan', hours: 3, daysAgo: 6 }],
           },
           {
             title: 'Интеграция с Телемостом',
@@ -332,7 +333,7 @@ const TEAMS: DemoTeamSeed[] = [
             release: 'crm3',
             createdDaysAgo: 8,
             dueDays: 30,
-            estimateHours: 20
+            estimateHours: 20,
           },
           {
             title: 'Почта из Яндекса',
@@ -342,7 +343,7 @@ const TEAMS: DemoTeamSeed[] = [
             release: 'crm3',
             createdDaysAgo: 7,
             dueDays: 34,
-            estimateHours: 16
+            estimateHours: 16,
           },
           {
             title: 'Массовое назначение менеджера',
@@ -352,7 +353,7 @@ const TEAMS: DemoTeamSeed[] = [
             release: 'crm2',
             createdDaysAgo: 11,
             dueDays: 12,
-            estimateHours: 8
+            estimateHours: 8,
           },
           {
             title: 'Теги компаний',
@@ -365,15 +366,15 @@ const TEAMS: DemoTeamSeed[] = [
             estimateHours: 12,
             timeEntries: [
               { user: 'anna', hours: 3, daysAgo: 1 },
-              { user: 'anna', hours: 5, daysAgo: 7 }
+              { user: 'anna', hours: 5, daysAgo: 7 },
             ],
             comments: [
               {
                 author: 'pavel',
                 body: 'Цвета тегов как в Excel-выгрузке.',
-                daysAgo: 2
-              }
-            ]
+                daysAgo: 2,
+              },
+            ],
           },
           {
             title: 'Дубликаты по телефону',
@@ -386,8 +387,8 @@ const TEAMS: DemoTeamSeed[] = [
             estimateHours: 10,
             timeEntries: [
               { user: 'ivan', hours: 4, daysAgo: 2 },
-              { user: 'ivan', hours: 6, daysAgo: 9 }
-            ]
+              { user: 'ivan', hours: 6, daysAgo: 9 },
+            ],
           },
           {
             title: 'Мобильная карточка сделки',
@@ -401,8 +402,8 @@ const TEAMS: DemoTeamSeed[] = [
             timeEntries: [
               { user: 'maria', hours: 5, daysAgo: 3 },
               { user: 'maria', hours: 4, daysAgo: 10 },
-              { user: 'maria', hours: 6, daysAgo: 16 }
-            ]
+              { user: 'maria', hours: 6, daysAgo: 16 },
+            ],
           },
           {
             title: 'Шаблоны писем',
@@ -420,10 +421,10 @@ const TEAMS: DemoTeamSeed[] = [
                 items: [
                   { text: 'Первый контакт', done: true },
                   { text: 'Счёт', done: true },
-                  { text: 'Просрочка', done: false }
-                ]
-              }
-            ]
+                  { text: 'Просрочка', done: false },
+                ],
+              },
+            ],
           },
           {
             title: 'Права на удаление сделок',
@@ -433,7 +434,7 @@ const TEAMS: DemoTeamSeed[] = [
             release: 'crm2',
             createdDaysAgo: 9,
             dueDays: 15,
-            estimateHours: 6
+            estimateHours: 6,
           },
           {
             title: 'Авторизация и роли',
@@ -446,14 +447,14 @@ const TEAMS: DemoTeamSeed[] = [
             timeEntries: [
               { user: 'anna', hours: 8, daysAgo: 720 },
               { user: 'anna', hours: 6, daysAgo: 705 },
-              { user: 'anna', hours: 6, daysAgo: 690 }
+              { user: 'anna', hours: 6, daysAgo: 690 },
             ],
             comments: [
               {
                 author: 'pavel',
                 body: 'Роли как в старой CRM: директор, РОП, менеджер.',
-                daysAgo: 710
-              }
+                daysAgo: 710,
+              },
             ],
             activity: [
               { kind: 'card_created', actor: 'demo', daysAgo: 740 },
@@ -461,9 +462,9 @@ const TEAMS: DemoTeamSeed[] = [
                 kind: 'card_moved',
                 actor: 'anna',
                 detail: 'Готово',
-                daysAgo: 688
-              }
-            ]
+                daysAgo: 688,
+              },
+            ],
           },
           {
             title: 'Список компаний',
@@ -475,7 +476,7 @@ const TEAMS: DemoTeamSeed[] = [
             estimateHours: 12,
             timeEntries: [
               { user: 'maria', hours: 7, daysAgo: 715 },
-              { user: 'maria', hours: 5, daysAgo: 698 }
+              { user: 'maria', hours: 5, daysAgo: 698 },
             ],
             activity: [
               { kind: 'card_created', actor: 'demo', daysAgo: 735 },
@@ -483,9 +484,9 @@ const TEAMS: DemoTeamSeed[] = [
                 kind: 'card_moved',
                 actor: 'maria',
                 detail: 'Готово',
-                daysAgo: 696
-              }
-            ]
+                daysAgo: 696,
+              },
+            ],
           },
           {
             title: 'Создание сделки',
@@ -497,7 +498,7 @@ const TEAMS: DemoTeamSeed[] = [
             estimateHours: 16,
             timeEntries: [
               { user: 'ivan', hours: 8, daysAgo: 710 },
-              { user: 'ivan', hours: 8, daysAgo: 692 }
+              { user: 'ivan', hours: 8, daysAgo: 692 },
             ],
             activity: [
               { kind: 'card_created', actor: 'demo', daysAgo: 730 },
@@ -505,9 +506,9 @@ const TEAMS: DemoTeamSeed[] = [
                 kind: 'card_moved',
                 actor: 'ivan',
                 detail: 'Готово',
-                daysAgo: 690
-              }
-            ]
+                daysAgo: 690,
+              },
+            ],
           },
           {
             title: 'Комментарии к сделке',
@@ -519,8 +520,8 @@ const TEAMS: DemoTeamSeed[] = [
             estimateHours: 8,
             timeEntries: [
               { user: 'maria', hours: 8, daysAgo: 700 },
-              { user: 'maria', hours: 7, daysAgo: 640 }
-            ]
+              { user: 'maria', hours: 7, daysAgo: 640 },
+            ],
           },
           {
             title: 'Поиск по ИНН',
@@ -532,8 +533,8 @@ const TEAMS: DemoTeamSeed[] = [
             estimateHours: 6,
             timeEntries: [
               { user: 'ivan', hours: 6, daysAgo: 685 },
-              { user: 'ivan', hours: 6, daysAgo: 660 }
-            ]
+              { user: 'ivan', hours: 6, daysAgo: 660 },
+            ],
           },
           {
             title: 'Бэкап базы и SSL',
@@ -545,7 +546,7 @@ const TEAMS: DemoTeamSeed[] = [
             estimateHours: 7,
             timeEntries: [
               { user: 'demo', hours: 4, daysAgo: 690 },
-              { user: 'demo', hours: 3, daysAgo: 680 }
+              { user: 'demo', hours: 3, daysAgo: 680 },
             ],
             activity: [
               { kind: 'card_created', actor: 'demo', daysAgo: 705 },
@@ -553,9 +554,9 @@ const TEAMS: DemoTeamSeed[] = [
                 kind: 'card_moved',
                 actor: 'demo',
                 detail: 'Готово',
-                daysAgo: 678
-              }
-            ]
+                daysAgo: 678,
+              },
+            ],
           },
           {
             title: 'Статусы сделки',
@@ -568,14 +569,14 @@ const TEAMS: DemoTeamSeed[] = [
             timeEntries: [
               { user: 'ivan', hours: 8, daysAgo: 530 },
               { user: 'ivan', hours: 6, daysAgo: 500 },
-              { user: 'ivan', hours: 5, daysAgo: 630 }
+              { user: 'ivan', hours: 5, daysAgo: 630 },
             ],
             comments: [
               {
                 author: 'pavel',
                 body: 'Нельзя перепрыгивать из «Новая» сразу в «Оплата».',
-                daysAgo: 520
-              }
+                daysAgo: 520,
+              },
             ],
             activity: [
               { kind: 'card_created', actor: 'demo', daysAgo: 560 },
@@ -583,9 +584,9 @@ const TEAMS: DemoTeamSeed[] = [
                 kind: 'card_moved',
                 actor: 'ivan',
                 detail: 'Готово',
-                daysAgo: 498
-              }
-            ]
+                daysAgo: 498,
+              },
+            ],
           },
           {
             title: 'Смена менеджера',
@@ -598,8 +599,8 @@ const TEAMS: DemoTeamSeed[] = [
             timeEntries: [
               { user: 'anna', hours: 6, daysAgo: 520 },
               { user: 'anna', hours: 6, daysAgo: 485 },
-              { user: 'anna', hours: 6, daysAgo: 650 }
-            ]
+              { user: 'anna', hours: 6, daysAgo: 650 },
+            ],
           },
           {
             title: 'Уведомление в Telegram',
@@ -612,8 +613,8 @@ const TEAMS: DemoTeamSeed[] = [
             timeEntries: [
               { user: 'ivan', hours: 6, daysAgo: 510 },
               { user: 'ivan', hours: 4, daysAgo: 470 },
-              { user: 'ivan', hours: 6, daysAgo: 600 }
-            ]
+              { user: 'ivan', hours: 6, daysAgo: 600 },
+            ],
           },
           {
             title: 'Импорт CSV',
@@ -626,7 +627,7 @@ const TEAMS: DemoTeamSeed[] = [
             timeEntries: [
               { user: 'maria', hours: 8, daysAgo: 540 },
               { user: 'maria', hours: 8, daysAgo: 490 },
-              { user: 'maria', hours: 6, daysAgo: 590 }
+              { user: 'maria', hours: 6, daysAgo: 590 },
             ],
             activity: [
               { kind: 'card_created', actor: 'demo', daysAgo: 550 },
@@ -634,9 +635,9 @@ const TEAMS: DemoTeamSeed[] = [
                 kind: 'card_moved',
                 actor: 'maria',
                 detail: 'Готово',
-                daysAgo: 488
-              }
-            ]
+                daysAgo: 488,
+              },
+            ],
           },
           {
             title: 'История смены статусов',
@@ -648,8 +649,8 @@ const TEAMS: DemoTeamSeed[] = [
             estimateHours: 8,
             timeEntries: [
               { user: 'maria', hours: 8, daysAgo: 460 },
-              { user: 'maria', hours: 5, daysAgo: 560 }
-            ]
+              { user: 'maria', hours: 5, daysAgo: 560 },
+            ],
           },
           {
             title: 'Акт по этапу «Воронка»',
@@ -661,8 +662,8 @@ const TEAMS: DemoTeamSeed[] = [
             estimateHours: 3,
             timeEntries: [
               { user: 'demo', hours: 3, daysAgo: 450 },
-              { user: 'demo', hours: 4, daysAgo: 620 }
-            ]
+              { user: 'demo', hours: 4, daysAgo: 620 },
+            ],
           },
           {
             title: 'Профиль пользователя',
@@ -675,7 +676,7 @@ const TEAMS: DemoTeamSeed[] = [
             timeEntries: [
               { user: 'maria', hours: 6, daysAgo: 330 },
               { user: 'maria', hours: 6, daysAgo: 300 },
-              { user: 'maria', hours: 6, daysAgo: 252 }
+              { user: 'maria', hours: 6, daysAgo: 252 },
             ],
             activity: [
               { kind: 'card_created', actor: 'demo', daysAgo: 360 },
@@ -683,9 +684,9 @@ const TEAMS: DemoTeamSeed[] = [
                 kind: 'card_moved',
                 actor: 'maria',
                 detail: 'Готово',
-                daysAgo: 298
-              }
-            ]
+                daysAgo: 298,
+              },
+            ],
           },
           {
             title: 'Фильтры списка компаний',
@@ -698,8 +699,8 @@ const TEAMS: DemoTeamSeed[] = [
             timeEntries: [
               { user: 'maria', hours: 8, daysAgo: 320 },
               { user: 'maria', hours: 6, daysAgo: 280 },
-              { user: 'maria', hours: 5, daysAgo: 350 }
-            ]
+              { user: 'maria', hours: 5, daysAgo: 350 },
+            ],
           },
           {
             title: 'Вложения к сделке',
@@ -713,14 +714,14 @@ const TEAMS: DemoTeamSeed[] = [
               { user: 'ivan', hours: 8, daysAgo: 340 },
               { user: 'ivan', hours: 8, daysAgo: 290 },
               { user: 'ivan', hours: 5, daysAgo: 570 },
-              { user: 'ivan', hours: 5, daysAgo: 238 }
+              { user: 'ivan', hours: 5, daysAgo: 238 },
             ],
             comments: [
               {
                 author: 'pavel',
                 body: 'Лимит 20 МБ, как в договоре на хранение.',
-                daysAgo: 310
-              }
+                daysAgo: 310,
+              },
             ],
             activity: [
               { kind: 'card_created', actor: 'demo', daysAgo: 355 },
@@ -728,9 +729,9 @@ const TEAMS: DemoTeamSeed[] = [
                 kind: 'card_moved',
                 actor: 'ivan',
                 detail: 'Готово',
-                daysAgo: 288
-              }
-            ]
+                daysAgo: 288,
+              },
+            ],
           },
           {
             title: 'Права РОПа',
@@ -745,8 +746,8 @@ const TEAMS: DemoTeamSeed[] = [
               { user: 'anna', hours: 6, daysAgo: 285 },
               { user: 'anna', hours: 4, daysAgo: 260 },
               { user: 'anna', hours: 5, daysAgo: 610 },
-              { user: 'anna', hours: 6, daysAgo: 336 }
-            ]
+              { user: 'anna', hours: 6, daysAgo: 336 },
+            ],
           },
           {
             title: 'История изменений сделки',
@@ -759,8 +760,8 @@ const TEAMS: DemoTeamSeed[] = [
             timeEntries: [
               { user: 'ivan', hours: 6, daysAgo: 305 },
               { user: 'ivan', hours: 4, daysAgo: 270 },
-              { user: 'ivan', hours: 4, daysAgo: 364 }
-            ]
+              { user: 'ivan', hours: 4, daysAgo: 364 },
+            ],
           },
           {
             title: 'Мобильный список компаний',
@@ -773,8 +774,8 @@ const TEAMS: DemoTeamSeed[] = [
             timeEntries: [
               { user: 'maria', hours: 6, daysAgo: 295 },
               { user: 'maria', hours: 6, daysAgo: 255 },
-              { user: 'anna', hours: 6, daysAgo: 580 }
-            ]
+              { user: 'anna', hours: 6, daysAgo: 580 },
+            ],
           },
           {
             title: 'Отчёт по воронке',
@@ -788,14 +789,14 @@ const TEAMS: DemoTeamSeed[] = [
               { user: 'maria', hours: 7, daysAgo: 130 },
               { user: 'maria', hours: 7, daysAgo: 100 },
               { user: 'maria', hours: 6, daysAgo: 154 },
-              { user: 'maria', hours: 5, daysAgo: 21 }
+              { user: 'maria', hours: 5, daysAgo: 21 },
             ],
             comments: [
               {
                 author: 'pavel',
                 body: 'Срез по филиалам, не только по всей компании.',
-                daysAgo: 120
-              }
+                daysAgo: 120,
+              },
             ],
             activity: [
               { kind: 'card_created', actor: 'demo', daysAgo: 150 },
@@ -803,9 +804,9 @@ const TEAMS: DemoTeamSeed[] = [
                 kind: 'card_moved',
                 actor: 'maria',
                 detail: 'Готово',
-                daysAgo: 88
-              }
-            ]
+                daysAgo: 88,
+              },
+            ],
           },
           {
             title: 'Выгрузка в Excel',
@@ -819,8 +820,8 @@ const TEAMS: DemoTeamSeed[] = [
               { user: 'ivan', hours: 6, daysAgo: 120 },
               { user: 'ivan', hours: 6, daysAgo: 90 },
               { user: 'ivan', hours: 5, daysAgo: 168 },
-              { user: 'ivan', hours: 5, daysAgo: 28 }
-            ]
+              { user: 'ivan', hours: 5, daysAgo: 28 },
+            ],
           },
           {
             title: 'Дашборд конверсии',
@@ -834,7 +835,7 @@ const TEAMS: DemoTeamSeed[] = [
               { user: 'maria', hours: 8, daysAgo: 140 },
               { user: 'maria', hours: 8, daysAgo: 85 },
               { user: 'maria', hours: 6, daysAgo: 224 },
-              { user: 'maria', hours: 6, daysAgo: 49 }
+              { user: 'maria', hours: 6, daysAgo: 49 },
             ],
             activity: [
               { kind: 'card_created', actor: 'demo', daysAgo: 145 },
@@ -842,9 +843,9 @@ const TEAMS: DemoTeamSeed[] = [
                 kind: 'card_moved',
                 actor: 'maria',
                 detail: 'Готово',
-                daysAgo: 82
-              }
-            ]
+                daysAgo: 82,
+              },
+            ],
           },
           {
             title: 'Отчёт по менеджерам',
@@ -858,8 +859,8 @@ const TEAMS: DemoTeamSeed[] = [
               { user: 'anna', hours: 7, daysAgo: 110 },
               { user: 'anna', hours: 7, daysAgo: 80 },
               { user: 'anna', hours: 5, daysAgo: 196 },
-              { user: 'anna', hours: 6, daysAgo: 35 }
-            ]
+              { user: 'anna', hours: 6, daysAgo: 35 },
+            ],
           },
           {
             title: 'Сводка за месяц',
@@ -873,8 +874,8 @@ const TEAMS: DemoTeamSeed[] = [
               { user: 'anna', hours: 6, daysAgo: 95 },
               { user: 'anna', hours: 4, daysAgo: 72 },
               { user: 'demo', hours: 3, daysAgo: 56 },
-              { user: 'demo', hours: 3, daysAgo: 140 }
-            ]
+              { user: 'demo', hours: 3, daysAgo: 140 },
+            ],
           },
           {
             title: 'Фильтр периода в отчётах',
@@ -889,13 +890,13 @@ const TEAMS: DemoTeamSeed[] = [
               { user: 'ivan', hours: 4, daysAgo: 75 },
               { user: 'ivan', hours: 6, daysAgo: 210 },
               { user: 'ivan', hours: 6, daysAgo: 63 },
-              { user: 'maria', hours: 5, daysAgo: 182 }
-            ]
-          }
-        ]
-      }
-    ]
-  }
+              { user: 'maria', hours: 5, daysAgo: 182 },
+            ],
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 function daysFromNow(days: number): Date {
@@ -910,7 +911,7 @@ function daysAgo(days: number): Date {
 }
 
 async function upsertUser(
-  seed: DemoUserSeed
+  seed: DemoUserSeed,
 ): Promise<mongoose.Types.ObjectId> {
   const user = await UserModel.findOneAndUpdate(
     { yandexId: seed.yandexId },
@@ -919,10 +920,10 @@ async function upsertUser(
         yandexId: seed.yandexId,
         displayName: seed.displayName,
         email: '',
-        avatarUrl: ''
-      }
+        avatarUrl: '',
+      },
     },
-    { upsert: true, new: true }
+    { upsert: true, new: true },
   ).lean();
 
   if (!user) {
@@ -933,14 +934,14 @@ async function upsertUser(
 }
 
 async function upsertDemoUsers(
-  ownerId: mongoose.Types.ObjectId
+  ownerId: mongoose.Types.ObjectId,
 ): Promise<Record<UserKey, mongoose.Types.ObjectId>> {
   return {
     demo: ownerId,
     anna: await upsertUser(COLLEAGUES.anna),
     ivan: await upsertUser(COLLEAGUES.ivan),
     maria: await upsertUser(COLLEAGUES.maria),
-    pavel: await upsertUser(COLLEAGUES.pavel)
+    pavel: await upsertUser(COLLEAGUES.pavel),
   };
 }
 
@@ -948,7 +949,7 @@ async function seedProject(
   teamId: mongoose.Types.ObjectId,
   users: Record<UserKey, mongoose.Types.ObjectId>,
   roleByUser: Record<UserKey, TeamRole | undefined>,
-  projectSeed: DemoProjectSeed
+  projectSeed: DemoProjectSeed,
 ): Promise<void> {
   const roleRates = projectSeed.roleRates ?? DEFAULT_ROLE_RATES;
   const project = await ProjectModel.create({
@@ -958,7 +959,7 @@ async function seedProject(
     roleRates,
     releasesEnabled: projectSeed.releasesEnabled ?? false,
     budgetEnabled: projectSeed.budgetEnabled ?? false,
-    boardBackground: projectSeed.boardBackground ?? 'default'
+    boardBackground: projectSeed.boardBackground ?? 'default',
   });
 
   const board = await createDefaultBoard(project._id);
@@ -984,8 +985,8 @@ async function seedProject(
       projectSeed.labels.map((label) => ({
         boardId: board._id,
         name: label.name,
-        color: label.color
-      }))
+        color: label.color,
+      })),
     );
 
     for (const [index, label] of labels.entries()) {
@@ -1009,7 +1010,7 @@ async function seedProject(
           releaseSeed.daysOffset === undefined
             ? null
             : daysFromNow(releaseSeed.daysOffset),
-        status: releaseSeed.status
+        status: releaseSeed.status,
       });
 
       releaseByKey.set(releaseSeed.key, release._id);
@@ -1040,10 +1041,9 @@ async function seedProject(
       planAmount = calcPlan(estimateHours, roleRates[role]);
     }
 
-    const createdAt =
-      cardSeed.createdDaysAgo === undefined
-        ? undefined
-        : daysAgo(cardSeed.createdDaysAgo);
+    const createdAt = cardSeed.createdDaysAgo === undefined
+      ? undefined
+      : daysAgo(cardSeed.createdDaysAgo);
 
     const card = await CardModel.create({
       boardId: board._id,
@@ -1068,18 +1068,18 @@ async function seedProject(
         items: list.items.map((item, itemIndex) => ({
           text: item.text,
           done: item.done,
-          position: itemIndex
-        }))
+          position: itemIndex,
+        })),
       })),
       position,
-      planAmount
+      planAmount,
     });
 
     if (createdAt) {
       await CardModel.updateOne(
         { _id: card._id },
         { $set: { createdAt, updatedAt: createdAt } },
-        { timestamps: false }
+        { timestamps: false },
       );
     }
 
@@ -1089,7 +1089,7 @@ async function seedProject(
           cardId: card._id,
           userId: users[comment.author],
           body: comment.body,
-          createdAt: daysAgo(comment.daysAgo ?? 0)
+          createdAt: daysAgo(comment.daysAgo ?? 0),
         });
       }
     }
@@ -1105,7 +1105,7 @@ async function seedProject(
           hours: entry.hours,
           rateSnapshot: rate,
           amount: calcAmount(entry.hours, rate),
-          workedAt: daysAgo(entry.daysAgo)
+          workedAt: daysAgo(entry.daysAgo),
         });
       }
     }
@@ -1121,7 +1121,7 @@ async function seedProject(
           kind: event.kind,
           cardTitle: cardSeed.title,
           detail: event.detail ?? '',
-          createdAt: daysAgo(event.daysAgo ?? 0)
+          createdAt: daysAgo(event.daysAgo ?? 0),
         });
       }
     }
@@ -1130,56 +1130,55 @@ async function seedProject(
 
 function expectedCardCount(): number {
   return TEAMS.reduce(
-    (sum, team) =>
-      sum +
-      team.projects.reduce(
+    (sum, team) => sum
+      + team.projects.reduce(
         (projectSum, project) => projectSum + project.cards.length,
-        0
+        0,
       ),
-    0
+    0,
   );
 }
 
 async function demoTeamIds(
-  ownerId: mongoose.Types.ObjectId
+  ownerId: mongoose.Types.ObjectId,
 ): Promise<mongoose.Types.ObjectId[]> {
   const memberships = await TeamMemberModel.find({
     userId: ownerId,
-    role: 'owner'
+    role: 'owner',
   }).lean();
 
   return memberships.map((item) => item.teamId);
 }
 
 async function demoTeamNamesMatch(
-  teamIds: mongoose.Types.ObjectId[]
+  teamIds: mongoose.Types.ObjectId[],
 ): Promise<boolean> {
   const teams = await TeamModel.find({ _id: { $in: teamIds } }).lean();
   const existing = teams.map((team) => team.name).sort();
   const expected = TEAMS.map((team) => team.name).sort();
 
   return (
-    existing.length === expected.length &&
-    existing.every((name, index) => name === expected[index])
+    existing.length === expected.length
+    && existing.every((name, index) => name === expected[index])
   );
 }
 
 async function demoCardCount(
-  teamIds: mongoose.Types.ObjectId[]
+  teamIds: mongoose.Types.ObjectId[],
 ): Promise<number> {
   if (teamIds.length === 0) {
     return 0;
   }
 
   const projects = await ProjectModel.find({
-    teamId: { $in: teamIds }
+    teamId: { $in: teamIds },
   }).lean();
   const boards = await BoardModel.find({
-    projectId: { $in: projects.map((project) => project._id) }
+    projectId: { $in: projects.map((project) => project._id) },
   }).lean();
 
   return CardModel.countDocuments({
-    boardId: { $in: boards.map((board) => board._id) }
+    boardId: { $in: boards.map((board) => board._id) },
   });
 }
 
@@ -1187,7 +1186,7 @@ async function demoCardCount(
  * Создаёт демо-команды. Если состав или объём сида изменился — пересоздаёт их.
  */
 export async function ensureDemoData(
-  ownerId: mongoose.Types.ObjectId
+  ownerId: mongoose.Types.ObjectId,
 ): Promise<void> {
   const existingIds = await demoTeamIds(ownerId);
   const namesMatch = await demoTeamNamesMatch(existingIds);
@@ -1214,7 +1213,7 @@ export async function ensureDemoData(
         anna: undefined,
         ivan: undefined,
         maria: undefined,
-        pavel: undefined
+        pavel: undefined,
       };
 
       for (const member of teamSeed.members) {
@@ -1222,7 +1221,7 @@ export async function ensureDemoData(
         await TeamMemberModel.create({
           teamId: team._id,
           userId: users[member.user],
-          role: member.role
+          role: member.role,
         });
       }
 

@@ -34,18 +34,18 @@ const checklistItemSchema = new Schema<ChecklistItemPojo>(
   {
     text: { type: String, required: true },
     done: { type: Boolean, required: true, default: false },
-    position: { type: Number, required: true }
+    position: { type: Number, required: true },
   },
-  { _id: true }
+  { _id: true },
 );
 
 const checklistSchema = new Schema<ChecklistPojo>(
   {
     title: { type: String, required: true },
     position: { type: Number, required: true },
-    items: { type: [checklistItemSchema], default: [] }
+    items: { type: [checklistItemSchema], default: [] },
   },
-  { _id: true }
+  { _id: true },
 );
 
 const cardSchema = new Schema<CardPojo>(
@@ -61,12 +61,12 @@ const cardSchema = new Schema<CardPojo>(
     labelIds: [{ type: Schema.Types.ObjectId, ref: 'Label' }],
     checklists: { type: [checklistSchema], default: [] },
     position: { type: Number, required: true },
-    planAmount: { type: Number, required: true, default: 0 }
+    planAmount: { type: Number, required: true, default: 0 },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-cardSchema.pre('save', function (next) {
+cardSchema.pre('save', function normalizeCard(next) {
   if (this.description == null) {
     this.description = '';
   }

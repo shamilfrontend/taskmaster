@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import {
   ActivityEventModel,
-  type ActivityKind
+  type ActivityKind,
 } from '../models/activity-event.js';
 
 export interface RecordActivityInput {
@@ -24,7 +24,7 @@ export function recordActivity(input: RecordActivityInput): void {
     actorId: input.actorId,
     kind: input.kind,
     cardTitle: input.cardTitle,
-    detail: input.detail ?? ''
+    detail: input.detail ?? '',
   }).catch((err: unknown) => {
     console.error('Failed to record activity', err);
   });

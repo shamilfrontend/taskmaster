@@ -8,7 +8,7 @@ import { ProjectModel } from '../models/project.js';
 import {
   DEFAULT_BOARD_NAME,
   DEFAULT_ROLE_RATES,
-  type LabelColor
+  type LabelColor,
 } from '../constants.js';
 import { deleteProjectCascade } from './cascade.js';
 
@@ -26,7 +26,7 @@ const TRELLO_COLOR: Record<string, LabelColor> = {
   orange: 'amber',
   red: 'pink',
   sky: 'blue',
-  lime: 'green'
+  lime: 'green',
 };
 
 interface TrelloList {
@@ -134,7 +134,7 @@ function parseList(value: unknown): TrelloList | null {
     id: row.id,
     name: fallbackName(asString(row.name)),
     closed: row.closed === true,
-    pos: asNumber(row.pos)
+    pos: asNumber(row.pos),
   };
 }
 
@@ -148,7 +148,7 @@ function parseLabel(value: unknown): TrelloLabel | null {
   return {
     id: row.id,
     name: fallbackName(asString(row.name)),
-    color: typeof row.color === 'string' ? row.color : null
+    color: typeof row.color === 'string' ? row.color : null,
   };
 }
 
@@ -175,7 +175,7 @@ function parseCard(value: unknown): TrelloCard | null {
     closed: row.closed === true,
     idList: row.idList,
     idLabels,
-    pos: asNumber(row.pos)
+    pos: asNumber(row.pos),
   };
 }
 
@@ -195,7 +195,7 @@ function parseCheckItem(value: unknown): TrelloCheckItem | null {
   return {
     name,
     state: asString(row.state),
-    pos: asNumber(row.pos)
+    pos: asNumber(row.pos),
   };
 }
 
@@ -208,16 +208,16 @@ function parseChecklist(value: unknown): TrelloChecklist | null {
 
   const checkItems = Array.isArray(row.checkItems)
     ? row.checkItems
-        .map(parseCheckItem)
-        .filter((item): item is TrelloCheckItem => item !== null)
-        .sort((a, b) => a.pos - b.pos)
+      .map(parseCheckItem)
+      .filter((item): item is TrelloCheckItem => item !== null)
+      .sort((a, b) => a.pos - b.pos)
     : [];
 
   return {
     idCard: row.idCard,
     name: fallbackName(clip(asString(row.name), CHECKLIST_TITLE_MAX)),
     pos: asNumber(row.pos),
-    checkItems
+    checkItems,
   };
 }
 
@@ -238,14 +238,14 @@ function parseBoard(value: unknown): TrelloBoard {
       .filter((item): item is TrelloCard => item !== null),
     labels: Array.isArray(row.labels)
       ? row.labels
-          .map(parseLabel)
-          .filter((item): item is TrelloLabel => item !== null)
+        .map(parseLabel)
+        .filter((item): item is TrelloLabel => item !== null)
       : [],
     checklists: Array.isArray(row.checklists)
       ? row.checklists
-          .map(parseChecklist)
-          .filter((item): item is TrelloChecklist => item !== null)
-      : []
+        .map(parseChecklist)
+        .filter((item): item is TrelloChecklist => item !== null)
+      : [],
   };
 }
 
@@ -271,13 +271,11 @@ export async function importTrelloBoard(params: {
   const checklistsByCard = new Map<string, TrelloChecklist[]>();
 
   for (const checklist of parsed.checklists) {
-    if (!importedCardIds.has(checklist.idCard)) {
-      continue;
+    if (importedCardIds.has(checklist.idCard)) {
+      const bucket = checklistsByCard.get(checklist.idCard) ?? [];
+      bucket.push(checklist);
+      checklistsByCard.set(checklist.idCard, bucket);
     }
-
-    const bucket = checklistsByCard.get(checklist.idCard) ?? [];
-    bucket.push(checklist);
-    checklistsByCard.set(checklist.idCard, bucket);
   }
 
   for (const bucket of checklistsByCard.values()) {
@@ -293,14 +291,14 @@ export async function importTrelloBoard(params: {
       budgetLimit: 0,
       roleRates: DEFAULT_ROLE_RATES,
       releasesEnabled: false,
-      budgetEnabled: false
+      budgetEnabled: false,
     });
 
     projectId = project._id;
 
     const board = await BoardModel.create({
       projectId: project._id,
-      name: DEFAULT_BOARD_NAME
+      name: DEFAULT_BOARD_NAME,
     });
 
     const columnIdByList = new Map<string, mongoose.Types.ObjectId>();
@@ -313,7 +311,7 @@ export async function importTrelloBoard(params: {
         boardId: board._id,
         name: list.name,
         position: index,
-        isDone: false
+        isDone: false,
       };
     });
 
@@ -328,7 +326,7 @@ export async function importTrelloBoard(params: {
         _id: id,
         boardId: board._id,
         name: label.name,
-        color: mapColor(label.color)
+        color: mapColor(label.color),
       };
     });
 
@@ -355,9 +353,9 @@ export async function importTrelloBoard(params: {
           items: checklist.checkItems.map((item, itemIndex) => ({
             text: item.name,
             done: item.state === 'complete',
-            position: itemIndex
-          }))
-        })
+            position: itemIndex,
+          })),
+        }),
       );
 
       return [
@@ -375,12 +373,14 @@ export async function importTrelloBoard(params: {
             .filter((id): id is mongoose.Types.ObjectId => Boolean(id)),
           checklists,
           position,
-          planAmount: 0
-        }
+          planAmount: 0,
+        },
       ];
     });
 
     for (let index = 0; index < cardDocs.length; index += CARD_BATCH) {
+      // Sequential batches keep Mongo memory bounded.
+      // eslint-disable-next-line no-await-in-loop
       await CardModel.insertMany(cardDocs.slice(index, index + CARD_BATCH));
     }
 

@@ -5,7 +5,7 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import {
   requireMembership,
-  teamIdFromProject
+  teamIdFromProject,
 } from '../middleware/access.js';
 import { BoardModel } from '../models/board.js';
 import { CardModel } from '../models/card.js';
@@ -15,7 +15,9 @@ import { ReleaseModel } from '../models/release.js';
 import { TeamMemberModel } from '../models/team-member.js';
 import { TimeEntryModel } from '../models/time-entry.js';
 import { UserModel } from '../models/user.js';
-import { addDays, periodRange, startOfDay, weekStart } from '../utils/dates.js';
+import {
+  addDays, periodRange, queryDateRange, startOfDay, weekStart,
+} from '../utils/dates.js';
 import { asObjectId, isFeatureOn, readPeriod } from '../utils/validate.js';
 
 export const analyticsRouter = Router();
@@ -27,8 +29,18 @@ analyticsRouter.get(
     const projectId = req.params.projectId as string;
     const teamId = await teamIdFromProject(projectId);
     const membership = await requireMembership(teamId, req.userId);
-    const period = readPeriod(req.query.period ?? '30d');
-    const { from, to } = periodRange(period);
+    const custom = queryDateRange(req.query.from, req.query.to);
+    let period: ReturnType<typeof readPeriod> | 'custom';
+    let from: Date;
+    let to: Date;
+
+    if (custom) {
+      period = 'custom';
+      ({ from, to } = custom);
+    } else {
+      period = readPeriod(req.query.period ?? '30d');
+      ({ from, to } = periodRange(period));
+    }
 
     const project = await ProjectModel.findById(asObjectId(projectId)).lean();
 
@@ -39,44 +51,43 @@ analyticsRouter.get(
     const boards = await BoardModel.find({ projectId: project._id }).lean();
     const boardIds = boards.map((board) => board._id);
     const columns = await ColumnModel.find({
-      boardId: { $in: boardIds }
+      boardId: { $in: boardIds },
     }).lean();
     const cards = await CardModel.find({ boardId: { $in: boardIds } }).lean();
     const releases = await ReleaseModel.find({
-      projectId: project._id
+      projectId: project._id,
     }).lean();
     const allEntries = await TimeEntryModel.find({
-      cardId: { $in: cards.map((card) => card._id) }
+      cardId: { $in: cards.map((card) => card._id) },
     }).lean();
     const periodEntries = allEntries.filter(
-      (entry) => entry.workedAt >= from && entry.workedAt <= to
+      (entry) => entry.workedAt >= from && entry.workedAt <= to,
     );
     const members = await TeamMemberModel.find({
-      teamId: project.teamId
+      teamId: project.teamId,
     }).lean();
     const users = await UserModel.find({
-      _id: { $in: members.map((item) => item.userId) }
+      _id: { $in: members.map((item) => item.userId) },
     }).lean();
 
     const doneColumnIds = new Set(
-      columns.filter((column) => column.isDone).map((column) => column._id.toString())
+      columns.filter((column) => column.isDone).map((column) => column._id.toString()),
     );
     const today = startOfDay(new Date());
     const weekEnd = addDays(weekStart(today), 7);
 
-    const isOverdue = (card: (typeof cards)[number]): boolean =>
-      Boolean(
-        card.dueDate &&
-          startOfDay(card.dueDate) < today &&
-          !doneColumnIds.has(card.columnId.toString())
-      );
+    const isOverdue = (card: (typeof cards)[number]): boolean => Boolean(
+      card.dueDate
+          && startOfDay(card.dueDate) < today
+          && !doneColumnIds.has(card.columnId.toString()),
+    );
 
     const byStatus = columns.map((column) => ({
       columnId: column._id.toString(),
       name: column.name,
       count: cards.filter(
-        (card) => card.columnId.toString() === column._id.toString()
-      ).length
+        (card) => card.columnId.toString() === column._id.toString(),
+      ).length,
     }));
 
     const planHours = cards.reduce((sum, card) => sum + card.estimateHours, 0);
@@ -87,39 +98,36 @@ analyticsRouter.get(
 
     const workload = members.map((member) => {
       const userEntries = periodEntries.filter(
-        (entry) => entry.userId.toString() === member.userId.toString()
+        (entry) => entry.userId.toString() === member.userId.toString(),
       );
       const user = users.find(
-        (item) => item._id.toString() === member.userId.toString()
+        (item) => item._id.toString() === member.userId.toString(),
       );
       const hours = userEntries.reduce((sum, entry) => sum + entry.hours, 0);
       const amount = userEntries.reduce((sum, entry) => sum + entry.amount, 0);
-      const showMoney =
-        membership.role === 'owner' ||
-        membership.role === 'admin' ||
-        member.userId.toString() === req.userId;
+      const showMoney = membership.role === 'owner'
+        || membership.role === 'admin'
+        || member.userId.toString() === req.userId;
 
       return {
         userId: member.userId.toString(),
         displayName: user?.displayName ?? '',
         hours,
-        amount: membership.role === 'viewer' ? undefined : showMoney ? amount : undefined
+        amount: membership.role !== 'viewer' && showMoney ? amount : undefined,
       };
     });
 
     const releaseRows = [
       ...releases.map((release) => {
         const relCards = cards.filter(
-          (card) => card.releaseId?.toString() === release._id.toString()
+          (card) => card.releaseId?.toString() === release._id.toString(),
         );
-        const done = relCards.filter((card) =>
-          doneColumnIds.has(card.columnId.toString())
-        ).length;
+        const done = relCards.filter((card) => doneColumnIds.has(card.columnId.toString())).length;
         const relPlan = relCards.reduce((sum, card) => sum + card.estimateHours, 0);
         const relFact = allEntries
-          .filter((entry) =>
-            relCards.some((card) => card._id.toString() === entry.cardId.toString())
-          )
+          .filter((entry) => relCards.some(
+            (card) => card._id.toString() === entry.cardId.toString(),
+          ))
           .reduce((sum, entry) => sum + entry.hours, 0);
 
         return {
@@ -129,14 +137,12 @@ analyticsRouter.get(
           done,
           total: relCards.length,
           planHours: relPlan,
-          factHours: relFact
+          factHours: relFact,
         };
       }),
       (() => {
         const relCards = cards.filter((card) => !card.releaseId);
-        const done = relCards.filter((card) =>
-          doneColumnIds.has(card.columnId.toString())
-        ).length;
+        const done = relCards.filter((card) => doneColumnIds.has(card.columnId.toString())).length;
 
         return {
           id: null,
@@ -146,12 +152,12 @@ analyticsRouter.get(
           total: relCards.length,
           planHours: relCards.reduce((sum, card) => sum + card.estimateHours, 0),
           factHours: allEntries
-            .filter((entry) =>
-              relCards.some((card) => card._id.toString() === entry.cardId.toString())
-            )
-            .reduce((sum, entry) => sum + entry.hours, 0)
+            .filter((entry) => relCards.some(
+              (card) => card._id.toString() === entry.cardId.toString(),
+            ))
+            .reduce((sum, entry) => sum + entry.hours, 0),
         };
-      })()
+      })(),
     ];
 
     const weeks: {
@@ -163,17 +169,18 @@ analyticsRouter.get(
     let cursor = weekStart(from);
 
     while (cursor <= to) {
-      const end = addDays(cursor, 7);
+      const weekFrom = cursor;
+      const end = addDays(weekFrom, 7);
       const weekEntries = periodEntries.filter(
-        (entry) => entry.workedAt >= cursor && entry.workedAt < end
+        (entry) => entry.workedAt >= weekFrom && entry.workedAt < end,
       );
       const hours = weekEntries.reduce((sum, entry) => sum + entry.hours, 0);
       const amount = weekEntries.reduce((sum, entry) => sum + entry.amount, 0);
       weeks.push({
-        from: new Date(cursor),
+        from: new Date(weekFrom),
         to: addDays(end, -1),
         hours,
-        amount
+        amount,
       });
       cursor = end;
     }
@@ -182,6 +189,14 @@ analyticsRouter.get(
     const memberMoney = membership.role === 'member';
     const releasesEnabled = isFeatureOn(project.releasesEnabled);
     const budgetEnabled = isFeatureOn(project.budgetEnabled);
+
+    const visibleMoney = (value: number): number | undefined => {
+      if (hideMoney || memberMoney) {
+        return undefined;
+      }
+
+      return value;
+    };
 
     type RiskKind = 'overdue' | 'dueSoon' | 'gaps';
     const risks = cards.flatMap((card) => {
@@ -197,19 +212,19 @@ analyticsRouter.get(
           cardId: card._id.toString(),
           title: card.title,
           kind: 'overdue',
-          detail: 'просрочен'
+          detail: 'просрочен',
         });
       } else if (
-        card.dueDate &&
-        startOfDay(card.dueDate) >= today &&
-        startOfDay(card.dueDate) < weekEnd &&
-        !doneColumnIds.has(card.columnId.toString())
+        card.dueDate
+        && startOfDay(card.dueDate) >= today
+        && startOfDay(card.dueDate) < weekEnd
+        && !doneColumnIds.has(card.columnId.toString())
       ) {
         items.push({
           cardId: card._id.toString(),
           title: card.title,
           kind: 'dueSoon',
-          detail: 'срок на этой неделе'
+          detail: 'срок на этой неделе',
         });
       }
 
@@ -232,7 +247,7 @@ analyticsRouter.get(
           cardId: card._id.toString(),
           title: card.title,
           kind: 'gaps',
-          detail: holes.join(', ')
+          detail: holes.join(', '),
         });
       }
 
@@ -254,32 +269,32 @@ analyticsRouter.get(
         noRelease: releasesEnabled
           ? cards.filter((card) => !card.releaseId).length
           : undefined,
-        factAmount: hideMoney ? undefined : memberMoney ? undefined : factAmount
+        factAmount: visibleMoney(factAmount),
       },
       byStatus,
       planVsFact: {
         planHours,
         factHours,
-        planAmount: hideMoney ? undefined : memberMoney ? undefined : planAmount,
-        factAmount: hideMoney ? undefined : memberMoney ? undefined : factAmount
+        planAmount: visibleMoney(planAmount),
+        factAmount: visibleMoney(factAmount),
       },
       burn:
         hideMoney || !budgetEnabled
           ? undefined
           : {
-              limit: membership.role === 'member' ? undefined : project.budgetLimit,
-              totalFact: membership.role === 'member' ? undefined : totalFact,
-              remainder: project.budgetLimit - totalFact
-            },
+            limit: membership.role === 'member' ? undefined : project.budgetLimit,
+            totalFact: membership.role === 'member' ? undefined : totalFact,
+            remainder: project.budgetLimit - totalFact,
+          },
       workload,
       releases: releasesEnabled ? releaseRows : [],
       weeks: weeks.map((week) => ({
         from: week.from,
         to: week.to,
         hours: week.hours,
-        amount: hideMoney ? undefined : memberMoney ? undefined : week.amount
+        amount: visibleMoney(week.amount),
       })),
-      risks
+      risks,
     });
-  })
+  }),
 );

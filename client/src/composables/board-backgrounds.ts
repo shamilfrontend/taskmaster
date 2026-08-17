@@ -10,13 +10,13 @@ export interface BoardBackgroundOption {
 function photo(
   id: BoardBackgroundId,
   label: string,
-  fileId: string
+  fileId: string,
 ): BoardBackgroundOption {
   return {
     id,
     label,
     thumb: `/backgrounds/${fileId}-thumb.jpg`,
-    full: `/backgrounds/${fileId}.jpg`
+    full: `/backgrounds/${fileId}.jpg`,
   };
 }
 
@@ -57,23 +57,23 @@ export const BOARD_BACKGROUNDS: BoardBackgroundOption[] = [
   photo('bg-33', 'Луг', 'bg-33'),
   photo('bg-34', 'Поле', 'bg-34'),
   photo('bg-35', 'Солнце в лесу', 'bg-35'),
-  photo('bg-36', 'Роща', 'bg-36')
+  photo('bg-36', 'Роща', 'bg-36'),
 ];
 
 const DEFAULT_OPTION: BoardBackgroundOption = photo(
   'default',
   'Горный хребет',
-  'bg-01'
+  'bg-01',
 );
 
 export function findBoardBackground(
-  id: BoardBackgroundId | undefined
+  id: BoardBackgroundId | undefined,
 ): BoardBackgroundOption {
   return BOARD_BACKGROUNDS.find((item) => item.id === id) ?? DEFAULT_OPTION;
 }
 
 export function boardBackgroundStyle(
-  id: BoardBackgroundId | undefined
+  id: BoardBackgroundId | undefined,
 ): Record<string, string> | undefined {
   const option = findBoardBackground(id);
 
@@ -82,6 +82,6 @@ export function boardBackgroundStyle(
   }
 
   return {
-    '--board-image': `url("${option.full}")`
+    '--board-image': `url("${option.full}")`,
   };
 }

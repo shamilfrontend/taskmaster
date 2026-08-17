@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import {
+  computed, onMounted, onUnmounted, ref,
+} from 'vue';
 
 interface ProductLink {
   id: string;
@@ -19,7 +21,7 @@ const products: ProductLink[] = [
     host: 'taskmaster.shamilfrontend.ru',
     initial: 'T',
     iconSrc: '/logo/kanban.svg',
-    iconBg: '#0079bf'
+    iconBg: '#0079bf',
   },
   {
     id: 'roundtalk',
@@ -27,7 +29,7 @@ const products: ProductLink[] = [
     href: 'https://roundtalk.shamilfrontend.ru',
     host: 'roundtalk.shamilfrontend.ru',
     initial: 'R',
-    iconBg: '#61bd4f'
+    iconBg: '#61bd4f',
   },
   {
     id: 'mockapi',
@@ -35,8 +37,8 @@ const products: ProductLink[] = [
     href: 'https://mockapi.shamilfrontend.ru',
     host: 'mockapi.shamilfrontend.ru',
     initial: 'M',
-    iconBg: '#c377e0'
-  }
+    iconBg: '#c377e0',
+  },
 ];
 
 const isOpen = ref(false);
@@ -57,7 +59,7 @@ function close(): void {
 }
 
 function onDocumentClick(event: MouseEvent): void {
-  const target = event.target;
+  const { target } = event;
 
   if (!(target instanceof Node) || !rootRef.value?.contains(target)) {
     close();
@@ -82,7 +84,10 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="rootRef" class="product-switcher">
+  <div
+    ref="rootRef"
+    class="product-switcher"
+  >
     <button
       type="button"
       class="product-switcher-btn"
@@ -96,18 +101,76 @@ onUnmounted(() => {
         viewBox="0 0 16 16"
         aria-hidden="true"
       >
-        <rect x="1" y="1" width="3.5" height="3.5" rx="0.8" />
-        <rect x="6.25" y="1" width="3.5" height="3.5" rx="0.8" />
-        <rect x="11.5" y="1" width="3.5" height="3.5" rx="0.8" />
-        <rect x="1" y="6.25" width="3.5" height="3.5" rx="0.8" />
-        <rect x="6.25" y="6.25" width="3.5" height="3.5" rx="0.8" />
-        <rect x="11.5" y="6.25" width="3.5" height="3.5" rx="0.8" />
-        <rect x="1" y="11.5" width="3.5" height="3.5" rx="0.8" />
-        <rect x="6.25" y="11.5" width="3.5" height="3.5" rx="0.8" />
-        <rect x="11.5" y="11.5" width="3.5" height="3.5" rx="0.8" />
+        <rect
+          x="1"
+          y="1"
+          width="3.5"
+          height="3.5"
+          rx="0.8"
+        />
+        <rect
+          x="6.25"
+          y="1"
+          width="3.5"
+          height="3.5"
+          rx="0.8"
+        />
+        <rect
+          x="11.5"
+          y="1"
+          width="3.5"
+          height="3.5"
+          rx="0.8"
+        />
+        <rect
+          x="1"
+          y="6.25"
+          width="3.5"
+          height="3.5"
+          rx="0.8"
+        />
+        <rect
+          x="6.25"
+          y="6.25"
+          width="3.5"
+          height="3.5"
+          rx="0.8"
+        />
+        <rect
+          x="11.5"
+          y="6.25"
+          width="3.5"
+          height="3.5"
+          rx="0.8"
+        />
+        <rect
+          x="1"
+          y="11.5"
+          width="3.5"
+          height="3.5"
+          rx="0.8"
+        />
+        <rect
+          x="6.25"
+          y="11.5"
+          width="3.5"
+          height="3.5"
+          rx="0.8"
+        />
+        <rect
+          x="11.5"
+          y="11.5"
+          width="3.5"
+          height="3.5"
+          rx="0.8"
+        />
       </svg>
     </button>
-    <div v-if="isOpen" class="product-switcher-menu" role="menu">
+    <div
+      v-if="isOpen"
+      class="product-switcher-menu"
+      role="menu"
+    >
       <a
         v-for="product in products"
         :key="product.id"

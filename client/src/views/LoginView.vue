@@ -12,38 +12,36 @@ const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 
-const next = computed(() => {
-  return typeof route.query.next === 'string' ? route.query.next : '/';
-});
+const next = computed(() => (typeof route.query.next === 'string' ? route.query.next : '/'));
 
 const pains: LandingCard[] = [
   {
     title: 'Нет общей доски',
-    text: 'Задачи в чатах, сроки в таблицах, статусы в голове. Нужно одно место, куда можно привести команду.'
+    text: 'Задачи в чатах, сроки в таблицах, статусы в голове. Нужно одно место, куда можно привести команду.',
   },
   {
     title: 'Неясно, кто что делает',
-    text: 'Сроки в голове, статусы в сообщениях. Горит ли задача — видно только если спросить.'
+    text: 'Сроки в голове, статусы в сообщениях. Горит ли задача — видно только если спросить.',
   },
   {
     title: 'Сложно подключить людей',
-    text: 'Заказчику нужна доска без права всё править. Коллеге — свои карточки, без долгой настройки.'
-  }
+    text: 'Заказчику нужна доска без права всё править. Коллеге — свои карточки, без долгой настройки.',
+  },
 ];
 
 const outcomes: LandingCard[] = [
   {
     title: 'Проект - это доска',
-    text: 'Колонки и карточки с drag-and-drop. Исполнитель, срок, чеклист, комментарии. Фильтры по человеку, метке и статусу.'
+    text: 'Колонки и карточки с drag-and-drop. Исполнитель, срок, чеклист, комментарии. Фильтры по человеку, метке и статусу.',
   },
   {
     title: 'Команда в одном месте',
-    text: 'Добавляйте участников, раздавайте роли.'
+    text: 'Добавляйте участников, раздавайте роли.',
   },
   {
     title: 'Аналитика и учёт рядом',
-    text: 'Если понадобится: статусы, загрузка, релизы и учёт расходов. Не мешают, пока ведёте обычные задачи.'
-  }
+    text: 'Если понадобится: статусы, загрузка, релизы и учёт расходов. Не мешают, пока ведёте обычные задачи.',
+  },
 ];
 
 function login(): void {
@@ -64,7 +62,10 @@ async function loginDemo(): Promise<void> {
     <header class="landing-bar">
       <div class="landing-bar__inner">
         <div class="brand">
-          <img src="/logo/kanban.svg" alt="">
+          <img
+            src="/logo/kanban.svg"
+            alt=""
+          >
           Taskmaster
         </div>
         <div class="landing-actions">
@@ -76,13 +77,24 @@ async function loginDemo(): Promise<void> {
           >
             {{ auth.isLoading ? 'Открываем…' : 'Демо-доступ' }}
           </button>
-          <button type="button" class="btn btn-yandex" @click="login">
+          <button
+            type="button"
+            class="btn btn-yandex"
+            @click="login"
+          >
             <span class="ya-mark">Я</span>
             Войти через Яндекс ID
           </button>
         </div>
       </div>
     </header>
+
+    <p
+      v-if="auth.error"
+      class="warn landing-error"
+    >
+      {{ auth.error }}
+    </p>
 
     <section class="hero">
       <div class="hero__inner">
@@ -94,7 +106,11 @@ async function loginDemo(): Promise<void> {
             Есть импорт проекта из Trello.
           </p>
           <div class="hero__actions">
-            <button type="button" class="btn btn-hero" @click="login">
+            <button
+              type="button"
+              class="btn btn-hero"
+              @click="login"
+            >
               <span class="ya-mark">Я</span>
               Открыть доску
             </button>
@@ -122,9 +138,15 @@ async function loginDemo(): Promise<void> {
         <h2>Знакомо?</h2>
       </div>
       <div class="cards">
-        <article v-for="item in pains" :key="item.title" class="panel">
+        <article
+          v-for="item in pains"
+          :key="item.title"
+          class="panel"
+        >
           <h3>{{ item.title }}</h3>
-          <p class="muted">{{ item.text }}</p>
+          <p class="muted">
+            {{ item.text }}
+          </p>
         </article>
       </div>
     </section>
@@ -134,9 +156,15 @@ async function loginDemo(): Promise<void> {
         <h2>Что меняется с Taskmaster</h2>
       </div>
       <div class="cards">
-        <article v-for="item in outcomes" :key="item.title" class="panel">
+        <article
+          v-for="item in outcomes"
+          :key="item.title"
+          class="panel"
+        >
           <h3>{{ item.title }}</h3>
-          <p class="muted">{{ item.text }}</p>
+          <p class="muted">
+            {{ item.text }}
+          </p>
         </article>
       </div>
     </section>
@@ -149,7 +177,11 @@ async function loginDemo(): Promise<void> {
           В настройках проектов можно включить аналитику и учёт расходов.
         </p>
         <div class="cta__actions">
-          <button type="button" class="btn btn-hero" @click="login">
+          <button
+            type="button"
+            class="btn btn-hero"
+            @click="login"
+          >
             <span class="ya-mark">Я</span>
             Войти через Яндекс ID
           </button>
@@ -171,6 +203,11 @@ async function loginDemo(): Promise<void> {
 .landing {
   min-height: 100vh;
   background: var(--bg);
+}
+
+.landing-error {
+  width: min(1120px, calc(100% - 48px));
+  margin: 12px auto 0;
 }
 
 .landing-bar {

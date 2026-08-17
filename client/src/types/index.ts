@@ -9,7 +9,8 @@ export type AnalyticsPeriod =
   | 'quarter'
   | 'year'
   | '3y'
-  | '5y';
+  | '5y'
+  | 'custom';
 export type AnalyticsRiskKind = 'overdue' | 'dueSoon' | 'gaps';
 export type BoardBackgroundId =
   | 'default'

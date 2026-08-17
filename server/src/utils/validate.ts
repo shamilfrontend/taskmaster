@@ -10,7 +10,7 @@ import {
   type BoardBackground,
   type InviteRole,
   type LabelColor,
-  type TeamRole
+  type TeamRole,
 } from '../constants.js';
 
 export function asObjectId(value: string, field = 'id'): mongoose.Types.ObjectId {
@@ -43,7 +43,7 @@ export function readString(body: unknown, field: string): string {
 
 export function readOptionalString(
   body: unknown,
-  field: string
+  field: string,
 ): string | undefined {
   if (typeof body !== 'object' || body === null) {
     throw new AppError(400, 'Некорректное тело запроса');
@@ -80,7 +80,7 @@ export function readNumber(body: unknown, field: string): number {
 
 export function readOptionalNumber(
   body: unknown,
-  field: string
+  field: string,
 ): number | undefined {
   if (typeof body !== 'object' || body === null) {
     throw new AppError(400, 'Некорректное тело запроса');
@@ -139,7 +139,7 @@ export function readTeamRole(body: unknown, field: string): TeamRole {
   const value = readString(body, field);
 
   if (!TEAM_ROLES.includes(value as TeamRole)) {
-    throw new AppError(400, `Некорректная роль`);
+    throw new AppError(400, 'Некорректная роль');
   }
 
   return value as TeamRole;
@@ -157,7 +157,7 @@ export function readInviteRole(body: unknown, field: string): InviteRole {
 
 export function readBoardBackground(
   body: unknown,
-  field: string
+  field: string,
 ): BoardBackground {
   const value = readString(body, field);
 
@@ -182,7 +182,7 @@ export function readPeriod(value: unknown): AnalyticsPeriod {
   if (typeof value !== 'string' || !ANALYTICS_PERIODS.includes(value as AnalyticsPeriod)) {
     throw new AppError(
       400,
-      'Период: today, 7d, 30d, quarter, year, 3y или 5y'
+      'Период: today, 7d, 30d, quarter, year, 3y или 5y',
     );
   }
 
@@ -191,7 +191,7 @@ export function readPeriod(value: unknown): AnalyticsPeriod {
 
 export function readOptionalDate(
   body: unknown,
-  field: string
+  field: string,
 ): Date | undefined {
   const value = readOptionalString(body, field);
 
@@ -228,7 +228,7 @@ export function isFeatureOn(value: boolean | undefined): boolean {
 
 export function assertFeatureOn(
   value: boolean | undefined,
-  message: string
+  message: string,
 ): void {
   if (!isFeatureOn(value)) {
     throw new AppError(403, message);
@@ -238,7 +238,7 @@ export function assertFeatureOn(
 export function assertRole(
   role: TeamRole,
   allowed: TeamRole[],
-  message = 'Недостаточно прав'
+  message = 'Недостаточно прав',
 ): void {
   if (!allowed.includes(role)) {
     throw new AppError(403, message);

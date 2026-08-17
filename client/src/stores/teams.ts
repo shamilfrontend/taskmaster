@@ -1,13 +1,15 @@
 import { acceptHMRUpdate, defineStore } from 'pinia';
 import { ref } from 'vue';
-import { http, errorMessage } from '../api/http.ts';
+import {
+  http, errorMessage, toastError, toastSuccess,
+} from '../api/http.ts';
 import type {
   ActivityItem,
   InviteRole,
   TeamActivityPage,
   TeamDetails,
   TeamListItem,
-  TeamRole
+  TeamRole,
 } from '../types/index.ts';
 
 export const useTeamsStore = defineStore('teams', () => {
@@ -53,7 +55,7 @@ export const useTeamsStore = defineStore('teams', () => {
 
   async function fetchActivity(
     teamId: string,
-    reset = true
+    reset = true,
   ): Promise<void> {
     isActivityLoading.value = true;
     error.value = null;
@@ -63,8 +65,8 @@ export const useTeamsStore = defineStore('teams', () => {
       const { data } = await http.get<TeamActivityPage>(
         `/teams/${teamId}/activity`,
         {
-          params: !reset && last ? { before: last.createdAt } : undefined
-        }
+          params: !reset && last ? { before: last.createdAt } : undefined,
+        },
       );
 
       if (reset) {
@@ -93,9 +95,11 @@ export const useTeamsStore = defineStore('teams', () => {
     try {
       const { data } = await http.post<{ id: string }>('/teams', { name });
       await fetchList();
+      toastSuccess('Команда создана');
       return data.id;
     } catch (err: unknown) {
       error.value = errorMessage(err);
+      toastError('Ошибка при создании команды', err);
       return null;
     } finally {
       isLoading.value = false;
@@ -109,12 +113,14 @@ export const useTeamsStore = defineStore('teams', () => {
     try {
       const { data } = await http.post<{ token: string }>(
         `/teams/${teamId}/invites`,
-        { role }
+        { role },
       );
       await fetchOne(teamId);
+      toastSuccess('Приглашение создано');
       return data.token;
     } catch (err: unknown) {
       error.value = errorMessage(err);
+      toastError('Ошибка при создании приглашения', err);
       return null;
     } finally {
       isLoading.value = false;
@@ -127,7 +133,7 @@ export const useTeamsStore = defineStore('teams', () => {
     try {
       const { data } = await http.patch<{ id: string; name: string }>(
         `/teams/${teamId}`,
-        { name }
+        { name },
       );
 
       if (current.value?.id === teamId) {
@@ -140,25 +146,29 @@ export const useTeamsStore = defineStore('teams', () => {
         item.name = data.name;
       }
 
+      toastSuccess('Команда обновлена');
       return true;
     } catch (err: unknown) {
       error.value = errorMessage(err);
+      toastError('Ошибка при обновлении команды', err);
       return false;
     }
   }
 
   async function revokeInvite(
     teamId: string,
-    inviteId: string
+    inviteId: string,
   ): Promise<boolean> {
     error.value = null;
 
     try {
       await http.delete(`/teams/${teamId}/invites/${inviteId}`);
       await fetchOne(teamId);
+      toastSuccess('Приглашение отозвано');
       return true;
     } catch (err: unknown) {
       error.value = errorMessage(err);
+      toastError('Ошибка при отзыве приглашения', err);
       return false;
     }
   }
@@ -175,9 +185,11 @@ export const useTeamsStore = defineStore('teams', () => {
         current.value = null;
       }
 
+      toastSuccess('Команда удалена');
       return true;
     } catch (err: unknown) {
       error.value = errorMessage(err);
+      toastError('Ошибка при удалении команды', err);
       return false;
     } finally {
       isLoading.value = false;
@@ -187,16 +199,18 @@ export const useTeamsStore = defineStore('teams', () => {
   async function changeRole(
     teamId: string,
     userId: string,
-    role: TeamRole
+    role: TeamRole,
   ): Promise<boolean> {
     error.value = null;
 
     try {
       await http.patch(`/teams/${teamId}/members/${userId}`, { role });
       await fetchOne(teamId);
+      toastSuccess('Роль обновлена');
       return true;
     } catch (err: unknown) {
       error.value = errorMessage(err);
+      toastError('Ошибка при изменении роли', err);
       return false;
     }
   }
@@ -204,7 +218,7 @@ export const useTeamsStore = defineStore('teams', () => {
   async function removeMember(
     teamId: string,
     userId: string,
-    refresh = true
+    refresh = true,
   ): Promise<boolean> {
     error.value = null;
 
@@ -221,9 +235,11 @@ export const useTeamsStore = defineStore('teams', () => {
         }
       }
 
+      toastSuccess('Участник исключён');
       return true;
     } catch (err: unknown) {
       error.value = errorMessage(err);
+      toastError('Ошибка при исключении участника', err);
       return false;
     }
   }
@@ -231,7 +247,6 @@ export const useTeamsStore = defineStore('teams', () => {
   async function createProject(
     teamId: string,
     name: string,
-    budgetLimit?: number
   ): Promise<string | null> {
     isLoading.value = true;
     error.value = null;
@@ -239,12 +254,14 @@ export const useTeamsStore = defineStore('teams', () => {
     try {
       const { data } = await http.post<{ id: string }>(
         `/teams/${teamId}/projects`,
-        { name, budgetLimit }
+        { name },
       );
       await fetchOne(teamId);
+      toastSuccess('Проект создан');
       return data.id;
     } catch (err: unknown) {
       error.value = errorMessage(err);
+      toastError('Ошибка при создании проекта', err);
       return null;
     } finally {
       isLoading.value = false;
@@ -254,7 +271,7 @@ export const useTeamsStore = defineStore('teams', () => {
   async function createProjectFromTrello(
     teamId: string,
     name: string,
-    board: unknown
+    board: unknown,
   ): Promise<string | null> {
     isLoading.value = true;
     error.value = null;
@@ -263,51 +280,17 @@ export const useTeamsStore = defineStore('teams', () => {
       const { data } = await http.post<{ id: string }>(
         `/teams/${teamId}/projects/from-trello`,
         { name, board },
-        { timeout: 60000 }
+        { timeout: 60000 },
       );
       await fetchOne(teamId);
+      toastSuccess('Проект импортирован');
       return data.id;
     } catch (err: unknown) {
       error.value = errorMessage(err);
+      toastError('Ошибка при импорте проекта', err);
       return null;
     } finally {
       isLoading.value = false;
-    }
-  }
-
-  async function duplicateProject(projectId: string): Promise<string | null> {
-    error.value = null;
-
-    try {
-      const { data } = await http.post<{ id: string }>(
-        `/projects/${projectId}/duplicate`
-      );
-
-      if (current.value) {
-        await fetchOne(current.value.id);
-      }
-
-      return data.id;
-    } catch (err: unknown) {
-      error.value = errorMessage(err);
-      return null;
-    }
-  }
-
-  async function deleteProject(projectId: string): Promise<boolean> {
-    error.value = null;
-
-    try {
-      await http.delete(`/projects/${projectId}`);
-
-      if (current.value) {
-        await fetchOne(current.value.id);
-      }
-
-      return true;
-    } catch (err: unknown) {
-      error.value = errorMessage(err);
-      return false;
     }
   }
 
@@ -331,8 +314,6 @@ export const useTeamsStore = defineStore('teams', () => {
     removeMember,
     createProject,
     createProjectFromTrello,
-    duplicateProject,
-    deleteProject
   };
 });
 

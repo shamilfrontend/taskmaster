@@ -887,3 +887,11 @@ h2 {
 .vue-notification.warn {
   background: var(--text);
 }
+
+.vue-notification.success {
+  background: var(--green);
+}
+
+.vue-notification.error {
+  background: var(--danger);
+}

@@ -18,22 +18,53 @@ async function logout(): Promise<void> {
 <template>
   <header class="app-header is-visible">
     <ProductSwitcher />
-    <button type="button" class="brand" @click="router.push({ name: 'teams' })">
-      <img src="/logo/kanban.svg" alt="">
+    <button
+      type="button"
+      class="brand"
+      @click="router.push({ name: 'teams' })"
+    >
+      <img
+        src="/logo/kanban.svg"
+        alt=""
+      >
       Taskmaster
     </button>
-    <nav v-if="crumbs.length > 0" class="crumbs">
-      <template v-for="(crumb, index) in crumbs" :key="`${crumb.label}-${index}`">
+    <nav
+      v-if="crumbs.length > 0"
+      class="crumbs"
+    >
+      <template
+        v-for="(crumb, index) in crumbs"
+        :key="`${crumb.label}-${index}`"
+      >
         <span class="sep">/</span>
-        <router-link v-if="crumb.to" :to="crumb.to">{{ crumb.label }}</router-link>
-        <span v-else class="current">{{ crumb.label }}</span>
+        <router-link
+          v-if="crumb.to"
+          :to="crumb.to"
+        >
+          {{ crumb.label }}
+        </router-link>
+        <span
+          v-else
+          class="current"
+        >{{ crumb.label }}</span>
       </template>
     </nav>
     <div class="header-right">
-      <span v-if="auth.user" class="avatar" :title="auth.user.displayName">
+      <span
+        v-if="auth.user"
+        class="avatar"
+        :title="auth.user.displayName"
+      >
         {{ initials(auth.user.displayName) }}
       </span>
-      <button type="button" class="btn btn-ghost" @click="logout">Выйти</button>
+      <button
+        type="button"
+        class="btn btn-ghost"
+        @click="logout"
+      >
+        Выйти
+      </button>
     </div>
   </header>
 </template>

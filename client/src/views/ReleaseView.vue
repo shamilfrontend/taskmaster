@@ -6,7 +6,7 @@ import { useProjectStore } from '../stores/project.ts';
 import { http } from '../api/http.ts';
 import {
   boardBackgroundStyle,
-  findBoardBackground
+  findBoardBackground,
 } from '../composables/board-backgrounds.ts';
 import { formatDate } from '../composables/format.ts';
 import { useProjectTabs } from '../composables/project-tabs.ts';
@@ -45,18 +45,16 @@ onMounted(async () => {
   }
 
   const boardRes = await http.get<{ cards: BoardCard[] }>(
-    `/boards/${boardId}`
+    `/boards/${boardId}`,
   );
   projectCards.value = boardRes.data.cards;
 });
 
 const selectedBackground = computed(
-  () => projects.current?.boardBackground ?? 'default'
+  () => projects.current?.boardBackground ?? 'default',
 );
 
-const hasBoardPhoto = computed(() =>
-  Boolean(findBoardBackground(selectedBackground.value).full)
-);
+const hasBoardPhoto = computed(() => Boolean(findBoardBackground(selectedBackground.value).full));
 
 const boardStyle = computed(() => {
   if (!hasBoardPhoto.value) {
@@ -69,7 +67,7 @@ const boardStyle = computed(() => {
 const tabs = useProjectTabs(
   projectId,
   computed(() => projects.current?.role ?? board.release?.role),
-  computed(() => Boolean(projects.current?.releasesEnabled))
+  computed(() => Boolean(projects.current?.releasesEnabled)),
 );
 
 const canAdmin = computed(() => {
@@ -127,7 +125,7 @@ async function saveEdit(): Promise<void> {
 
   const ok = await board.updateRelease(releaseId.value, {
     name,
-    date: editDate.value || null
+    date: editDate.value || null,
   });
 
   if (ok) {
@@ -170,7 +168,10 @@ async function remove(): Promise<void> {
 </script>
 
 <template>
-  <section v-if="board.release" class="screen is-active">
+  <section
+    v-if="board.release"
+    class="screen is-active"
+  >
     <div
       class="board-screen"
       :class="{ 'has-photo': hasBoardPhoto }"
@@ -227,11 +228,22 @@ async function remove(): Promise<void> {
             Отметить как released
           </button>
         </div>
-        <p v-if="!board.release.cards.length" class="muted">Нет задач</p>
-        <div v-for="card in board.release.cards" :key="card.id" class="list-row">
+        <p
+          v-if="!board.release.cards.length"
+          class="muted"
+        >
+          Нет задач
+        </p>
+        <div
+          v-for="card in board.release.cards"
+          :key="card.id"
+          class="list-row"
+        >
           <div class="grow">
             <div>{{ card.title }}</div>
-            <div class="muted">{{ card.boardName }} · {{ card.columnName }}</div>
+            <div class="muted">
+              {{ card.boardName }} · {{ card.columnName }}
+            </div>
           </div>
           <span class="muted">{{ card.assigneeName }}</span>
           <button
@@ -243,16 +255,32 @@ async function remove(): Promise<void> {
             Открепить
           </button>
         </div>
-        <div v-if="canAdmin" class="actions pt-12">
-          <button type="button" class="btn btn-danger" @click="deleteOpen = true">
+        <div
+          v-if="canAdmin"
+          class="actions pt-12"
+        >
+          <button
+            type="button"
+            class="btn btn-danger"
+            @click="deleteOpen = true"
+          >
             Удалить
           </button>
         </div>
       </div>
     </div>
 
-    <ModalDialog :open="editOpen" title="Изменить релиз" @close="editOpen = false">
-      <p v-if="board.error" class="warn">{{ board.error }}</p>
+    <ModalDialog
+      :open="editOpen"
+      title="Изменить релиз"
+      @close="editOpen = false"
+    >
+      <p
+        v-if="board.error"
+        class="warn"
+      >
+        {{ board.error }}
+      </p>
       <div class="field">
         <label>Название</label>
         <input
@@ -264,10 +292,18 @@ async function remove(): Promise<void> {
       </div>
       <div class="field">
         <label>Дата релиза</label>
-        <input v-model="editDate" class="input" type="date">
+        <input
+          v-model="editDate"
+          class="input"
+          type="date"
+        >
       </div>
       <div class="modal-foot">
-        <button type="button" class="btn btn-ghost" @click="editOpen = false">
+        <button
+          type="button"
+          class="btn btn-ghost"
+          @click="editOpen = false"
+        >
           Отмена
         </button>
         <button
@@ -281,24 +317,65 @@ async function remove(): Promise<void> {
       </div>
     </ModalDialog>
 
-    <ModalDialog :open="statusOpen" title="Статус релиза" @close="statusOpen = false">
-      <p class="muted mb-16">Карточки не переместятся по колонкам.</p>
+    <ModalDialog
+      :open="statusOpen"
+      title="Статус релиза"
+      @close="statusOpen = false"
+    >
+      <p class="muted mb-16">
+        Карточки не переместятся по колонкам.
+      </p>
       <div class="modal-foot">
-        <button type="button" class="btn btn-ghost" @click="statusOpen = false">Отмена</button>
-        <button type="button" class="btn" @click="markReleased">Отметить как released</button>
+        <button
+          type="button"
+          class="btn btn-ghost"
+          @click="statusOpen = false"
+        >
+          Отмена
+        </button>
+        <button
+          type="button"
+          class="btn"
+          @click="markReleased"
+        >
+          Отметить как released
+        </button>
       </div>
     </ModalDialog>
 
-    <ModalDialog :open="attachOpen" title="Прикрепить карточку" @close="closeAttach">
+    <ModalDialog
+      :open="attachOpen"
+      title="Прикрепить карточку"
+      @close="closeAttach"
+    >
       <div class="choice-list">
-        <p v-if="!availableCards.length" class="muted">Нет свободных карточек.</p>
-        <label v-for="card in availableCards" :key="card.id" class="choice">
-          <input v-model="selectedCardIds" type="checkbox" :value="card.id">
+        <p
+          v-if="!availableCards.length"
+          class="muted"
+        >
+          Нет свободных карточек.
+        </p>
+        <label
+          v-for="card in availableCards"
+          :key="card.id"
+          class="choice"
+        >
+          <input
+            v-model="selectedCardIds"
+            type="checkbox"
+            :value="card.id"
+          >
           <span>{{ card.title }}</span>
         </label>
       </div>
       <div class="modal-foot">
-        <button type="button" class="btn btn-ghost" @click="closeAttach">Отмена</button>
+        <button
+          type="button"
+          class="btn btn-ghost"
+          @click="closeAttach"
+        >
+          Отмена
+        </button>
         <button
           type="button"
           class="btn"
@@ -310,11 +387,29 @@ async function remove(): Promise<void> {
       </div>
     </ModalDialog>
 
-    <ModalDialog :open="deleteOpen" title="Удалить релиз" @close="deleteOpen = false">
-      <p class="muted mb-16">Карточки останутся на доске без релиза.</p>
+    <ModalDialog
+      :open="deleteOpen"
+      title="Удалить релиз"
+      @close="deleteOpen = false"
+    >
+      <p class="muted mb-16">
+        Карточки останутся на доске без релиза.
+      </p>
       <div class="modal-foot">
-        <button type="button" class="btn btn-ghost" @click="deleteOpen = false">Отмена</button>
-        <button type="button" class="btn btn-danger" @click="remove">Удалить</button>
+        <button
+          type="button"
+          class="btn btn-ghost"
+          @click="deleteOpen = false"
+        >
+          Отмена
+        </button>
+        <button
+          type="button"
+          class="btn btn-danger"
+          @click="remove"
+        >
+          Удалить
+        </button>
       </div>
     </ModalDialog>
   </section>

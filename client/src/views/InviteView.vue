@@ -29,7 +29,7 @@ onMounted(async () => {
 async function accept(): Promise<void> {
   try {
     const { data } = await http.post<{ teamId: string }>(
-      `/invites/${token.value}/accept`
+      `/invites/${token.value}/accept`,
     );
     await router.push({ name: 'team', params: { teamId: data.teamId } });
   } catch (err: unknown) {
@@ -45,9 +45,14 @@ function login(): void {
 <template>
   <section class="screen screen--center is-active">
     <div class="card auth-card">
-      <img src="/logo/kanban.svg" alt="Taskmaster">
+      <img
+        src="/logo/kanban.svg"
+        alt="Taskmaster"
+      >
       <h1>Приглашение в команду</h1>
-      <p v-if="error">{{ error }}</p>
+      <p v-if="error">
+        {{ error }}
+      </p>
       <template v-else-if="preview">
         <p>
           Вас пригласили в {{ preview.teamName }}.
@@ -70,8 +75,17 @@ function login(): void {
           <span class="ya-mark">Я</span>
           Войти и вступить
         </button>
-        <button v-else type="button" class="btn" @click="accept">Вступить</button>
-        <p class="muted mt-16 tight">Ссылка одноразовая, срок 7 дней</p>
+        <button
+          v-else
+          type="button"
+          class="btn"
+          @click="accept"
+        >
+          Вступить
+        </button>
+        <p class="muted mt-16 tight">
+          Ссылка одноразовая, срок 7 дней
+        </p>
       </template>
     </div>
   </section>

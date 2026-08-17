@@ -5,7 +5,7 @@ export function errorHandler(
   err: unknown,
   _req: Request,
   res: Response,
-  _next: NextFunction
+  _next: NextFunction,
 ): void {
   if (err instanceof AppError) {
     res.status(err.status).json({ error: err.message });
@@ -13,10 +13,10 @@ export function errorHandler(
   }
 
   if (
-    typeof err === 'object' &&
-    err !== null &&
-    'status' in err &&
-    (err as { status: unknown }).status === 413
+    typeof err === 'object'
+    && err !== null
+    && 'status' in err
+    && (err as { status: unknown }).status === 413
   ) {
     res.status(413).json({ error: 'Файл слишком большой' });
     return;

@@ -12,14 +12,14 @@ const teamMemberSchema = new Schema<TeamMemberPojo>(
   {
     teamId: { type: Schema.Types.ObjectId, ref: 'Team', required: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    role: { type: String, enum: TEAM_ROLES, required: true }
+    role: { type: String, enum: TEAM_ROLES, required: true },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 teamMemberSchema.index({ teamId: 1, userId: 1 }, { unique: true });
 
 export const TeamMemberModel = mongoose.model<TeamMemberPojo>(
   'TeamMember',
-  teamMemberSchema
+  teamMemberSchema,
 );

@@ -1,12 +1,14 @@
 import { acceptHMRUpdate, defineStore } from 'pinia';
 import { ref } from 'vue';
-import { http, errorMessage } from '../api/http.ts';
+import {
+  http, errorMessage, toastError, toastSuccess,
+} from '../api/http.ts';
 import type {
   AnalyticsPayload,
   AnalyticsPeriod,
   BoardBackgroundId,
   ProjectDetails,
-  TeamRole
+  TeamRole,
 } from '../types/index.ts';
 
 interface ProjectPayload extends Omit<ProjectDetails, 'board'> {
@@ -20,7 +22,7 @@ function toProjectDetails(data: ProjectPayload): ProjectDetails {
   return {
     ...data,
     boardBackground: data.boardBackground ?? 'default',
-    board: { id: boardId }
+    board: { id: boardId },
   };
 }
 
@@ -45,8 +47,14 @@ export const useProjectStore = defineStore('project', () => {
   }
 
   async function updateBudget(projectId: string, budgetLimit: number): Promise<void> {
-    await http.patch(`/projects/${projectId}`, { budgetLimit });
-    await fetchOne(projectId);
+    try {
+      await http.patch(`/projects/${projectId}`, { budgetLimit });
+      await fetchOne(projectId);
+      toastSuccess('Бюджет обновлён');
+    } catch (err: unknown) {
+      toastError('Ошибка при обновлении бюджета', err);
+      throw err;
+    }
   }
 
   async function updateSettings(
@@ -55,7 +63,7 @@ export const useProjectStore = defineStore('project', () => {
       releasesEnabled?: boolean;
       budgetEnabled?: boolean;
       boardBackground?: BoardBackgroundId;
-    }
+    },
   ): Promise<void> {
     isLoading.value = true;
     error.value = null;
@@ -67,8 +75,11 @@ export const useProjectStore = defineStore('project', () => {
       if (current.value && payload.boardBackground) {
         current.value.boardBackground = payload.boardBackground;
       }
+
+      toastSuccess('Настройки проекта обновлены');
     } catch (err: unknown) {
       error.value = errorMessage(err);
+      toastError('Ошибка при обновлении настроек', err);
     } finally {
       isLoading.value = false;
     }
@@ -77,7 +88,7 @@ export const useProjectStore = defineStore('project', () => {
   async function createRelease(
     projectId: string,
     name: string,
-    date?: string
+    date?: string,
   ): Promise<string | null> {
     isLoading.value = true;
     error.value = null;
@@ -85,12 +96,14 @@ export const useProjectStore = defineStore('project', () => {
     try {
       const { data } = await http.post<{ id: string }>(
         `/projects/${projectId}/releases`,
-        { name, date }
+        { name, date },
       );
       await fetchOne(projectId);
+      toastSuccess('Релиз создан');
       return data.id;
     } catch (err: unknown) {
       error.value = errorMessage(err);
+      toastError('Ошибка при создании релиза', err);
       return null;
     } finally {
       isLoading.value = false;
@@ -99,19 +112,16 @@ export const useProjectStore = defineStore('project', () => {
 
   async function saveRoleRates(
     projectId: string,
-    roleRates: Record<TeamRole, number>
+    roleRates: Record<TeamRole, number>,
   ): Promise<void> {
-    await http.put(`/projects/${projectId}/role-rates`, roleRates);
-    await fetchOne(projectId);
-  }
-
-  async function saveMemberRate(
-    projectId: string,
-    userId: string,
-    amount: number | null
-  ): Promise<void> {
-    await http.put(`/projects/${projectId}/member-rates`, { userId, amount });
-    await fetchOne(projectId);
+    try {
+      await http.put(`/projects/${projectId}/role-rates`, roleRates);
+      await fetchOne(projectId);
+      toastSuccess('Ставки сохранены');
+    } catch (err: unknown) {
+      toastError('Ошибка при сохранении ставок', err);
+      throw err;
+    }
   }
 
   async function deleteProject(projectId: string): Promise<boolean> {
@@ -121,9 +131,11 @@ export const useProjectStore = defineStore('project', () => {
     try {
       await http.delete(`/projects/${projectId}`);
       current.value = null;
+      toastSuccess('Проект удалён');
       return true;
     } catch (err: unknown) {
       error.value = errorMessage(err);
+      toastError('Ошибка при удалении проекта', err);
       return false;
     } finally {
       isLoading.value = false;
@@ -136,11 +148,13 @@ export const useProjectStore = defineStore('project', () => {
 
     try {
       const { data } = await http.post<{ id: string }>(
-        `/projects/${projectId}/duplicate`
+        `/projects/${projectId}/duplicate`,
       );
+      toastSuccess('Проект скопирован');
       return data.id;
     } catch (err: unknown) {
       error.value = errorMessage(err);
+      toastError('Ошибка при копировании проекта', err);
       return null;
     } finally {
       isLoading.value = false;
@@ -149,15 +163,19 @@ export const useProjectStore = defineStore('project', () => {
 
   async function fetchAnalytics(
     projectId: string,
-    period: AnalyticsPeriod
+    period: AnalyticsPeriod,
+    range?: { from: string; to: string },
   ): Promise<void> {
     isLoading.value = true;
     error.value = null;
 
     try {
+      const params = period === 'custom' && range
+        ? { from: range.from, to: range.to }
+        : { period };
       const { data } = await http.get<AnalyticsPayload>(
         `/projects/${projectId}/analytics`,
-        { params: { period } }
+        { params },
       );
       analytics.value = data;
     } catch (err: unknown) {
@@ -177,10 +195,9 @@ export const useProjectStore = defineStore('project', () => {
     updateSettings,
     createRelease,
     saveRoleRates,
-    saveMemberRate,
     deleteProject,
     duplicateProject,
-    fetchAnalytics
+    fetchAnalytics,
   };
 });
 

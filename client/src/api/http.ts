@@ -5,8 +5,6 @@ import type { ApiErrorBody } from '../types/index.ts';
 export const DEMO_BLOCKED_MESSAGE = 'Действия в демо-доступе отключены';
 
 export class DemoBlockedError extends Error {
-  readonly isDemoBlocked = true;
-
   constructor() {
     super(DEMO_BLOCKED_MESSAGE);
     this.name = 'DemoBlockedError';
@@ -15,7 +13,7 @@ export class DemoBlockedError extends Error {
 
 export const http = axios.create({
   baseURL: '/api',
-  withCredentials: true
+  withCredentials: true,
 });
 
 let demoMode = false;
@@ -42,7 +40,7 @@ http.interceptors.request.use((config) => {
   notify({
     type: 'warn',
     text: DEMO_BLOCKED_MESSAGE,
-    ignoreDuplicates: true
+    ignoreDuplicates: true,
   });
 
   throw new DemoBlockedError();
@@ -55,10 +53,9 @@ http.interceptors.response.use(
       const url = error.config?.url ?? '';
       const isMe = url.includes('/auth/me');
       const path = window.location.pathname;
-      const isPublic =
-        path.startsWith('/landing') ||
-        path.startsWith('/login') ||
-        path.startsWith('/invite');
+      const isPublic = path.startsWith('/landing')
+        || path.startsWith('/login')
+        || path.startsWith('/invite');
 
       if (!isMe && !isPublic) {
         const next = encodeURIComponent(path + window.location.search);
@@ -67,8 +64,20 @@ http.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  }
+  },
 );
+
+export function toastSuccess(text: string): void {
+  notify({ type: 'success', text });
+}
+
+export function toastError(text: string, err?: unknown): void {
+  if (err instanceof DemoBlockedError) {
+    return;
+  }
+
+  notify({ type: 'error', text });
+}
 
 export function errorMessage(err: unknown): string {
   if (err instanceof DemoBlockedError) {

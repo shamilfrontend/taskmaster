@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import {
+  computed, onMounted, onUnmounted, ref, watch,
+} from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.ts';
 import { useProjectStore } from '../stores/project.ts';
@@ -10,7 +12,7 @@ import {
   formatMoney,
   initials,
   roleClass,
-  roleLabel
+  roleLabel,
 } from '../composables/format.ts';
 import ModalDialog from '../components/ModalDialog.vue';
 import PageTabs, { type PageTab } from '../components/PageTabs.vue';
@@ -20,7 +22,7 @@ import type {
   InviteRole,
   TeamInvite,
   TeamMember,
-  TeamRole
+  TeamRole,
 } from '../types/index.ts';
 
 interface MenuPosition {
@@ -113,7 +115,7 @@ const menuProject = computed(() => {
 type TeamTab = 'projects' | 'members' | 'activity' | 'settings';
 
 const activeTab = computed<TeamTab>(() => {
-  const tab = route.query.tab;
+  const { tab } = route.query;
 
   if (tab === 'members') {
     return 'members';
@@ -137,7 +139,7 @@ watch(
       await teams.fetchActivity(id);
     }
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 const tabs = computed<PageTab[]>(() => {
@@ -145,7 +147,7 @@ const tabs = computed<PageTab[]>(() => {
     {
       id: 'projects',
       label: 'Проекты',
-      to: { name: 'team', params: { teamId: teamId.value } }
+      to: { name: 'team', params: { teamId: teamId.value } },
     },
     {
       id: 'members',
@@ -153,8 +155,8 @@ const tabs = computed<PageTab[]>(() => {
       to: {
         name: 'team',
         params: { teamId: teamId.value },
-        query: { tab: 'members' }
-      }
+        query: { tab: 'members' },
+      },
     },
     {
       id: 'activity',
@@ -162,9 +164,9 @@ const tabs = computed<PageTab[]>(() => {
       to: {
         name: 'team',
         params: { teamId: teamId.value },
-        query: { tab: 'activity' }
-      }
-    }
+        query: { tab: 'activity' },
+      },
+    },
   ];
 
   if (canManage.value) {
@@ -174,8 +176,8 @@ const tabs = computed<PageTab[]>(() => {
       to: {
         name: 'team',
         params: { teamId: teamId.value },
-        query: { tab: 'settings' }
-      }
+        query: { tab: 'settings' },
+      },
     });
   }
 
@@ -198,7 +200,7 @@ function placeMenu(event: MouseEvent): MenuPosition | null {
 
   return {
     top: `${Math.round(rect.bottom + 4)}px`,
-    right: `${Math.round(window.innerWidth - rect.right)}px`
+    right: `${Math.round(window.innerWidth - rect.right)}px`,
   };
 }
 
@@ -243,7 +245,7 @@ function openProjectDelete(): void {
 
   projectToDelete.value = {
     id: menuProject.value.id,
-    name: menuProject.value.name
+    name: menuProject.value.name,
   };
   projectDeleteOpen.value = true;
   closeMenus();
@@ -300,9 +302,9 @@ function isTrelloBoard(value: unknown): value is { name: string } {
   const row = value as Record<string, unknown>;
 
   return (
-    typeof row.name === 'string' &&
-    Array.isArray(row.lists) &&
-    Array.isArray(row.cards)
+    typeof row.name === 'string'
+    && Array.isArray(row.lists)
+    && Array.isArray(row.cards)
   );
 }
 
@@ -365,14 +367,13 @@ async function createProject(): Promise<void> {
     return;
   }
 
-  const id =
-    projectSource.value === 'trello' && trelloBoard.value
-      ? await teams.createProjectFromTrello(
-          teamId.value,
-          projectName.value,
-          trelloBoard.value
-        )
-      : await teams.createProject(teamId.value, projectName.value);
+  const id = projectSource.value === 'trello' && trelloBoard.value
+    ? await teams.createProjectFromTrello(
+      teamId.value,
+      projectName.value,
+      trelloBoard.value,
+    )
+    : await teams.createProject(teamId.value, projectName.value);
 
   if (id) {
     closeProjectModal();
@@ -448,7 +449,7 @@ function openActivityItem(item: ActivityItem): void {
   void router.push({
     name: 'project',
     params: { projectId: item.projectId },
-    query: { card: item.cardId }
+    query: { card: item.cardId },
   });
 }
 
@@ -495,7 +496,7 @@ async function confirmMemberAction(): Promise<void> {
     const ok = await teams.removeMember(
       teamId.value,
       memberTargetId.value,
-      false
+      false,
     );
 
     if (ok) {
@@ -536,10 +537,25 @@ async function confirmRevoke(): Promise<void> {
 <template>
   <section class="screen is-active">
     <div class="wrap">
-      <p v-if="teams.isLoading && !teams.current" class="muted">Загрузка…</p>
+      <p
+        v-if="teams.isLoading && !teams.current"
+        class="muted"
+      >
+        Загрузка…
+      </p>
       <template v-else-if="!teams.current">
-        <p v-if="teams.error" class="warn">{{ teams.error }}</p>
-        <p v-else class="muted">Команда не найдена</p>
+        <p
+          v-if="teams.error"
+          class="warn"
+        >
+          {{ teams.error }}
+        </p>
+        <p
+          v-else
+          class="muted"
+        >
+          Команда не найдена
+        </p>
       </template>
       <template v-else>
         <div class="page-head">
@@ -549,8 +565,16 @@ async function confirmRevoke(): Promise<void> {
           </div>
         </div>
         <PageTabs :tabs="tabs" />
-        <p v-if="teams.error" class="warn">{{ teams.error }}</p>
-        <div v-if="activeTab === 'projects'" class="stack">
+        <p
+          v-if="teams.error"
+          class="warn"
+        >
+          {{ teams.error }}
+        </p>
+        <div
+          v-if="activeTab === 'projects'"
+          class="stack"
+        >
           <div class="panel">
             <div class="panel-head">
               <h2>Проекты</h2>
@@ -574,7 +598,9 @@ async function confirmRevoke(): Promise<void> {
                 @keydown.enter.prevent="openProject(project.id)"
               >
                 <span class="avatar">{{ initials(project.name) }}</span>
-                <div class="grow">{{ project.name }}</div>
+                <div class="grow">
+                  {{ project.name }}
+                </div>
                 <span
                   v-if="project.budgetEnabled && project.budgetLimit !== undefined"
                   class="muted"
@@ -592,10 +618,18 @@ async function confirmRevoke(): Promise<void> {
                 </button>
               </div>
             </template>
-            <p v-else class="muted">Нет проектов</p>
+            <p
+              v-else
+              class="muted"
+            >
+              Нет проектов
+            </p>
           </div>
         </div>
-        <div v-else-if="activeTab === 'members'" class="stack">
+        <div
+          v-else-if="activeTab === 'members'"
+          class="stack"
+        >
           <div class="panel">
             <div class="panel-head">
               <h2>Участники</h2>
@@ -616,7 +650,9 @@ async function confirmRevoke(): Promise<void> {
               <span :class="avatarClass(member.role)">{{ initials(member.displayName) }}</span>
               <div class="grow">
                 <div>{{ member.displayName }}</div>
-                <div class="muted">{{ member.email }}</div>
+                <div class="muted">
+                  {{ member.email }}
+                </div>
               </div>
               <template v-if="canManageMember(member.role)">
                 <select
@@ -662,7 +698,9 @@ async function confirmRevoke(): Promise<void> {
               <div class="grow">
                 <div>Роль {{ roleLabel(invite.role) }}</div>
               </div>
-              <span class="muted">до {{ new Date(invite.expiresAt).toLocaleDateString('ru-RU') }}</span>
+              <span class="muted">
+                до {{ new Date(invite.expiresAt).toLocaleDateString('ru-RU') }}
+              </span>
               <button
                 v-if="canManage"
                 type="button"
@@ -674,12 +712,18 @@ async function confirmRevoke(): Promise<void> {
             </div>
           </div>
         </div>
-        <div v-else-if="activeTab === 'activity'" class="stack">
+        <div
+          v-else-if="activeTab === 'activity'"
+          class="stack"
+        >
           <div class="panel">
             <div class="panel-head">
               <h2>Действия</h2>
             </div>
-            <p v-if="teams.isActivityLoading && !teams.activity.length" class="muted">
+            <p
+              v-if="teams.isActivityLoading && !teams.activity.length"
+              class="muted"
+            >
               Загрузка…
             </p>
             <template v-else>
@@ -695,11 +739,16 @@ async function confirmRevoke(): Promise<void> {
                     {{ item.actorName || 'Участник' }}
                     {{ activityAction(item.kind) }}
                   </div>
-                  <div class="muted">{{ activitySubtitle(item) }}</div>
+                  <div class="muted">
+                    {{ activitySubtitle(item) }}
+                  </div>
                 </div>
                 <span class="muted">{{ formatDate(item.createdAt) }}</span>
               </button>
-              <p v-if="!teams.activity.length" class="muted">
+              <p
+                v-if="!teams.activity.length"
+                class="muted"
+              >
                 Нет активности
               </p>
               <div
@@ -718,7 +767,10 @@ async function confirmRevoke(): Promise<void> {
             </template>
           </div>
         </div>
-        <div v-else-if="activeTab === 'settings'" class="stack">
+        <div
+          v-else-if="activeTab === 'settings'"
+          class="stack"
+        >
           <div class="panel">
             <div class="panel-head">
               <h2>Общие</h2>
@@ -743,12 +795,19 @@ async function confirmRevoke(): Promise<void> {
               </button>
             </div>
           </div>
-          <div v-if="isOwner" class="panel">
+          <div
+            v-if="isOwner"
+            class="panel"
+          >
             <div class="panel-head">
               <h2>Опасная зона</h2>
             </div>
             <div class="actions actions--start">
-              <button type="button" class="btn btn-danger" @click="deleteOpen = true">
+              <button
+                type="button"
+                class="btn btn-danger"
+                @click="deleteOpen = true"
+              >
                 Удалить команду
               </button>
             </div>
@@ -766,32 +825,70 @@ async function confirmRevoke(): Promise<void> {
       <template v-if="!inviteUrl">
         <div class="choice-list">
           <label class="choice">
-            <input v-model="inviteRole" type="radio" value="admin">
+            <input
+              v-model="inviteRole"
+              type="radio"
+              value="admin"
+            >
             <span><strong>{{ roleLabel('admin') }}</strong></span>
           </label>
           <label class="choice">
-            <input v-model="inviteRole" type="radio" value="member">
+            <input
+              v-model="inviteRole"
+              type="radio"
+              value="member"
+            >
             <span><strong>{{ roleLabel('member') }}</strong></span>
           </label>
           <label class="choice">
-            <input v-model="inviteRole" type="radio" value="viewer">
+            <input
+              v-model="inviteRole"
+              type="radio"
+              value="viewer"
+            >
             <span><strong>{{ roleLabel('viewer') }}</strong></span>
           </label>
         </div>
         <div class="modal-foot">
-          <button type="button" class="btn btn-ghost" @click="closeInviteModal">Отмена</button>
-          <button type="button" class="btn" @click="createInvite">Создать ссылку</button>
+          <button
+            type="button"
+            class="btn btn-ghost"
+            @click="closeInviteModal"
+          >
+            Отмена
+          </button>
+          <button
+            type="button"
+            class="btn"
+            @click="createInvite"
+          >
+            Создать ссылку
+          </button>
         </div>
       </template>
       <template v-else>
         <div class="link-box">
-          <input class="input" :value="inviteUrl" readonly>
+          <input
+            class="input"
+            :value="inviteUrl"
+            readonly
+          >
         </div>
         <div class="modal-foot">
-          <button type="button" class="btn btn-ghost" @click="copyInviteUrl">
+          <button
+            type="button"
+            class="btn btn-ghost"
+            @click="copyInviteUrl"
+          >
             {{ inviteCopied ? 'Скопировано' : 'Копировать' }}
           </button>
-          <button type="button" class="btn" @click="closeInviteModal">Готово</button>
+          <button
+            type="button"
+            class="btn"
+            @click="closeInviteModal"
+          >
+            Готово
+          </button>
         </div>
       </template>
     </ModalDialog>
@@ -804,11 +901,19 @@ async function confirmRevoke(): Promise<void> {
     >
       <div class="choice-list choice-list--row">
         <label class="choice">
-          <input v-model="projectSource" type="radio" value="blank">
+          <input
+            v-model="projectSource"
+            type="radio"
+            value="blank"
+          >
           <span><strong>Обычный</strong></span>
         </label>
         <label class="choice">
-          <input v-model="projectSource" type="radio" value="trello">
+          <input
+            v-model="projectSource"
+            type="radio"
+            value="trello"
+          >
           <span><strong>Из Trello</strong></span>
         </label>
       </div>
@@ -821,7 +926,10 @@ async function confirmRevoke(): Promise<void> {
           placeholder="Название проекта…"
         >
       </div>
-      <div v-if="projectSource === 'trello'" class="field">
+      <div
+        v-if="projectSource === 'trello'"
+        class="field"
+      >
         <p class="muted mb-16">
           В Trello откройте доску → меню → Печать, экспорт
           и публикация → Экспортировать как JSON.
@@ -835,11 +943,18 @@ async function confirmRevoke(): Promise<void> {
           @change="onTrelloFile"
         >
       </div>
-      <p v-if="trelloError || teams.error" class="warn">
+      <p
+        v-if="trelloError || teams.error"
+        class="warn"
+      >
         {{ trelloError || teams.error }}
       </p>
       <div class="modal-foot">
-        <button type="button" class="btn btn-ghost" @click="closeProjectModal">
+        <button
+          type="button"
+          class="btn btn-ghost"
+          @click="closeProjectModal"
+        >
           Отмена
         </button>
         <button
@@ -874,7 +989,11 @@ async function confirmRevoke(): Promise<void> {
         >
           Отмена
         </button>
-        <button type="button" class="btn btn-danger" @click="confirmMemberAction">
+        <button
+          type="button"
+          class="btn btn-danger"
+          @click="confirmMemberAction"
+        >
           {{ memberAction === 'leave' ? 'Выйти' : 'Исключить' }}
         </button>
       </div>
@@ -889,10 +1008,18 @@ async function confirmRevoke(): Promise<void> {
         Ссылка с ролью {{ roleLabel(revokeInviteRole) }} перестанет работать.
       </p>
       <div class="modal-foot">
-        <button type="button" class="btn btn-ghost" @click="revokeOpen = false">
+        <button
+          type="button"
+          class="btn btn-ghost"
+          @click="revokeOpen = false"
+        >
           Отмена
         </button>
-        <button type="button" class="btn btn-danger" @click="confirmRevoke">
+        <button
+          type="button"
+          class="btn btn-danger"
+          @click="confirmRevoke"
+        >
           Отозвать
         </button>
       </div>
@@ -905,7 +1032,10 @@ async function confirmRevoke(): Promise<void> {
         :style="menuPosition"
         @click.stop
       >
-        <button type="button" @click="duplicateProject">
+        <button
+          type="button"
+          @click="duplicateProject"
+        >
           Дублировать
         </button>
         <button
@@ -935,17 +1065,39 @@ async function confirmRevoke(): Promise<void> {
         >
           Отмена
         </button>
-        <button type="button" class="btn btn-danger" @click="confirmProjectDelete">
+        <button
+          type="button"
+          class="btn btn-danger"
+          @click="confirmProjectDelete"
+        >
           Удалить
         </button>
       </div>
     </ModalDialog>
 
-    <ModalDialog :open="deleteOpen" title="Удалить команду" @close="deleteOpen = false">
-      <p class="muted mb-16">Каскадом удалятся проекты и доски.</p>
+    <ModalDialog
+      :open="deleteOpen"
+      title="Удалить команду"
+      @close="deleteOpen = false"
+    >
+      <p class="muted mb-16">
+        Каскадом удалятся проекты и доски.
+      </p>
       <div class="modal-foot">
-        <button type="button" class="btn btn-ghost" @click="deleteOpen = false">Отмена</button>
-        <button type="button" class="btn btn-danger" @click="removeTeam">Удалить</button>
+        <button
+          type="button"
+          class="btn btn-ghost"
+          @click="deleteOpen = false"
+        >
+          Отмена
+        </button>
+        <button
+          type="button"
+          class="btn btn-danger"
+          @click="removeTeam"
+        >
+          Удалить
+        </button>
       </div>
     </ModalDialog>
   </section>

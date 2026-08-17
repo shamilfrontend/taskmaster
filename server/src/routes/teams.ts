@@ -14,12 +14,13 @@ import { TeamModel } from '../models/team.js';
 import { TeamMemberModel } from '../models/team-member.js';
 import { UserModel } from '../models/user.js';
 import { deleteTeamCascade, unassignUserInTeam } from '../services/cascade.js';
+import { recalcAssigneePlans } from '../services/plan.js';
 import { createDefaultBoard } from '../services/project-setup.js';
 import { importTrelloBoard } from '../services/trello-import.js';
 import { DEFAULT_ROLE_RATES } from '../constants.js';
 import {
   createInviteToken,
-  hashToken
+  hashToken,
 } from '../utils/crypto.js';
 import {
   asObjectId,
@@ -29,7 +30,7 @@ import {
   readInviteRole,
   readOptionalNumber,
   readString,
-  readTeamRole
+  readTeamRole,
 } from '../utils/validate.js';
 import type { TeamRole } from '../constants.js';
 
@@ -81,21 +82,21 @@ teamsRouter.get(
   '/',
   asyncHandler(async (req: Request, res: Response) => {
     const memberships = await TeamMemberModel.find({
-      userId: asObjectId(req.userId)
+      userId: asObjectId(req.userId),
     }).lean();
     const teamIds = memberships.map((item) => item.teamId);
     const teams = await TeamModel.find({ _id: { $in: teamIds } }).lean();
     const projects = await ProjectModel.find({
-      teamId: { $in: teamIds }
+      teamId: { $in: teamIds },
     }).lean();
     const allMembers = await TeamMemberModel.find({
-      teamId: { $in: teamIds }
+      teamId: { $in: teamIds },
     }).lean();
 
     res.json(
       teams.map((team) => {
         const membership = memberships.find(
-          (item) => item.teamId.toString() === team._id.toString()
+          (item) => item.teamId.toString() === team._id.toString(),
         );
 
         return {
@@ -103,15 +104,15 @@ teamsRouter.get(
           name: team.name,
           role: membership?.role ?? 'viewer',
           memberCount: allMembers.filter(
-            (item) => item.teamId.toString() === team._id.toString()
+            (item) => item.teamId.toString() === team._id.toString(),
           ).length,
           projectCount: projects.filter(
-            (item) => item.teamId.toString() === team._id.toString()
-          ).length
+            (item) => item.teamId.toString() === team._id.toString(),
+          ).length,
         };
-      })
+      }),
     );
-  })
+  }),
 );
 
 teamsRouter.post(
@@ -123,11 +124,11 @@ teamsRouter.post(
     await TeamMemberModel.create({
       teamId: team._id,
       userId: asObjectId(req.userId),
-      role: 'owner'
+      role: 'owner',
     });
 
     res.status(201).json({ id: team._id.toString(), name: team.name, role: 'owner' });
-  })
+  }),
 );
 
 teamsRouter.post(
@@ -151,7 +152,7 @@ teamsRouter.post(
       budgetLimit,
       roleRates: DEFAULT_ROLE_RATES,
       releasesEnabled: false,
-      budgetEnabled: false
+      budgetEnabled: false,
     });
 
     await createDefaultBoard(project._id);
@@ -159,9 +160,9 @@ teamsRouter.post(
     res.status(201).json({
       id: project._id.toString(),
       name: project.name,
-      budgetLimit: project.budgetLimit
+      budgetLimit: project.budgetLimit,
     });
-  })
+  }),
 );
 
 teamsRouter.post(
@@ -177,15 +178,15 @@ teamsRouter.post(
       throw new AppError(400, 'Некорректное тело запроса');
     }
 
-    const board = (req.body as Record<string, unknown>).board;
+    const { board } = (req.body as Record<string, unknown>);
     const project = await importTrelloBoard({
       teamId: asObjectId(teamId),
       name,
-      board
+      board,
     });
 
     res.status(201).json(project);
-  })
+  }),
 );
 
 teamsRouter.get(
@@ -201,20 +202,20 @@ teamsRouter.get(
       .select({ _id: 1 })
       .lean();
     const boards = await BoardModel.find({
-      projectId: { $in: projects.map((project) => project._id) }
+      projectId: { $in: projects.map((project) => project._id) },
     }).lean();
     const boardIds = boards.map((board) => board._id);
     const boardProjectMap = new Map(
       boards.map((board) => [
         board._id.toString(),
-        board.projectId.toString()
-      ])
+        board.projectId.toString(),
+      ]),
     );
 
     const events = await ActivityEventModel.find({
       teamId: teamObjectId,
       kind: { $ne: 'comment_added' },
-      ...(before ? { createdAt: { $lt: before } } : {})
+      ...(before ? { createdAt: { $lt: before } } : {}),
     })
       .sort({ createdAt: -1 })
       .limit(fetchLimit)
@@ -229,14 +230,14 @@ teamsRouter.get(
         {
           title: card.title,
           boardId: card.boardId.toString(),
-          projectId: boardProjectMap.get(card.boardId.toString()) ?? ''
-        }
-      ])
+          projectId: boardProjectMap.get(card.boardId.toString()) ?? '',
+        },
+      ]),
     );
 
     const comments = await CommentModel.find({
       cardId: { $in: cards.map((card) => card._id) },
-      ...(before ? { createdAt: { $lt: before } } : {})
+      ...(before ? { createdAt: { $lt: before } } : {}),
     })
       .sort({ createdAt: -1 })
       .limit(fetchLimit)
@@ -245,14 +246,14 @@ teamsRouter.get(
     const actorIds = [
       ...new Set([
         ...events.map((event) => event.actorId.toString()),
-        ...comments.map((comment) => comment.userId.toString())
-      ])
+        ...comments.map((comment) => comment.userId.toString()),
+      ]),
     ];
     const actors = await UserModel.find({
-      _id: { $in: actorIds.map((id) => asObjectId(id)) }
+      _id: { $in: actorIds.map((id) => asObjectId(id)) },
     }).lean();
     const actorMap = new Map(
-      actors.map((user) => [user._id.toString(), user.displayName])
+      actors.map((user) => [user._id.toString(), user.displayName]),
     );
 
     const activityFromEvents = events.map((event) => ({
@@ -265,7 +266,7 @@ teamsRouter.get(
       projectId: event.projectId.toString(),
       actorId: event.actorId.toString(),
       actorName: actorMap.get(event.actorId.toString()) ?? '',
-      createdAt: event.createdAt
+      createdAt: event.createdAt,
     }));
 
     const activityFromComments = comments.flatMap((comment) => {
@@ -286,20 +287,19 @@ teamsRouter.get(
           projectId: card.projectId,
           actorId: comment.userId.toString(),
           actorName: actorMap.get(comment.userId.toString()) ?? '',
-          createdAt: comment.createdAt
-        }
+          createdAt: comment.createdAt,
+        },
       ];
     });
 
     const merged = [...activityFromEvents, ...activityFromComments].sort(
-      (left, right) =>
-        new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+      (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
     );
     const hasMore = merged.length > ACTIVITY_LIMIT;
     const items = merged.slice(0, ACTIVITY_LIMIT);
 
     res.json({ items, hasMore });
-  })
+  }),
 );
 
 teamsRouter.get(
@@ -314,10 +314,10 @@ teamsRouter.get(
     }
 
     const members = await TeamMemberModel.find({
-      teamId: team._id
+      teamId: team._id,
     }).lean();
     const users = await UserModel.find({
-      _id: { $in: members.map((item) => item.userId) }
+      _id: { $in: members.map((item) => item.userId) },
     }).lean();
     const userMap = new Map(users.map((user) => [user._id.toString(), user]));
 
@@ -326,11 +326,10 @@ teamsRouter.get(
       teamId: team._id,
       acceptedAt: null,
       revokedAt: null,
-      expiresAt: { $gt: new Date() }
+      expiresAt: { $gt: new Date() },
     }).lean();
 
-    const canSeeBudget =
-      membership.role === 'owner' || membership.role === 'admin';
+    const canSeeBudget = membership.role === 'owner' || membership.role === 'admin';
 
     res.json({
       id: team._id.toString(),
@@ -344,7 +343,7 @@ teamsRouter.get(
           role: item.role,
           displayName: user?.displayName ?? '',
           email: user?.email ?? '',
-          avatarUrl: user?.avatarUrl ?? ''
+          avatarUrl: user?.avatarUrl ?? '',
         };
       }),
       projects: projects.map((project) => ({
@@ -354,18 +353,18 @@ teamsRouter.get(
         budgetLimit:
           canSeeBudget && isFeatureOn(project.budgetEnabled)
             ? project.budgetLimit
-            : undefined
+            : undefined,
       })),
       invites:
         membership.role === 'owner' || membership.role === 'admin'
           ? invites.map((invite) => ({
-              id: invite._id.toString(),
-              role: invite.role,
-              expiresAt: invite.expiresAt
-            }))
-          : []
+            id: invite._id.toString(),
+            role: invite.role,
+            expiresAt: invite.expiresAt,
+          }))
+          : [],
     });
-  })
+  }),
 );
 
 teamsRouter.patch(
@@ -386,7 +385,7 @@ teamsRouter.patch(
     await team.save();
 
     res.json({ id: team._id.toString(), name: team.name });
-  })
+  }),
 );
 
 teamsRouter.delete(
@@ -404,7 +403,7 @@ teamsRouter.delete(
 
     await deleteTeamCascade(team._id);
     res.json({ ok: true });
-  })
+  }),
 );
 
 teamsRouter.patch(
@@ -421,7 +420,7 @@ teamsRouter.patch(
 
     const target = await TeamMemberModel.findOne({
       teamId: asObjectId(teamId),
-      userId: asObjectId(targetUserId, 'userId')
+      userId: asObjectId(targetUserId, 'userId'),
     });
 
     if (!target) {
@@ -432,10 +431,21 @@ teamsRouter.patch(
       throw new AppError(403, 'Недостаточно прав');
     }
 
+    const roleChanged = target.role !== nextRole;
     target.role = nextRole;
     await target.save();
+
+    if (roleChanged) {
+      const projects = await ProjectModel.find({ teamId: target.teamId })
+        .select('_id')
+        .lean();
+      await Promise.all(
+        projects.map((project) => recalcAssigneePlans(project._id, target.userId)),
+      );
+    }
+
     res.json({ ok: true, role: nextRole });
-  })
+  }),
 );
 
 teamsRouter.delete(
@@ -448,7 +458,7 @@ teamsRouter.delete(
 
     const target = await TeamMemberModel.findOne({
       teamId: asObjectId(teamId),
-      userId: asObjectId(targetUserId, 'userId')
+      userId: asObjectId(targetUserId, 'userId'),
     });
 
     if (!target) {
@@ -466,7 +476,7 @@ teamsRouter.delete(
     await unassignUserInTeam(asObjectId(teamId), target.userId);
     await target.deleteOne();
     res.json({ ok: true });
-  })
+  }),
 );
 
 teamsRouter.post(
@@ -486,16 +496,16 @@ teamsRouter.post(
       tokenHash: hashToken(raw),
       role,
       createdBy: asObjectId(req.userId),
-      expiresAt
+      expiresAt,
     });
 
     res.status(201).json({
       id: invite._id.toString(),
       token: raw,
       role: invite.role,
-      expiresAt: invite.expiresAt
+      expiresAt: invite.expiresAt,
     });
-  })
+  }),
 );
 
 teamsRouter.delete(
@@ -508,7 +518,7 @@ teamsRouter.delete(
 
     const invite = await InviteModel.findOne({
       _id: asObjectId(inviteId, 'inviteId'),
-      teamId: asObjectId(teamId)
+      teamId: asObjectId(teamId),
     });
 
     if (!invite || invite.acceptedAt || invite.revokedAt) {
@@ -518,5 +528,5 @@ teamsRouter.delete(
     invite.revokedAt = new Date();
     await invite.save();
     res.json({ ok: true });
-  })
+  }),
 );

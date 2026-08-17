@@ -33,22 +33,45 @@ async function create(): Promise<void> {
           <h1>Команды</h1>
           <p>Рабочие пространства, в которых вы состоите</p>
         </div>
-        <button type="button" class="btn" @click="modalOpen = true">
+        <button
+          type="button"
+          class="btn"
+          @click="modalOpen = true"
+        >
           Создать команду
         </button>
       </div>
-      <p v-if="teams.error" class="warn">{{ teams.error }}</p>
-      <p v-if="teams.isLoading && !teams.list.length" class="muted">Загрузка…</p>
+      <p
+        v-if="teams.error"
+        class="warn"
+      >
+        {{ teams.error }}
+      </p>
+      <p
+        v-if="teams.isLoading && !teams.list.length"
+        class="muted"
+      >
+        Загрузка…
+      </p>
       <div
         v-else-if="!teams.isLoading && !teams.list.length"
         class="panel"
       >
-        <p class="muted mb-16">Вы пока не состоите ни в одной команде.</p>
-        <button type="button" class="btn" @click="modalOpen = true">
+        <p class="muted mb-16">
+          Вы пока не состоите ни в одной команде.
+        </p>
+        <button
+          type="button"
+          class="btn"
+          @click="modalOpen = true"
+        >
           Создать команду
         </button>
       </div>
-      <div v-else class="panel">
+      <div
+        v-else
+        class="panel"
+      >
         <button
           v-for="team in teams.list"
           :key="team.id"
@@ -57,7 +80,9 @@ async function create(): Promise<void> {
           @click="router.push({ name: 'team', params: { teamId: team.id } })"
         >
           <span class="avatar">{{ initials(team.name) }}</span>
-          <div class="grow">{{ team.name }}</div>
+          <div class="grow">
+            {{ team.name }}
+          </div>
           <span class="muted">{{
             pluralRu(
               team.memberCount,
@@ -73,7 +98,11 @@ async function create(): Promise<void> {
         </button>
       </div>
     </div>
-    <ModalDialog :open="modalOpen" title="Создать команду" @close="modalOpen = false">
+    <ModalDialog
+      :open="modalOpen"
+      title="Создать команду"
+      @close="modalOpen = false"
+    >
       <div class="field">
         <label for="team-name">Название</label>
         <input
@@ -84,10 +113,23 @@ async function create(): Promise<void> {
           placeholder="Название команды…"
         >
       </div>
-      <p class="muted mb-16">Вы станете владельцем этой команды.</p>
+      <p class="muted mb-16">
+        Вы станете владельцем этой команды.
+      </p>
       <div class="modal-foot">
-        <button type="button" class="btn btn-ghost" @click="modalOpen = false">Отмена</button>
-        <button type="button" class="btn" :disabled="!name.trim() || teams.isLoading" @click="create">
+        <button
+          type="button"
+          class="btn btn-ghost"
+          @click="modalOpen = false"
+        >
+          Отмена
+        </button>
+        <button
+          type="button"
+          class="btn"
+          :disabled="!name.trim() || teams.isLoading"
+          @click="create"
+        >
           Создать
         </button>
       </div>

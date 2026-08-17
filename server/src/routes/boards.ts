@@ -6,7 +6,7 @@ import { requireAuth } from '../middleware/auth.js';
 import {
   requireMembership,
   teamIdFromBoard,
-  teamIdFromColumn
+  teamIdFromColumn,
 } from '../middleware/access.js';
 import { BoardModel } from '../models/board.js';
 import { CardModel } from '../models/card.js';
@@ -24,7 +24,7 @@ import {
   isFeatureOn,
   readLabelColor,
   readOptionalString,
-  readString
+  readString,
 } from '../utils/validate.js';
 
 export const boardsRouter = Router();
@@ -50,16 +50,16 @@ boardsRouter.get(
       .sort({ position: 1 })
       .lean();
     const releases = await ReleaseModel.find({
-      projectId: board.projectId
+      projectId: board.projectId,
     }).lean();
     const users = await UserModel.find({
-      _id: { $in: cards.map((card) => card.assigneeId).filter(Boolean) }
+      _id: { $in: cards.map((card) => card.assigneeId).filter(Boolean) },
     }).lean();
     const entries = await TimeEntryModel.find({
-      cardId: { $in: cards.map((card) => card._id) }
+      cardId: { $in: cards.map((card) => card._id) },
     }).lean();
     const commentRows = await CommentModel.find({
-      cardId: { $in: cards.map((card) => card._id) }
+      cardId: { $in: cards.map((card) => card._id) },
     })
       .select('cardId')
       .lean();
@@ -72,8 +72,7 @@ boardsRouter.get(
     const project = await ProjectModel.findById(board.projectId).lean();
     const releasesEnabled = isFeatureOn(project?.releasesEnabled);
 
-    const hideMoney =
-      membership.role === 'viewer' || !isFeatureOn(project?.budgetEnabled);
+    const hideMoney = membership.role === 'viewer' || !isFeatureOn(project?.budgetEnabled);
 
     res.json({
       id: board._id.toString(),
@@ -84,19 +83,19 @@ boardsRouter.get(
         id: column._id.toString(),
         name: column.name,
         position: column.position,
-        isDone: column.isDone
+        isDone: column.isDone,
       })),
       labels: labels.map((label) => ({
         id: label._id.toString(),
         name: label.name,
-        color: label.color
+        color: label.color,
       })),
       releases: releasesEnabled
         ? releases.map((release) => ({
-            id: release._id.toString(),
-            name: release.name,
-            status: release.status
-          }))
+          id: release._id.toString(),
+          name: release.name,
+          status: release.status,
+        }))
         : [],
       cards: cards.map((card) => {
         const factHours = entries
@@ -105,23 +104,21 @@ boardsRouter.get(
         const factAmount = entries
           .filter((entry) => entry.cardId.toString() === card._id.toString())
           .reduce((sum, entry) => sum + entry.amount, 0);
-        const isOwn =
-          card.assigneeId?.toString() === req.userId;
-        const showMoney =
-          !hideMoney &&
-          (membership.role === 'owner' ||
-            membership.role === 'admin' ||
-            isOwn);
+        const isOwn = card.assigneeId?.toString() === req.userId;
+        const showMoney = !hideMoney
+          && (membership.role === 'owner'
+            || membership.role === 'admin'
+            || isOwn);
         const assignee = users.find(
-          (user) => user._id.toString() === card.assigneeId?.toString()
+          (user) => user._id.toString() === card.assigneeId?.toString(),
         );
         const release = releasesEnabled
           ? releases.find(
-              (item) => item._id.toString() === card.releaseId?.toString()
-            )
+            (item) => item._id.toString() === card.releaseId?.toString(),
+          )
           : undefined;
         const checklistItems = (card.checklists ?? []).flatMap(
-          (list) => list.items
+          (list) => list.items,
         );
 
         return {
@@ -143,11 +140,11 @@ boardsRouter.get(
           commentCount: commentCountByCard.get(card._id.toString()) ?? 0,
           checklistDone: checklistItems.filter((item) => item.done).length,
           checklistTotal: checklistItems.length,
-          position: card.position
+          position: card.position,
         };
-      })
+      }),
     });
-  })
+  }),
 );
 
 boardsRouter.patch(
@@ -167,7 +164,7 @@ boardsRouter.patch(
     board.name = readString(req.body, 'name');
     await board.save();
     res.json({ id: board._id.toString(), name: board.name });
-  })
+  }),
 );
 
 boardsRouter.delete(
@@ -179,7 +176,7 @@ boardsRouter.delete(
     assertRole(membership.role, ['owner', 'admin']);
     await deleteBoardCascade(asObjectId(boardId));
     res.json({ ok: true });
-  })
+  }),
 );
 
 boardsRouter.post(
@@ -198,16 +195,16 @@ boardsRouter.post(
       boardId: asObjectId(boardId),
       name: readString(req.body, 'name'),
       position: (last?.position ?? -1) + 1,
-      isDone: false
+      isDone: false,
     });
 
     res.status(201).json({
       id: column._id.toString(),
       name: column.name,
       position: column.position,
-      isDone: column.isDone
+      isDone: column.isDone,
     });
-  })
+  }),
 );
 
 boardsRouter.patch(
@@ -239,9 +236,9 @@ boardsRouter.patch(
       id: column._id.toString(),
       name: column.name,
       position: column.position,
-      isDone: column.isDone
+      isDone: column.isDone,
     });
-  })
+  }),
 );
 
 boardsRouter.delete(
@@ -259,7 +256,7 @@ boardsRouter.delete(
     }
 
     const count = await CardModel.countDocuments({
-      columnId: column._id
+      columnId: column._id,
     });
 
     if (count > 0) {
@@ -268,7 +265,7 @@ boardsRouter.delete(
 
     await ColumnModel.deleteOne({ _id: column._id });
     res.json({ ok: true });
-  })
+  }),
 );
 
 boardsRouter.post(
@@ -282,15 +279,40 @@ boardsRouter.post(
     const label = await LabelModel.create({
       boardId: asObjectId(boardId),
       name: readString(req.body, 'name'),
-      color: readLabelColor(req.body, 'color')
+      color: readLabelColor(req.body, 'color'),
     });
 
     res.status(201).json({
       id: label._id.toString(),
       name: label.name,
-      color: label.color
+      color: label.color,
     });
-  })
+  }),
+);
+
+boardsRouter.patch(
+  '/labels/:labelId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const labelId = req.params.labelId as string;
+    const label = await LabelModel.findById(asObjectId(labelId, 'labelId'));
+
+    if (!label) {
+      throw new AppError(404, 'Метка не найдена');
+    }
+
+    const teamId = await teamIdFromBoard(label.boardId.toString());
+    const membership = await requireMembership(teamId, req.userId);
+    assertRole(membership.role, ['owner', 'admin']);
+
+    label.name = readString(req.body, 'name');
+    await label.save();
+
+    res.json({
+      id: label._id.toString(),
+      name: label.name,
+      color: label.color,
+    });
+  }),
 );
 
 boardsRouter.delete(
@@ -309,9 +331,9 @@ boardsRouter.delete(
 
     await CardModel.updateMany(
       { labelIds: label._id },
-      { $pull: { labelIds: label._id } }
+      { $pull: { labelIds: label._id } },
     );
     await LabelModel.deleteOne({ _id: label._id });
     res.json({ ok: true });
-  })
+  }),
 );

@@ -3,7 +3,7 @@ import { BarChart, LineChart, PieChart } from 'echarts/charts';
 import {
   GridComponent,
   LegendComponent,
-  TooltipComponent
+  TooltipComponent,
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import type { EChartsOption } from 'echarts';
@@ -17,7 +17,7 @@ use([
   LineChart,
   GridComponent,
   TooltipComponent,
-  LegendComponent
+  LegendComponent,
 ]);
 
 const TEXT = '#172b4d';
@@ -36,7 +36,7 @@ const STATUS_COLORS = [
   '#00c2e0',
   '#51e898',
   '#ff78cb',
-  '#344563'
+  '#344563',
 ];
 
 interface ChartTooltipItem {
@@ -57,8 +57,7 @@ interface WorkloadBarDatum {
 function tooltipItems(raw: unknown): ChartTooltipItem[] {
   if (Array.isArray(raw)) {
     return raw.filter(
-      (item): item is ChartTooltipItem =>
-        typeof item === 'object' && item !== null
+      (item): item is ChartTooltipItem => typeof item === 'object' && item !== null,
     );
   }
 
@@ -82,7 +81,7 @@ function weekLabel(value: string): string {
 
   return date.toLocaleDateString('ru-RU', {
     day: 'numeric',
-    month: 'short'
+    month: 'short',
   });
 }
 
@@ -91,12 +90,12 @@ function axisValue(): Record<string, unknown> {
     type: 'value',
     axisLabel: { color: MUTED, fontSize: 11 },
     axisLine: { show: false },
-    splitLine: { lineStyle: { color: SPLIT } }
+    splitLine: { lineStyle: { color: SPLIT } },
   };
 }
 
 export function statusPieOption(
-  rows: { columnId: string; name: string; count: number }[]
+  rows: { columnId: string; name: string; count: number }[],
 ): EChartsOption {
   const slices = rows.filter((row) => row.count > 0);
 
@@ -113,14 +112,14 @@ export function statusPieOption(
 
         const percent = item.percent ?? 0;
         return `${item.name ?? ''}: ${numericValue(item.value)} (${percent}%)`;
-      }
+      },
     },
     legend: {
       bottom: 0,
       icon: 'circle',
       itemWidth: 8,
       itemHeight: 8,
-      textStyle: { color: MUTED, fontSize: 12 }
+      textStyle: { color: MUTED, fontSize: 12 },
     },
     series: [
       {
@@ -131,22 +130,22 @@ export function statusPieOption(
         cursor: 'pointer',
         itemStyle: {
           borderColor: '#fff',
-          borderWidth: 2
+          borderWidth: 2,
         },
         label: { show: false },
         data: slices.map((row) => ({
           name: row.name,
           value: row.count,
-          columnId: row.columnId
-        }))
-      }
-    ]
+          columnId: row.columnId,
+        })),
+      },
+    ],
   };
 }
 
 export function weeksLineOption(
   weeks: { from: string; hours: number; amount?: number }[],
-  showMoney: boolean
+  showMoney: boolean,
 ): EChartsOption {
   const labels = weeks.map((week) => weekLabel(week.from));
   const hours = weeks.map((week) => week.hours);
@@ -161,60 +160,59 @@ export function weeksLineOption(
         const title = items[0]?.axisValue ?? '';
         const lines = items.map((item) => {
           const value = numericValue(item.value);
-          const formatted =
-            item.seriesName === 'Сумма'
-              ? formatMoney(value)
-              : `${value.toLocaleString('ru-RU')} ч`;
+          const formatted = item.seriesName === 'Сумма'
+            ? formatMoney(value)
+            : `${value.toLocaleString('ru-RU')} ч`;
 
           return `${item.marker ?? ''}${item.seriesName ?? ''}: ${formatted}`;
         });
 
         return [title, ...lines].join('<br/>');
-      }
+      },
     },
     legend: showMoney
       ? {
-          top: 0,
-          icon: 'circle',
-          itemWidth: 8,
-          itemHeight: 8,
-          textStyle: { color: MUTED, fontSize: 12 }
-        }
+        top: 0,
+        icon: 'circle',
+        itemWidth: 8,
+        itemHeight: 8,
+        textStyle: { color: MUTED, fontSize: 12 },
+      }
       : undefined,
     grid: {
       left: 48,
       right: showMoney ? 56 : 16,
       top: showMoney ? 36 : 16,
-      bottom: 28
+      bottom: 28,
     },
     xAxis: {
       type: 'category',
       data: labels,
       axisLabel: { color: MUTED, fontSize: 11 },
       axisLine: { lineStyle: { color: BORDER } },
-      axisTick: { show: false }
+      axisTick: { show: false },
     },
     yAxis: showMoney
       ? [
-          {
-            ...axisValue(),
-            name: 'ч',
-            nameTextStyle: { color: MUTED, fontSize: 11 }
-          },
-          {
-            ...axisValue(),
-            name: '₽',
-            nameTextStyle: { color: MUTED, fontSize: 11 },
-            splitLine: { show: false }
-          }
-        ]
+        {
+          ...axisValue(),
+          name: 'ч',
+          nameTextStyle: { color: MUTED, fontSize: 11 },
+        },
+        {
+          ...axisValue(),
+          name: '₽',
+          nameTextStyle: { color: MUTED, fontSize: 11 },
+          splitLine: { show: false },
+        },
+      ]
       : [
-          {
-            ...axisValue(),
-            name: 'ч',
-            nameTextStyle: { color: MUTED, fontSize: 11 }
-          }
-        ],
+        {
+          ...axisValue(),
+          name: 'ч',
+          nameTextStyle: { color: MUTED, fontSize: 11 },
+        },
+      ],
     series: [
       {
         name: 'Часы',
@@ -223,32 +221,32 @@ export function weeksLineOption(
         symbol: 'circle',
         symbolSize: 6,
         data: hours,
-        areaStyle: { opacity: 0.12 }
+        areaStyle: { opacity: 0.12 },
       },
       ...(showMoney
         ? [
-            {
-              name: 'Сумма',
-              type: 'line' as const,
-              yAxisIndex: 1,
-              smooth: true,
-              symbol: 'circle',
-              symbolSize: 6,
-              data: amounts
-            }
-          ]
-        : [])
-    ]
+          {
+            name: 'Сумма',
+            type: 'line' as const,
+            yAxisIndex: 1,
+            smooth: true,
+            symbol: 'circle',
+            symbolSize: 6,
+            data: amounts,
+          },
+        ]
+        : []),
+    ],
   };
 }
 
 export function workloadBarOption(
-  rows: { displayName: string; hours: number; amount?: number }[]
+  rows: { displayName: string; hours: number; amount?: number }[],
 ): EChartsOption {
   const names = rows.map((row) => row.displayName);
   const data: WorkloadBarDatum[] = rows.map((row) => ({
     value: row.hours,
-    amount: row.amount
+    amount: row.amount,
   }));
 
   return {
@@ -264,28 +262,27 @@ export function workloadBarOption(
         }
 
         const hours = numericValue(item.value);
-        const extra =
-          typeof item.data === 'object' &&
-          item.data !== null &&
-          'amount' in item.data &&
-          typeof item.data.amount === 'number'
-            ? `<br/>${formatMoney(item.data.amount)}`
-            : '';
+        const extra = typeof item.data === 'object'
+          && item.data !== null
+          && 'amount' in item.data
+          && typeof item.data.amount === 'number'
+          ? `<br/>${formatMoney(item.data.amount)}`
+          : '';
 
         return `${item.name ?? ''}<br/>${hours.toLocaleString('ru-RU')} ч${extra}`;
-      }
+      },
     },
     grid: {
       left: 120,
       right: 56,
       top: 8,
-      bottom: 8
+      bottom: 8,
     },
     xAxis: {
       type: 'value',
       axisLabel: { color: MUTED, fontSize: 11 },
       axisLine: { show: false },
-      splitLine: { lineStyle: { color: SPLIT } }
+      splitLine: { lineStyle: { color: SPLIT } },
     },
     yAxis: {
       type: 'category',
@@ -294,10 +291,10 @@ export function workloadBarOption(
         color: TEXT,
         fontSize: 12,
         width: 108,
-        overflow: 'truncate'
+        overflow: 'truncate',
       },
       axisLine: { show: false },
-      axisTick: { show: false }
+      axisTick: { show: false },
     },
     series: [
       {
@@ -313,10 +310,10 @@ export function workloadBarOption(
           formatter: (raw: unknown) => {
             const item = raw as ChartTooltipItem;
             return `${numericValue(item.value)} ч`;
-          }
-        }
-      }
-    ]
+          },
+        },
+      },
+    ],
   };
 }
 

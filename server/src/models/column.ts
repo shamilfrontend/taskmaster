@@ -13,9 +13,9 @@ const columnSchema = new Schema<ColumnPojo>(
     boardId: { type: Schema.Types.ObjectId, ref: 'Board', required: true },
     name: { type: String, required: true },
     position: { type: Number, required: true },
-    isDone: { type: Boolean, required: true, default: false }
+    isDone: { type: Boolean, required: true, default: false },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 columnSchema.index({ boardId: 1, position: 1 });

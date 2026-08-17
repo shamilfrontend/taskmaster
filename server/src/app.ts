@@ -19,12 +19,12 @@ export function createApp() {
   app.use(
     cors({
       origin: config.frontendUrl,
-      credentials: true
-    })
+      credentials: true,
+    }),
   );
   app.use(
     '/api/teams/:teamId/projects/from-trello',
-    express.json({ limit: '10mb' })
+    express.json({ limit: '10mb' }),
   );
   app.use(express.json());
   app.use(cookieParser());

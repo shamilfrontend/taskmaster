@@ -12,9 +12,9 @@ const commentSchema = new Schema<CommentPojo>(
   {
     cardId: { type: Schema.Types.ObjectId, ref: 'Card', required: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    body: { type: String, required: true }
+    body: { type: String, required: true },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 commentSchema.index({ cardId: 1, createdAt: 1 });

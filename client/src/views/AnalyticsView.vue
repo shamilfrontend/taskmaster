@@ -5,15 +5,15 @@ import VChart from 'vue-echarts';
 import { useProjectStore } from '../stores/project.ts';
 import {
   boardBackgroundStyle,
-  findBoardBackground
+  findBoardBackground,
 } from '../composables/board-backgrounds.ts';
 import {
   statusPieOption,
   weeksLineOption,
   workloadBarOption,
-  workloadChartHeight
+  workloadChartHeight,
 } from '../composables/analytics-charts.ts';
-import { formatDate, formatMoney } from '../composables/format.ts';
+import { formatMoney } from '../composables/format.ts';
 import { useProjectTabs } from '../composables/project-tabs.ts';
 import PageTabs from '../components/PageTabs.vue';
 import type { AnalyticsPeriod, AnalyticsRiskKind } from '../types/index.ts';
@@ -23,6 +23,34 @@ const router = useRouter();
 const projects = useProjectStore();
 const projectId = computed(() => String(route.params.projectId));
 const period = ref<AnalyticsPeriod>('30d');
+const rangeFrom = ref('');
+const rangeTo = ref('');
+
+function toDateInput(value: string | Date | null | undefined): string {
+  if (!value) {
+    return '';
+  }
+
+  const date = typeof value === 'string' ? new Date(value) : value;
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function syncRangeFromPayload(): void {
+  if (!projects.analytics) {
+    return;
+  }
+
+  rangeFrom.value = toDateInput(projects.analytics.from);
+  rangeTo.value = toDateInput(projects.analytics.to);
+}
 
 watch(
   projectId,
@@ -33,24 +61,51 @@ watch(
 
     void load();
   },
-  { immediate: true }
+  { immediate: true },
 );
+
+async function requestAnalytics(): Promise<void> {
+  if (period.value === 'custom') {
+    await projects.fetchAnalytics(projectId.value, 'custom', {
+      from: rangeFrom.value,
+      to: rangeTo.value,
+    });
+  } else {
+    await projects.fetchAnalytics(projectId.value, period.value);
+  }
+
+  syncRangeFromPayload();
+}
 
 async function load(): Promise<void> {
   projects.analytics = null;
   await Promise.all([
     projects.fetchOne(projectId.value),
-    projects.fetchAnalytics(projectId.value, period.value)
+    requestAnalytics(),
   ]);
 }
 
 async function setPeriod(next: AnalyticsPeriod): Promise<void> {
-  if (period.value === next || projects.isLoading) {
+  if (next === 'custom' || period.value === next || projects.isLoading) {
     return;
   }
 
   period.value = next;
-  await projects.fetchAnalytics(projectId.value, period.value);
+  await requestAnalytics();
+}
+
+async function applyCustomRange(): Promise<void> {
+  if (
+    !rangeFrom.value
+    || !rangeTo.value
+    || rangeFrom.value > rangeTo.value
+    || projects.isLoading
+  ) {
+    return;
+  }
+
+  period.value = 'custom';
+  await requestAnalytics();
 }
 
 function barWidth(count: number, max: number): string {
@@ -65,7 +120,7 @@ function openBoard(query: Record<string, string> = {}): void {
   void router.push({
     name: 'project',
     params: { projectId: projectId.value },
-    query
+    query,
   });
 }
 
@@ -113,12 +168,10 @@ function riskKindLabel(kind: AnalyticsRiskKind): string {
 }
 
 const selectedBackground = computed(
-  () => projects.current?.boardBackground ?? 'default'
+  () => projects.current?.boardBackground ?? 'default',
 );
 
-const hasBoardPhoto = computed(() =>
-  Boolean(findBoardBackground(selectedBackground.value).full)
-);
+const hasBoardPhoto = computed(() => Boolean(findBoardBackground(selectedBackground.value).full));
 
 const boardStyle = computed(() => {
   if (!hasBoardPhoto.value) {
@@ -132,11 +185,10 @@ const tabs = useProjectTabs(
   projectId,
   computed(() => projects.current?.role ?? projects.analytics?.role),
   computed(
-    () =>
-      projects.current?.releasesEnabled ??
-      projects.analytics?.releasesEnabled ??
-      false
-  )
+    () => projects.current?.releasesEnabled
+      ?? projects.analytics?.releasesEnabled
+      ?? false,
+  ),
 );
 
 const statusOption = computed(() => {
@@ -153,8 +205,8 @@ const showWeekMoney = computed(() => {
   const data = projects.analytics;
 
   return Boolean(
-    data?.budgetEnabled &&
-      data.weeks.some((week) => week.amount !== undefined)
+    data?.budgetEnabled
+      && data.weeks.some((week) => week.amount !== undefined),
   );
 });
 
@@ -168,9 +220,9 @@ const weeksOption = computed(() => {
   return weeksLineOption(weeks, showWeekMoney.value);
 });
 
-const activeWorkload = computed(() =>
-  (projects.analytics?.workload ?? []).filter((row) => row.hours > 0)
-);
+const activeWorkload = computed(() => (
+  projects.analytics?.workload ?? []
+).filter((row) => row.hours > 0));
 
 const workloadOption = computed(() => {
   if (!activeWorkload.value.length) {
@@ -180,12 +232,10 @@ const workloadOption = computed(() => {
   return workloadBarOption(activeWorkload.value);
 });
 
-const workloadHeight = computed(() =>
-  workloadChartHeight(activeWorkload.value.length)
-);
+const workloadHeight = computed(() => workloadChartHeight(activeWorkload.value.length));
 
 const showPlanMoney = computed(
-  () => projects.analytics?.planVsFact.planAmount !== undefined
+  () => projects.analytics?.planVsFact.planAmount !== undefined,
 );
 
 const hasBurnMeter = computed(() => {
@@ -272,13 +322,42 @@ const hasBurnMeter = computed(() => {
             5 лет
           </button>
         </div>
-        <p v-if="projects.analytics" class="muted">
-          {{ formatDate(projects.analytics.from) }} –
-          {{ formatDate(projects.analytics.to) }}
-        </p>
+        <div
+          v-if="projects.analytics"
+          class="analytics-range"
+          :class="{ 'is-active': period === 'custom' }"
+        >
+          <input
+            v-model="rangeFrom"
+            class="input"
+            type="date"
+            :max="rangeTo || undefined"
+            :disabled="projects.isLoading"
+            aria-label="Дата начала"
+            @change="applyCustomRange"
+          >
+          <span class="muted">–</span>
+          <input
+            v-model="rangeTo"
+            class="input"
+            type="date"
+            :min="rangeFrom || undefined"
+            :disabled="projects.isLoading"
+            aria-label="Дата конца"
+            @change="applyCustomRange"
+          >
+        </div>
       </div>
-      <p v-if="projects.error" class="warn">{{ projects.error }}</p>
-      <p v-if="projects.isLoading && !projects.analytics" class="muted">
+      <p
+        v-if="projects.error"
+        class="warn"
+      >
+        {{ projects.error }}
+      </p>
+      <p
+        v-if="projects.isLoading && !projects.analytics"
+        class="muted"
+      >
         Загрузка…
       </p>
       <template v-else-if="projects.analytics">
@@ -288,32 +367,48 @@ const hasBurnMeter = computed(() => {
             class="panel stat"
             @click="openBoard()"
           >
-            <div class="label">Карточки</div>
-            <div class="value">{{ projects.analytics.summary.cards }}</div>
+            <div class="label">
+              Карточки
+            </div>
+            <div class="value">
+              {{ projects.analytics.summary.cards }}
+            </div>
           </button>
           <button
             type="button"
             class="panel stat"
             @click="openBoard({ due: 'overdue' })"
           >
-            <div class="label">Просрочено</div>
-            <div class="value neg">{{ projects.analytics.summary.overdue }}</div>
+            <div class="label">
+              Просрочено
+            </div>
+            <div class="value neg">
+              {{ projects.analytics.summary.overdue }}
+            </div>
           </button>
           <button
             type="button"
             class="panel stat"
             @click="openBoard({ assignee: 'none' })"
           >
-            <div class="label">Без исполнителя</div>
-            <div class="value">{{ projects.analytics.summary.noAssignee }}</div>
+            <div class="label">
+              Без исполнителя
+            </div>
+            <div class="value">
+              {{ projects.analytics.summary.noAssignee }}
+            </div>
           </button>
           <button
             type="button"
             class="panel stat"
             @click="openBoard({ estimate: 'none' })"
           >
-            <div class="label">Без оценки</div>
-            <div class="value">{{ projects.analytics.summary.noEstimate }}</div>
+            <div class="label">
+              Без оценки
+            </div>
+            <div class="value">
+              {{ projects.analytics.summary.noEstimate }}
+            </div>
           </button>
           <button
             v-if="projects.analytics.releasesEnabled"
@@ -321,14 +416,20 @@ const hasBurnMeter = computed(() => {
             class="panel stat"
             @click="openBoard({ release: 'none' })"
           >
-            <div class="label">Без релиза</div>
-            <div class="value">{{ projects.analytics.summary.noRelease }}</div>
+            <div class="label">
+              Без релиза
+            </div>
+            <div class="value">
+              {{ projects.analytics.summary.noRelease }}
+            </div>
           </button>
           <div
             v-if="projects.analytics.summary.factAmount !== undefined"
             class="panel stat"
           >
-            <div class="label">Факт за период</div>
+            <div class="label">
+              Факт за период
+            </div>
             <div class="value">
               {{ formatMoney(projects.analytics.summary.factAmount) }}
             </div>
@@ -346,7 +447,12 @@ const hasBurnMeter = computed(() => {
               autoresize
               @click="onStatusClick"
             />
-            <p v-else class="muted">Нет карточек</p>
+            <p
+              v-else
+              class="muted"
+            >
+              Нет карточек
+            </p>
           </div>
           <div class="panel">
             <div class="panel-head">
@@ -358,7 +464,12 @@ const hasBurnMeter = computed(() => {
               :option="weeksOption"
               autoresize
             />
-            <p v-else class="muted">Нет списаний за период</p>
+            <p
+              v-else
+              class="muted"
+            >
+              Нет списаний за период
+            </p>
           </div>
         </div>
         <div class="grid-2 mb-16">
@@ -373,7 +484,12 @@ const hasBurnMeter = computed(() => {
               :option="workloadOption"
               autoresize
             />
-            <p v-else class="muted">Нет списаний за период</p>
+            <p
+              v-else
+              class="muted"
+            >
+              Нет списаний за период
+            </p>
           </div>
           <div class="panel">
             <div class="panel-head">
@@ -405,7 +521,10 @@ const hasBurnMeter = computed(() => {
                 />
               </div>
             </div>
-            <div v-if="showPlanMoney" class="meter">
+            <div
+              v-if="showPlanMoney"
+              class="meter"
+            >
               <div class="meter-head">
                 <span>Сумма</span>
                 <span>
@@ -434,7 +553,10 @@ const hasBurnMeter = computed(() => {
             <p class="muted tight">
               План — все карточки, факт — выбранный период
             </p>
-            <div v-if="hasBurnMeter && projects.analytics.burn" class="meter">
+            <div
+              v-if="hasBurnMeter && projects.analytics.burn"
+              class="meter"
+            >
               <div class="meter-head">
                 <span>Бюджет</span>
                 <span>
@@ -470,7 +592,10 @@ const hasBurnMeter = computed(() => {
           </div>
         </div>
         <div :class="{ 'grid-2': projects.analytics.releasesEnabled }">
-          <div v-if="projects.analytics.releasesEnabled" class="panel">
+          <div
+            v-if="projects.analytics.releasesEnabled"
+            class="panel"
+          >
             <div class="panel-head">
               <h2>Релизы</h2>
             </div>
@@ -522,7 +647,10 @@ const hasBurnMeter = computed(() => {
               class="list-row"
               @click="openRisk(risk.cardId)"
             >
-              <span class="kind-dot" :class="`kind-dot--${risk.kind}`" />
+              <span
+                class="kind-dot"
+                :class="`kind-dot--${risk.kind}`"
+              />
               <div class="grow">
                 <div>{{ risk.title }}</div>
                 <div class="muted">
@@ -534,7 +662,10 @@ const hasBurnMeter = computed(() => {
                 </div>
               </div>
             </button>
-            <p v-if="!projects.analytics.risks.length" class="muted">
+            <p
+              v-if="!projects.analytics.risks.length"
+              class="muted"
+            >
               Рисков нет
             </p>
           </div>
@@ -668,6 +799,20 @@ button.stat:hover {
   margin-bottom: 16px;
 }
 
+.analytics-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  .input {
+    width: auto;
+  }
+
+  &.is-active .input {
+    border-color: var(--blue);
+  }
+}
+
 .filter {
   display: flex;
   gap: 4px;
@@ -691,6 +836,11 @@ button.stat:hover {
 .board-screen.has-photo {
   .analytics-bar .muted {
     color: rgb(255 255 255 / 80%);
+  }
+
+  .analytics-range .input {
+    background: var(--surface);
+    color: var(--text);
   }
 
   .filter {

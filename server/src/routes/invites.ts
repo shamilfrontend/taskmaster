@@ -15,14 +15,14 @@ invitesRouter.get(
   asyncHandler(async (req: Request, res: Response) => {
     const token = req.params.token as string;
     const invite = await InviteModel.findOne({
-      tokenHash: hashToken(token)
+      tokenHash: hashToken(token),
     }).lean();
 
     if (
-      !invite ||
-      invite.acceptedAt ||
-      invite.revokedAt ||
-      invite.expiresAt < new Date()
+      !invite
+      || invite.acceptedAt
+      || invite.revokedAt
+      || invite.expiresAt < new Date()
     ) {
       throw new AppError(404, 'Ссылка недействительна');
     }
@@ -32,9 +32,9 @@ invitesRouter.get(
     res.json({
       teamName: team?.name ?? '',
       role: invite.role,
-      expiresAt: invite.expiresAt
+      expiresAt: invite.expiresAt,
     });
-  })
+  }),
 );
 
 invitesRouter.post(
@@ -43,21 +43,21 @@ invitesRouter.post(
   asyncHandler(async (req: Request, res: Response) => {
     const token = req.params.token as string;
     const invite = await InviteModel.findOne({
-      tokenHash: hashToken(token)
+      tokenHash: hashToken(token),
     });
 
     if (
-      !invite ||
-      invite.acceptedAt ||
-      invite.revokedAt ||
-      invite.expiresAt < new Date()
+      !invite
+      || invite.acceptedAt
+      || invite.revokedAt
+      || invite.expiresAt < new Date()
     ) {
       throw new AppError(404, 'Ссылка недействительна');
     }
 
     const existing = await TeamMemberModel.findOne({
       teamId: invite.teamId,
-      userId: req.userId
+      userId: req.userId,
     }).lean();
 
     invite.acceptedAt = new Date();
@@ -66,7 +66,7 @@ invitesRouter.post(
     if (existing) {
       res.json({
         teamId: invite.teamId.toString(),
-        alreadyMember: true
+        alreadyMember: true,
       });
       return;
     }
@@ -74,12 +74,12 @@ invitesRouter.post(
     await TeamMemberModel.create({
       teamId: invite.teamId,
       userId: req.userId,
-      role: invite.role
+      role: invite.role,
     });
 
     res.json({
       teamId: invite.teamId.toString(),
-      alreadyMember: false
+      alreadyMember: false,
     });
-  })
+  }),
 );

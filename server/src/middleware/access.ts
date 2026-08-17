@@ -10,11 +10,11 @@ import type { TeamRole } from '../constants.js';
 
 export async function requireMembership(
   teamId: string,
-  userId: string
+  userId: string,
 ): Promise<{ teamId: string; role: TeamRole }> {
   const member = await TeamMemberModel.findOne({
     teamId: asObjectId(teamId, 'teamId'),
-    userId: asObjectId(userId, 'userId')
+    userId: asObjectId(userId, 'userId'),
   }).lean();
 
   if (!member) {

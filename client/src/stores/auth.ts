@@ -66,5 +66,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  return { user, isLoading, error, fetchMe, login, loginDemo, logout };
+  return {
+    user, isLoading, error, fetchMe, login, loginDemo, logout,
+  };
 });

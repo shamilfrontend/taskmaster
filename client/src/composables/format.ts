@@ -23,8 +23,8 @@ export function linkifyText(text: string): string {
     }
 
     return (
-      `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>` +
-      suffix
+      `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>${
+        suffix}`
     );
   });
 }
@@ -60,31 +60,13 @@ export function formatDate(value: string | Date | null | undefined): string {
   return date.toLocaleDateString('ru-RU', {
     day: 'numeric',
     month: 'short',
-    year: 'numeric'
+    year: 'numeric',
   });
-}
-
-export function daysLeft(iso: string): string {
-  const due = new Date(iso);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  due.setHours(0, 0, 0, 0);
-  const diff = Math.round((due.getTime() - today.getTime()) / 86400000);
-
-  if (diff < 0) {
-    return `просрочен на ${-diff} дн.`;
-  }
-
-  if (diff === 0) {
-    return 'сегодня';
-  }
-
-  return `через ${diff} дн.`;
 }
 
 export function isOverdue(
   dueDate: string | Date | null | undefined,
-  isDone: boolean
+  isDone: boolean,
 ): boolean {
   if (!dueDate || isDone) {
     return false;
@@ -128,7 +110,7 @@ export function pluralRu(
   count: number,
   one: string,
   few: string,
-  many: string
+  many: string,
 ): string {
   const abs = Math.abs(count) % 100;
   const last = abs % 10;

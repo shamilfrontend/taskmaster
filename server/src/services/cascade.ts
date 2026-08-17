@@ -14,7 +14,7 @@ import { TeamMemberModel } from '../models/team-member.js';
 import { TimeEntryModel } from '../models/time-entry.js';
 
 export async function deleteBoardCascade(
-  boardId: mongoose.Types.ObjectId
+  boardId: mongoose.Types.ObjectId,
 ): Promise<void> {
   const cards = await CardModel.find({ boardId }).lean();
   const cardIds = cards.map((card) => card._id);
@@ -29,13 +29,13 @@ export async function deleteBoardCascade(
 }
 
 export async function deleteProjectCascade(
-  projectId: mongoose.Types.ObjectId
+  projectId: mongoose.Types.ObjectId,
 ): Promise<void> {
   const boards = await BoardModel.find({ projectId }).lean();
 
-  for (const board of boards) {
-    await deleteBoardCascade(board._id);
-  }
+  await Promise.all(
+    boards.map((board) => deleteBoardCascade(board._id)),
+  );
 
   await ReleaseModel.deleteMany({ projectId });
   await ProjectMemberRateModel.deleteMany({ projectId });
@@ -43,13 +43,13 @@ export async function deleteProjectCascade(
 }
 
 export async function deleteTeamCascade(
-  teamId: mongoose.Types.ObjectId
+  teamId: mongoose.Types.ObjectId,
 ): Promise<void> {
   const projects = await ProjectModel.find({ teamId }).lean();
 
-  for (const project of projects) {
-    await deleteProjectCascade(project._id);
-  }
+  await Promise.all(
+    projects.map((project) => deleteProjectCascade(project._id)),
+  );
 
   await ActivityEventModel.deleteMany({ teamId });
   await InviteModel.deleteMany({ teamId });
@@ -59,22 +59,22 @@ export async function deleteTeamCascade(
 
 export async function unassignUserInTeam(
   teamId: mongoose.Types.ObjectId,
-  userId: mongoose.Types.ObjectId
+  userId: mongoose.Types.ObjectId,
 ): Promise<void> {
   const projects = await ProjectModel.find({ teamId }).lean();
   const projectIds = projects.map((project) => project._id);
   const boards = await BoardModel.find({
-    projectId: { $in: projectIds }
+    projectId: { $in: projectIds },
   }).lean();
   const boardIds = boards.map((board) => board._id);
 
   await CardModel.updateMany(
     { boardId: { $in: boardIds }, assigneeId: userId },
-    { $set: { assigneeId: null, planAmount: 0 } }
+    { $set: { assigneeId: null, planAmount: 0 } },
   );
 
   await ProjectMemberRateModel.deleteMany({
     projectId: { $in: projectIds },
-    userId
+    userId,
   });
 }
