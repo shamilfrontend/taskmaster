@@ -23,7 +23,12 @@ export function setDemoMode(value: boolean): void {
 }
 
 function isWriteAllowed(url: string): boolean {
-  return url.includes('/auth/logout') || url.includes('/auth/demo');
+  const path = (url.split('?')[0] ?? '');
+
+  return path.includes('/auth/logout')
+    || path.includes('/auth/demo')
+    || path.endsWith('/notifications/read-all')
+    || /\/notifications\/[a-fA-F0-9]{24}\/read$/.test(path);
 }
 
 function isMutating(method: string | undefined): boolean {

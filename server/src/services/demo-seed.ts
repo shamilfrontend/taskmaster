@@ -14,6 +14,7 @@ import { CardModel } from '../models/card.js';
 import { ColumnModel } from '../models/column.js';
 import { CommentModel } from '../models/comment.js';
 import { LabelModel } from '../models/label.js';
+import { NotificationModel } from '../models/notification.js';
 import { ProjectMemberModel } from '../models/project-member.js';
 import { ProjectModel } from '../models/project.js';
 import { ReleaseModel } from '../models/release.js';
@@ -1298,5 +1299,126 @@ export async function ensureDemoData(
     }
 
     throw err;
+  }
+}
+
+function minutesAgo(minutes: number): Date {
+  return new Date(Date.now() - minutes * 60 * 1000);
+}
+
+/**
+ * Пересоздаёт непрочитанные уведомления демо-пользователя на каждый вход.
+ */
+export async function refreshDemoNotifications(
+  ownerId: mongoose.Types.ObjectId,
+): Promise<void> {
+  await NotificationModel.deleteMany({ recipientId: ownerId });
+
+  const teamIds = await demoTeamIds(ownerId);
+
+  if (teamIds.length === 0) {
+    return;
+  }
+
+  const [anna, pavel, maria, projects] = await Promise.all([
+    UserModel.findOne({ yandexId: 'demo-anna' }).lean(),
+    UserModel.findOne({ yandexId: 'demo-pavel' }).lean(),
+    UserModel.findOne({ yandexId: 'demo-maria' }).lean(),
+    ProjectModel.find({ teamId: { $in: teamIds } }).lean(),
+  ]);
+
+  if (!anna || !pavel || !maria || projects.length === 0) {
+    return;
+  }
+
+  const boards = await BoardModel.find({
+    projectId: { $in: projects.map((project) => project._id) },
+  }).lean();
+  const assigned = await CardModel.find({
+    boardId: { $in: boards.map((board) => board._id) },
+    assigneeId: ownerId,
+  })
+    .sort({ createdAt: -1 })
+    .limit(3)
+    .lean();
+
+  if (assigned.length === 0) {
+    return;
+  }
+
+  const firstCard = assigned[0];
+
+  if (!firstCard) {
+    return;
+  }
+
+  const boardById = new Map(
+    boards.map((board) => [board._id.toString(), board]),
+  );
+  const projectById = new Map(
+    projects.map((project) => [project._id.toString(), project]),
+  );
+
+  const seeds: Array<{
+    actorId: mongoose.Types.ObjectId;
+    kind: 'card_assigned' | 'comment_added' | 'comment_reply';
+    card: (typeof assigned)[number];
+    detail: string;
+    createdAt: Date;
+  }> = [
+    {
+      actorId: anna._id,
+      kind: 'card_assigned',
+      card: firstCard,
+      detail: '',
+      createdAt: minutesAgo(4),
+    },
+  ];
+
+  if (assigned[1]) {
+    seeds.push({
+      actorId: pavel._id,
+      kind: 'comment_added',
+      card: assigned[1],
+      detail: 'Можно взять в работу на этой неделе?',
+      createdAt: minutesAgo(18),
+    });
+  }
+
+  seeds.push({
+    actorId: maria._id,
+    kind: 'comment_reply',
+    card: assigned[assigned.length - 1] ?? firstCard,
+    detail: 'Согласен, давай так и сделаем.',
+    createdAt: minutesAgo(42),
+  });
+
+  const docs = seeds.flatMap((seed) => {
+    const board = boardById.get(seed.card.boardId.toString());
+    const project = board
+      ? projectById.get(board.projectId.toString())
+      : undefined;
+
+    if (!board || !project) {
+      return [];
+    }
+
+    return [{
+      recipientId: ownerId,
+      actorId: seed.actorId,
+      kind: seed.kind,
+      teamId: project.teamId,
+      projectId: board.projectId,
+      boardId: board._id,
+      cardId: seed.card._id,
+      cardTitle: seed.card.title,
+      detail: seed.detail,
+      readAt: null,
+      createdAt: seed.createdAt,
+    }];
+  });
+
+  if (docs.length > 0) {
+    await NotificationModel.insertMany(docs);
   }
 }

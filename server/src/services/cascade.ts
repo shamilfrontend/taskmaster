@@ -6,6 +6,7 @@ import { ColumnModel } from '../models/column.js';
 import { CommentModel } from '../models/comment.js';
 import { InviteModel } from '../models/invite.js';
 import { LabelModel } from '../models/label.js';
+import { NotificationModel } from '../models/notification.js';
 import { ProjectModel } from '../models/project.js';
 import { ProjectMemberModel } from '../models/project-member.js';
 import { ProjectMemberRateModel } from '../models/project-member-rate.js';
@@ -23,6 +24,7 @@ export async function deleteBoardCascade(
   await TimeEntryModel.deleteMany({ cardId: { $in: cardIds } });
   await CommentModel.deleteMany({ cardId: { $in: cardIds } });
   await ActivityEventModel.deleteMany({ boardId });
+  await NotificationModel.deleteMany({ boardId });
   await CardModel.deleteMany({ boardId });
   await ColumnModel.deleteMany({ boardId });
   await LabelModel.deleteMany({ boardId });
@@ -41,6 +43,7 @@ export async function deleteProjectCascade(
   await ReleaseModel.deleteMany({ projectId });
   await ProjectMemberRateModel.deleteMany({ projectId });
   await ProjectMemberModel.deleteMany({ projectId });
+  await NotificationModel.deleteMany({ projectId });
   await ProjectModel.deleteOne({ _id: projectId });
 }
 
@@ -54,6 +57,7 @@ export async function deleteTeamCascade(
   );
 
   await ActivityEventModel.deleteMany({ teamId });
+  await NotificationModel.deleteMany({ teamId });
   await InviteModel.deleteMany({ teamId });
   await TeamMemberModel.deleteMany({ teamId });
   await TeamModel.deleteOne({ _id: teamId });

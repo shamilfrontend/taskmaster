@@ -77,6 +77,7 @@ flowchart TB
   Release[Release]
   TimeEntry[TimeEntry]
   Comment[Comment]
+  Notification[Notification]
   Checklist[Checklist внутри Card]
 
   User --> TeamMember
@@ -85,6 +86,7 @@ flowchart TB
   Team --> Activity
   Team --> Project
   User --> ProjectMember
+  User --> Notification
   Project --> ProjectMember
   Project --> MemberRate
   Project --> Board
@@ -96,6 +98,7 @@ flowchart TB
   Release --> Card
   Card --> TimeEntry
   Card --> Comment
+  Card --> Notification
   Card --> Checklist
 ```
 

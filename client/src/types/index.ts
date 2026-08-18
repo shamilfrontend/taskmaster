@@ -118,6 +118,34 @@ export interface TeamActivityPage {
   hasMore: boolean;
 }
 
+export type NotificationKind =
+  | 'card_assigned'
+  | 'comment_added'
+  | 'comment_reply';
+
+export interface NotificationItem {
+  id: string;
+  kind: NotificationKind;
+  readAt: string | null;
+  actorId: string;
+  actorName: string;
+  actorAvatarUrl: string;
+  cardId: string;
+  cardTitle: string;
+  projectId: string;
+  projectName: string;
+  teamId: string;
+  teamName: string;
+  detail: string;
+  createdAt: string;
+}
+
+export interface NotificationPage {
+  items: NotificationItem[];
+  hasMore: boolean;
+  unreadCount: number;
+}
+
 export interface InvitePreview {
   teamName: string;
   role: InviteRole;

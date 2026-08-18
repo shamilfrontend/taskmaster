@@ -34,6 +34,12 @@ erDiagram
   Project ||--o{ ActivityEvent : has
   Board ||--o{ ActivityEvent : has
   Card ||--o{ ActivityEvent : has
+  User ||--o{ Notification : receives
+  User ||--o{ Notification : acts
+  Team ||--o{ Notification : has
+  Project ||--o{ Notification : has
+  Board ||--o{ Notification : has
+  Card ||--o{ Notification : has
 
   User {
     ObjectId _id
@@ -135,6 +141,20 @@ erDiagram
     object checklists
     number position
     number planAmount
+  }
+
+  Notification {
+    ObjectId _id
+    ObjectId recipientId
+    ObjectId actorId
+    string kind
+    ObjectId teamId
+    ObjectId projectId
+    ObjectId boardId
+    ObjectId cardId
+    string cardTitle
+    string detail
+    date readAt
   }
 
   TimeEntry {
@@ -439,3 +459,24 @@ Unique: `{ projectId: 1, nameNormalized: 1 }`. К `released` можно прик
 | `createdAt` | Date | Только создание, без `updatedAt` |
 
 Индексы: `{ teamId, createdAt: -1 }`, `{ boardId }`.
+
+## Notification
+
+Личный инбокс. Автор действия не получает запись о себе. `readAt = null` — непрочитано.
+
+| Поле | Тип | Зачем |
+| --- | --- | --- |
+| `_id` | ObjectId | PK |
+| `recipientId` | ObjectId → User | Кому |
+| `actorId` | ObjectId → User | Кто сделал |
+| `kind` | `card_assigned \| comment_added \| comment_reply` | Тип |
+| `teamId` | ObjectId → Team | Команда |
+| `projectId` | ObjectId → Project | Проект |
+| `boardId` | ObjectId → Board | Доска |
+| `cardId` | ObjectId → Card | Карточка |
+| `cardTitle` | string | Снимок названия |
+| `detail` | string | Превью комментария, max ~120 |
+| `readAt` | Date \| null | Когда прочитали |
+| `createdAt` / `updatedAt` | Date | Служебные |
+
+Индексы: `{ recipientId, createdAt: -1 }`, `{ recipientId, readAt }`, `{ cardId }`. Каскад при удалении карточки / доски / проекта / команды.

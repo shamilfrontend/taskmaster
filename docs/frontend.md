@@ -68,7 +68,7 @@ Legacy query `?tab=releases|settings` на канбане редиректитс
 2. `meta.public`: залогиненный на `landing` уходит на `query.next` или `/`.
 3. Остальные маршруты без сессии → `/landing?next=<fullPath>` (кроме уже `/`, который просто на landing).
 
-`chrome: true` — шапка с хлебными крошками и переключателем продуктов. Public-экраны без хрома.
+`chrome: true` — шапка с хлебными крошками, колокольчиком уведомлений и переключателем продуктов. Public-экраны без хрома.
 
 После навигации — хит Яндекс.Метрики.
 
@@ -80,11 +80,12 @@ Legacy query `?tab=releases|settings` на канбане редиректитс
 | `teams` | [`client/src/stores/teams.ts`](../client/src/stores/teams.ts) | Список и текущая команда, activity, инвайты, участники, создание проекта и импорт Trello. |
 | `project` | [`client/src/stores/project.ts`](../client/src/stores/project.ts) | Детали проекта, members, analytics, ставки ролей, дублирование, релизы create. |
 | `board` | [`client/src/stores/board.ts`](../client/src/stores/board.ts) | Колонки, карточки, метки, списания, комментарии, чеклисты, релизы attach/detach. |
+| `notifications` | [`client/src/stores/notifications.ts`](../client/src/stores/notifications.ts) | Инбокс, `unreadCount`, polling 10 с, `markRead` / `markAllRead`. Drawer в шапке. |
 
 ## HTTP-клиент
 
 - Cookie сессии уходит сама (`withCredentials`).
-- Демо: мутации кроме `/auth/logout` и `/auth/demo` режутся на клиенте тостом «Действия в демо-доступе отключены».
+- Демо: мутации кроме `/auth/logout`, `/auth/demo` и отметки уведомлений прочитанными режутся на клиенте тостом «Действия в демо-доступе отключены».
 - 401 (не `/auth/me`, не public path) → редирект на `/landing?next=`.
 
 ## Экраны и данные
@@ -101,3 +102,4 @@ Legacy query `?tab=releases|settings` на канбане редиректитс
 | Release | Название, дата, статус, прикреплённые карточки |
 | Analytics | Период, сводка, статусы, план/факт, burn, загрузка, релизы, недели, риски |
 | Settings | Имя, флаги релизов/бюджета, фон, состав, ставки, лимит, удаление |
+| Уведомления | Колокольчик слева от аватарки, drawer, подгрузка; клик открывает карточку |

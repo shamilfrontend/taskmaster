@@ -19,7 +19,7 @@
 | project * | `requireProjectAccess` (+ роли ниже) |
 | Member+ | owner, admin или member проекта (не viewer) |
 
-Демо (`yandexId = demo`): middleware `blockDemoWrites` отвечает 403 на POST/PUT/PATCH/DELETE, кроме `/api/auth/logout` и `/api/auth/demo`.
+Демо (`yandexId = demo`): middleware `blockDemoWrites` отвечает 403 на POST/PUT/PATCH/DELETE, кроме `/api/auth/logout`, `/api/auth/demo`, `PATCH /api/notifications/:id/read` и `POST /api/notifications/read-all`.
 
 ## Auth `/api/auth`
 
@@ -133,6 +133,20 @@ GET проекта: Viewer без ставок/бюджета; Member видит
 | DELETE | `/:releaseId` | O/A | — | Карточки остаются, `releaseId → null` |
 | POST | `/:releaseId/cards` | Member+ | `{ cardId }` | Прикрепить карточку этого проекта |
 | DELETE | `/:releaseId/cards/:cardId` | Member+ | — | Открепить |
+
+## Notifications `/api/notifications`
+
+Личный инбокс. Автор действия не получает уведомление о себе.
+
+| Метод | Путь | Auth | Query / тело | Ответ |
+| --- | --- | --- | --- | --- |
+| GET | `/` | JWT | `?before=ISO` | `{ items, hasMore, unreadCount }`, страница 10 |
+| PATCH | `/:id/read` | получатель | — | `{ ok: true }` |
+| POST | `/read-all` | JWT | — | `{ ok: true }` |
+
+`kind`: `card_assigned` (назначили исполнителем), `comment_added` (комментарий на вашей карточке), `comment_reply` (ответ на ваш комментарий; если вы и исполнитель — только этот kind).
+
+Элемент: `id`, `kind`, `readAt`, `actorId`, `actorName`, `actorAvatarUrl`, `cardId`, `cardTitle`, `projectId`, `projectName`, `teamId`, `teamName`, `detail`, `createdAt`.
 
 ## Кто что видит в деньгах
 

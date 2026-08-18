@@ -12,6 +12,7 @@ import { boardsRouter } from './routes/boards.js';
 import { cardsRouter } from './routes/cards.js';
 import { releasesRouter } from './routes/releases.js';
 import { analyticsRouter } from './routes/analytics.js';
+import { notificationsRouter } from './routes/notifications.js';
 
 export function createApp() {
   const app = express();
@@ -42,6 +43,7 @@ export function createApp() {
   app.use('/api/boards', boardsRouter);
   app.use('/api/cards', cardsRouter);
   app.use('/api/releases', releasesRouter);
+  app.use('/api/notifications', notificationsRouter);
 
   app.use(errorHandler);
 

@@ -13,11 +13,13 @@ import { CardModel, type CardPojo, type ChecklistPojo } from '../models/card.js'
 import { ColumnModel } from '../models/column.js';
 import { CommentModel } from '../models/comment.js';
 import { LabelModel } from '../models/label.js';
+import { NotificationModel } from '../models/notification.js';
 import { ProjectModel } from '../models/project.js';
 import { ReleaseModel } from '../models/release.js';
 import { TimeEntryModel } from '../models/time-entry.js';
 import { UserModel } from '../models/user.js';
 import { recordActivity } from '../services/activity.js';
+import { notifyUser } from '../services/notifications.js';
 import { rateForUser, recalcCardPlan } from '../services/plan.js';
 import { calcAmount } from '../utils/rates.js';
 import {
@@ -246,6 +248,19 @@ cardsRouter.post(
       detail: column.name,
     });
 
+    if (card.assigneeId && card.assigneeId.toString() !== req.userId) {
+      notifyUser({
+        recipientId: card.assigneeId,
+        actorId: req.userId,
+        kind: 'card_assigned',
+        teamId: access.teamId,
+        projectId: board.projectId,
+        boardId: board._id,
+        cardId: card._id,
+        cardTitle: card.title,
+      });
+    }
+
     res.status(201).json({
       id: card._id.toString(),
       title: card.title,
@@ -378,6 +393,7 @@ cardsRouter.patch(
     }
 
     const previousColumnId = card.columnId.toString();
+    const previousAssigneeId = card.assigneeId?.toString() ?? null;
     let movedToColumnName: string | null = null;
 
     if (req.body?.columnId) {
@@ -468,6 +484,25 @@ cardsRouter.patch(
       });
     }
 
+    const nextAssigneeId = card.assigneeId?.toString() ?? null;
+
+    if (
+      nextAssigneeId
+      && nextAssigneeId !== previousAssigneeId
+      && nextAssigneeId !== req.userId
+    ) {
+      notifyUser({
+        recipientId: nextAssigneeId,
+        actorId: req.userId,
+        kind: 'card_assigned',
+        teamId: access.teamId,
+        projectId: board.projectId,
+        boardId: card.boardId,
+        cardId: card._id,
+        cardTitle: card.title,
+      });
+    }
+
     res.json({ ok: true });
   }),
 );
@@ -495,6 +530,7 @@ cardsRouter.delete(
 
     await TimeEntryModel.deleteMany({ cardId: card._id });
     await CommentModel.deleteMany({ cardId: card._id });
+    await NotificationModel.deleteMany({ cardId: card._id });
     await CardModel.deleteOne({ _id: card._id });
     res.json({ ok: true });
   }),
@@ -635,6 +671,7 @@ cardsRouter.post(
     );
     const parentRaw = readOptionalString(req.body, 'parentId');
     let parentId: mongoose.Types.ObjectId | null = null;
+    let rootAuthorId: string | null = null;
 
     if (parentRaw) {
       const parent = await CommentModel.findById(
@@ -646,6 +683,13 @@ cardsRouter.post(
       }
 
       parentId = parent.parentId ?? parent._id;
+
+      if (parent.parentId) {
+        const root = await CommentModel.findById(parent.parentId).lean();
+        rootAuthorId = root?.userId.toString() ?? null;
+      } else {
+        rootAuthorId = parent.userId.toString();
+      }
     }
 
     const comment = await CommentModel.create({
@@ -661,6 +705,8 @@ cardsRouter.post(
       : null;
 
     if (card && board) {
+      const detail = truncateDetail(body);
+
       recordActivity({
         teamId: access.teamId,
         projectId: board.projectId,
@@ -669,8 +715,42 @@ cardsRouter.post(
         actorId: req.userId,
         kind: 'comment_added',
         cardTitle: card.title,
-        detail: truncateDetail(body),
+        detail,
       });
+
+      const assigneeId = card.assigneeId?.toString() ?? null;
+
+      if (rootAuthorId && rootAuthorId !== req.userId) {
+        notifyUser({
+          recipientId: rootAuthorId,
+          actorId: req.userId,
+          kind: 'comment_reply',
+          teamId: access.teamId,
+          projectId: board.projectId,
+          boardId: card.boardId,
+          cardId: card._id,
+          cardTitle: card.title,
+          detail,
+        });
+      }
+
+      if (
+        assigneeId
+        && assigneeId !== req.userId
+        && assigneeId !== rootAuthorId
+      ) {
+        notifyUser({
+          recipientId: assigneeId,
+          actorId: req.userId,
+          kind: 'comment_added',
+          teamId: access.teamId,
+          projectId: board.projectId,
+          boardId: card.boardId,
+          cardId: card._id,
+          cardTitle: card.title,
+          detail,
+        });
+      }
     }
 
     res.status(201).json({ id: comment._id.toString(), body: comment.body });
