@@ -16,6 +16,7 @@ import {
 } from '../composables/format.ts';
 import ModalDialog from '../components/ModalDialog.vue';
 import PageTabs, { type PageTab } from '../components/PageTabs.vue';
+import UserAvatar from '../components/UserAvatar.vue';
 import type {
   ActivityItem,
   ActivityKind,
@@ -52,6 +53,9 @@ const trelloInputKey = ref(0);
 const deleteOpen = ref(false);
 const projectDeleteOpen = ref(false);
 const projectToDelete = ref<{ id: string; name: string } | null>(null);
+const projectRenameOpen = ref(false);
+const projectToRename = ref<{ id: string; name: string } | null>(null);
+const projectRenameDraft = ref('');
 const menuProjectId = ref<string | null>(null);
 const menuPosition = ref<MenuPosition | null>(null);
 const memberActionOpen = ref(false);
@@ -96,11 +100,20 @@ const canManage = computed(() => {
   return role === 'owner' || role === 'admin';
 });
 
+function canManageProject(role: TeamRole): boolean {
+  return role === 'owner' || role === 'admin';
+}
+
 const isOwner = computed(() => teams.current?.role === 'owner');
 
 const canSaveName = computed(() => {
   const draft = teamNameDraft.value.trim();
   return Boolean(draft) && draft !== teams.current?.name;
+});
+
+const canSaveProjectRename = computed(() => {
+  const draft = projectRenameDraft.value.trim();
+  return Boolean(draft) && draft !== projectToRename.value?.name;
 });
 
 const menuProject = computed(() => {
@@ -235,6 +248,36 @@ async function duplicateProject(): Promise<void> {
 
   if (id) {
     await teams.fetchOne(teamId.value);
+  }
+}
+
+function openProjectRename(): void {
+  if (!menuProject.value) {
+    return;
+  }
+
+  projectToRename.value = {
+    id: menuProject.value.id,
+    name: menuProject.value.name,
+  };
+  projectRenameDraft.value = menuProject.value.name;
+  projectRenameOpen.value = true;
+  closeMenus();
+}
+
+async function saveProjectRename(): Promise<void> {
+  if (!projectToRename.value || !canSaveProjectRename.value) {
+    return;
+  }
+
+  const ok = await projects.renameProject(
+    projectToRename.value.id,
+    projectRenameDraft.value.trim(),
+  );
+
+  if (ok) {
+    projectRenameOpen.value = false;
+    projectToRename.value = null;
   }
 }
 
@@ -608,7 +651,7 @@ async function confirmRevoke(): Promise<void> {
                   {{ formatMoney(project.budgetLimit) }}
                 </span>
                 <button
-                  v-if="canManage"
+                  v-if="canManageProject(project.role)"
                   type="button"
                   class="column-menu-btn"
                   aria-label="Действия с проектом"
@@ -647,7 +690,11 @@ async function confirmRevoke(): Promise<void> {
               :key="member.userId"
               class="list-row"
             >
-              <span :class="avatarClass(member.role)">{{ initials(member.displayName) }}</span>
+              <UserAvatar
+                :class="avatarClass(member.role)"
+                :name="member.displayName"
+                :src="member.avatarUrl"
+              />
               <div class="grow">
                 <div>{{ member.displayName }}</div>
                 <div class="muted">
@@ -1034,6 +1081,12 @@ async function confirmRevoke(): Promise<void> {
       >
         <button
           type="button"
+          @click="openProjectRename"
+        >
+          Переименовать
+        </button>
+        <button
+          type="button"
           @click="duplicateProject"
         >
           Дублировать
@@ -1047,6 +1100,40 @@ async function confirmRevoke(): Promise<void> {
         </button>
       </div>
     </Teleport>
+
+    <ModalDialog
+      :open="projectRenameOpen"
+      title="Переименовать проект"
+      @close="projectRenameOpen = false"
+    >
+      <div class="field">
+        <label>Название</label>
+        <input
+          v-model="projectRenameDraft"
+          class="input"
+          type="text"
+          placeholder="Название проекта…"
+          @keydown.enter.prevent="saveProjectRename"
+        >
+      </div>
+      <div class="modal-foot">
+        <button
+          type="button"
+          class="btn btn-ghost"
+          @click="projectRenameOpen = false"
+        >
+          Отмена
+        </button>
+        <button
+          type="button"
+          class="btn"
+          :disabled="!canSaveProjectRename || projects.isLoading"
+          @click="saveProjectRename"
+        >
+          Сохранить
+        </button>
+      </div>
+    </ModalDialog>
 
     <ModalDialog
       :open="projectDeleteOpen"

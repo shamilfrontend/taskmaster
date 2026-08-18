@@ -4,9 +4,8 @@ import { AppError } from '../errors/app-error.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import {
-  requireMembership,
-  teamIdFromBoard,
-  teamIdFromColumn,
+  requireProjectAccessFromBoard,
+  requireProjectAccessFromColumn,
 } from '../middleware/access.js';
 import { BoardModel } from '../models/board.js';
 import { CardModel } from '../models/card.js';
@@ -34,8 +33,7 @@ boardsRouter.get(
   '/:boardId',
   asyncHandler(async (req: Request, res: Response) => {
     const boardId = req.params.boardId as string;
-    const teamId = await teamIdFromBoard(boardId);
-    const membership = await requireMembership(teamId, req.userId);
+    const access = await requireProjectAccessFromBoard(boardId, req.userId);
     const board = await BoardModel.findById(asObjectId(boardId)).lean();
 
     if (!board) {
@@ -72,13 +70,13 @@ boardsRouter.get(
     const project = await ProjectModel.findById(board.projectId).lean();
     const releasesEnabled = isFeatureOn(project?.releasesEnabled);
 
-    const hideMoney = membership.role === 'viewer' || !isFeatureOn(project?.budgetEnabled);
+    const hideMoney = access.role === 'viewer' || !isFeatureOn(project?.budgetEnabled);
 
     res.json({
       id: board._id.toString(),
       projectId: board.projectId.toString(),
       name: board.name,
-      role: membership.role,
+      role: access.role,
       columns: columns.map((column) => ({
         id: column._id.toString(),
         name: column.name,
@@ -106,8 +104,8 @@ boardsRouter.get(
           .reduce((sum, entry) => sum + entry.amount, 0);
         const isOwn = card.assigneeId?.toString() === req.userId;
         const showMoney = !hideMoney
-          && (membership.role === 'owner'
-            || membership.role === 'admin'
+          && (access.role === 'owner'
+            || access.role === 'admin'
             || isOwn);
         const assignee = users.find(
           (user) => user._id.toString() === card.assigneeId?.toString(),
@@ -127,6 +125,7 @@ boardsRouter.get(
           title: card.title,
           assigneeId: card.assigneeId?.toString() ?? null,
           assigneeName: assignee?.displayName ?? null,
+          assigneeAvatarUrl: assignee?.avatarUrl ?? null,
           dueDate: card.dueDate,
           estimateHours: card.estimateHours,
           factHours,
@@ -151,9 +150,8 @@ boardsRouter.patch(
   '/:boardId',
   asyncHandler(async (req: Request, res: Response) => {
     const boardId = req.params.boardId as string;
-    const teamId = await teamIdFromBoard(boardId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin']);
+    const access = await requireProjectAccessFromBoard(boardId, req.userId);
+    assertRole(access.role, ['owner', 'admin']);
 
     const board = await BoardModel.findById(asObjectId(boardId));
 
@@ -171,9 +169,8 @@ boardsRouter.delete(
   '/:boardId',
   asyncHandler(async (req: Request, res: Response) => {
     const boardId = req.params.boardId as string;
-    const teamId = await teamIdFromBoard(boardId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin']);
+    const access = await requireProjectAccessFromBoard(boardId, req.userId);
+    assertRole(access.role, ['owner', 'admin']);
     await deleteBoardCascade(asObjectId(boardId));
     res.json({ ok: true });
   }),
@@ -183,9 +180,8 @@ boardsRouter.post(
   '/:boardId/columns',
   asyncHandler(async (req: Request, res: Response) => {
     const boardId = req.params.boardId as string;
-    const teamId = await teamIdFromBoard(boardId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin']);
+    const access = await requireProjectAccessFromBoard(boardId, req.userId);
+    assertRole(access.role, ['owner', 'admin']);
 
     const last = await ColumnModel.findOne({ boardId: asObjectId(boardId) })
       .sort({ position: -1 })
@@ -211,9 +207,8 @@ boardsRouter.patch(
   '/columns/:columnId',
   asyncHandler(async (req: Request, res: Response) => {
     const columnId = req.params.columnId as string;
-    const teamId = await teamIdFromColumn(columnId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin']);
+    const access = await requireProjectAccessFromColumn(columnId, req.userId);
+    assertRole(access.role, ['owner', 'admin']);
 
     const column = await ColumnModel.findById(asObjectId(columnId, 'columnId'));
 
@@ -245,9 +240,8 @@ boardsRouter.delete(
   '/columns/:columnId',
   asyncHandler(async (req: Request, res: Response) => {
     const columnId = req.params.columnId as string;
-    const teamId = await teamIdFromColumn(columnId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin']);
+    const access = await requireProjectAccessFromColumn(columnId, req.userId);
+    assertRole(access.role, ['owner', 'admin']);
 
     const column = await ColumnModel.findById(asObjectId(columnId, 'columnId'));
 
@@ -272,9 +266,8 @@ boardsRouter.post(
   '/:boardId/labels',
   asyncHandler(async (req: Request, res: Response) => {
     const boardId = req.params.boardId as string;
-    const teamId = await teamIdFromBoard(boardId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin']);
+    const access = await requireProjectAccessFromBoard(boardId, req.userId);
+    assertRole(access.role, ['owner', 'admin']);
 
     const label = await LabelModel.create({
       boardId: asObjectId(boardId),
@@ -300,9 +293,11 @@ boardsRouter.patch(
       throw new AppError(404, 'Метка не найдена');
     }
 
-    const teamId = await teamIdFromBoard(label.boardId.toString());
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin']);
+    const access = await requireProjectAccessFromBoard(
+      label.boardId.toString(),
+      req.userId,
+    );
+    assertRole(access.role, ['owner', 'admin']);
 
     label.name = readString(req.body, 'name');
     await label.save();
@@ -325,9 +320,11 @@ boardsRouter.delete(
       throw new AppError(404, 'Метка не найдена');
     }
 
-    const teamId = await teamIdFromBoard(label.boardId.toString());
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin']);
+    const access = await requireProjectAccessFromBoard(
+      label.boardId.toString(),
+      req.userId,
+    );
+    assertRole(access.role, ['owner', 'admin']);
 
     await CardModel.updateMany(
       { labelIds: label._id },

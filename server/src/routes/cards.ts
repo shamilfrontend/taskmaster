@@ -5,20 +5,21 @@ import { AppError } from '../errors/app-error.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import {
-  requireMembership,
-  teamIdFromBoard,
-  teamIdFromCard,
+  requireProjectAccessFromBoard,
+  requireProjectAccessFromCard,
 } from '../middleware/access.js';
 import { BoardModel } from '../models/board.js';
 import { CardModel, type CardPojo, type ChecklistPojo } from '../models/card.js';
 import { ColumnModel } from '../models/column.js';
 import { CommentModel } from '../models/comment.js';
 import { LabelModel } from '../models/label.js';
+import { NotificationModel } from '../models/notification.js';
 import { ProjectModel } from '../models/project.js';
 import { ReleaseModel } from '../models/release.js';
 import { TimeEntryModel } from '../models/time-entry.js';
 import { UserModel } from '../models/user.js';
 import { recordActivity } from '../services/activity.js';
+import { notifyUser } from '../services/notifications.js';
 import { rateForUser, recalcCardPlan } from '../services/plan.js';
 import { calcAmount } from '../utils/rates.js';
 import {
@@ -33,7 +34,8 @@ import {
   readOptionalString,
   readString,
 } from '../utils/validate.js';
-import type { TeamRole } from '../constants.js';
+import { COMMENT_BODY_MAX, type TeamRole } from '../constants.js';
+import { canEditCards } from '../utils/roles.js';
 
 const DESCRIPTION_MAX = 8000;
 const CHECKLIST_TITLE_MAX = 200;
@@ -83,10 +85,9 @@ async function requireEditableCard(
   req: Request,
   cardId: string,
 ): Promise<mongoose.HydratedDocument<CardPojo>> {
-  const teamId = await teamIdFromCard(cardId);
-  const membership = await requireMembership(teamId, req.userId);
+  const access = await requireProjectAccessFromCard(cardId, req.userId);
 
-  if (!canEditCards(membership.role)) {
+  if (!canEditCards(access.role)) {
     throw new AppError(403, 'Недостаточно прав');
   }
 
@@ -142,10 +143,6 @@ async function findCardByItem(itemId: string): Promise<{
   throw new AppError(404, 'Пункт не найден');
 }
 
-function canEditCards(role: TeamRole): boolean {
-  return role === 'owner' || role === 'admin' || role === 'member';
-}
-
 function canLogOnCard(
   role: TeamRole,
   assigneeId: string | null,
@@ -162,9 +159,8 @@ cardsRouter.post(
   '/',
   asyncHandler(async (req: Request, res: Response) => {
     const boardId = readString(req.body, 'boardId');
-    const teamId = await teamIdFromBoard(boardId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin', 'member']);
+    const access = await requireProjectAccessFromBoard(boardId, req.userId);
+    assertRole(access.role, ['owner', 'admin', 'member']);
 
     const board = await BoardModel.findById(asObjectId(boardId)).lean();
 
@@ -242,7 +238,7 @@ cardsRouter.post(
     const fresh = await CardModel.findById(card._id).lean();
 
     recordActivity({
-      teamId,
+      teamId: access.teamId,
       projectId: board.projectId,
       boardId: board._id,
       cardId: card._id,
@@ -251,6 +247,19 @@ cardsRouter.post(
       cardTitle: card.title,
       detail: column.name,
     });
+
+    if (card.assigneeId && card.assigneeId.toString() !== req.userId) {
+      notifyUser({
+        recipientId: card.assigneeId,
+        actorId: req.userId,
+        kind: 'card_assigned',
+        teamId: access.teamId,
+        projectId: board.projectId,
+        boardId: board._id,
+        cardId: card._id,
+        cardTitle: card.title,
+      });
+    }
 
     res.status(201).json({
       id: card._id.toString(),
@@ -264,8 +273,7 @@ cardsRouter.get(
   '/:cardId',
   asyncHandler(async (req: Request, res: Response) => {
     const cardId = req.params.cardId as string;
-    const teamId = await teamIdFromCard(cardId);
-    const membership = await requireMembership(teamId, req.userId);
+    const access = await requireProjectAccessFromCard(cardId, req.userId);
     const card = await CardModel.findById(asObjectId(cardId)).lean();
 
     if (!card) {
@@ -284,9 +292,14 @@ cardsRouter.get(
       ...(card.assigneeId ? [card.assigneeId] : []),
     ];
     const users = await UserModel.find({ _id: { $in: userIds } }).lean();
-    const userName = (id: mongoose.Types.ObjectId): string => (
+    const userById = (id: mongoose.Types.ObjectId) => (
       users.find((user) => user._id.toString() === id.toString())
-        ?.displayName ?? ''
+    );
+    const userName = (id: mongoose.Types.ObjectId): string => (
+      userById(id)?.displayName ?? ''
+    );
+    const userAvatar = (id: mongoose.Types.ObjectId): string => (
+      userById(id)?.avatarUrl ?? ''
     );
 
     const board = await BoardModel.findById(card.boardId).lean();
@@ -296,8 +309,8 @@ cardsRouter.get(
     const budgetEnabled = isFeatureOn(project?.budgetEnabled);
     const isOwn = card.assigneeId?.toString() === req.userId;
     const showAllMoney = budgetEnabled
-      && (membership.role === 'owner' || membership.role === 'admin');
-    const showOwnMoney = budgetEnabled && membership.role === 'member' && isOwn;
+      && (access.role === 'owner' || access.role === 'admin');
+    const showOwnMoney = budgetEnabled && access.role === 'member' && isOwn;
 
     res.json({
       id: card._id.toString(),
@@ -315,7 +328,7 @@ cardsRouter.get(
       timeEntries: entries.map((entry) => {
         const own = entry.userId.toString() === req.userId;
         const showMoney = budgetEnabled
-          && (showAllMoney || (membership.role === 'member' && own));
+          && (showAllMoney || (access.role === 'member' && own));
 
         return {
           id: entry._id.toString(),
@@ -331,8 +344,11 @@ cardsRouter.get(
         id: comment._id.toString(),
         userId: comment.userId.toString(),
         displayName: userName(comment.userId),
+        avatarUrl: userAvatar(comment.userId),
+        parentId: comment.parentId ? comment.parentId.toString() : null,
         body: comment.body,
         createdAt: comment.createdAt,
+        editedAt: comment.editedAt ?? null,
       })),
     });
   }),
@@ -342,10 +358,9 @@ cardsRouter.patch(
   '/:cardId',
   asyncHandler(async (req: Request, res: Response) => {
     const cardId = req.params.cardId as string;
-    const teamId = await teamIdFromCard(cardId);
-    const membership = await requireMembership(teamId, req.userId);
+    const access = await requireProjectAccessFromCard(cardId, req.userId);
 
-    if (!canEditCards(membership.role)) {
+    if (!canEditCards(access.role)) {
       throw new AppError(403, 'Недостаточно прав');
     }
 
@@ -378,6 +393,7 @@ cardsRouter.patch(
     }
 
     const previousColumnId = card.columnId.toString();
+    const previousAssigneeId = card.assigneeId?.toString() ?? null;
     let movedToColumnName: string | null = null;
 
     if (req.body?.columnId) {
@@ -457,7 +473,7 @@ cardsRouter.patch(
 
     if (movedToColumnName) {
       recordActivity({
-        teamId,
+        teamId: access.teamId,
         projectId: board.projectId,
         boardId: card.boardId,
         cardId: card._id,
@@ -465,6 +481,25 @@ cardsRouter.patch(
         kind: 'card_moved',
         cardTitle: card.title,
         detail: movedToColumnName,
+      });
+    }
+
+    const nextAssigneeId = card.assigneeId?.toString() ?? null;
+
+    if (
+      nextAssigneeId
+      && nextAssigneeId !== previousAssigneeId
+      && nextAssigneeId !== req.userId
+    ) {
+      notifyUser({
+        recipientId: nextAssigneeId,
+        actorId: req.userId,
+        kind: 'card_assigned',
+        teamId: access.teamId,
+        projectId: board.projectId,
+        boardId: card.boardId,
+        cardId: card._id,
+        cardTitle: card.title,
       });
     }
 
@@ -476,8 +511,7 @@ cardsRouter.delete(
   '/:cardId',
   asyncHandler(async (req: Request, res: Response) => {
     const cardId = req.params.cardId as string;
-    const teamId = await teamIdFromCard(cardId);
-    const membership = await requireMembership(teamId, req.userId);
+    const access = await requireProjectAccessFromCard(cardId, req.userId);
     const card = await CardModel.findById(asObjectId(cardId)).lean();
 
     if (!card) {
@@ -489,13 +523,14 @@ cardsRouter.delete(
     });
 
     if (entryCount > 0) {
-      assertRole(membership.role, ['owner', 'admin']);
+      assertRole(access.role, ['owner', 'admin']);
     } else {
-      assertRole(membership.role, ['owner', 'admin', 'member']);
+      assertRole(access.role, ['owner', 'admin', 'member']);
     }
 
     await TimeEntryModel.deleteMany({ cardId: card._id });
     await CommentModel.deleteMany({ cardId: card._id });
+    await NotificationModel.deleteMany({ cardId: card._id });
     await CardModel.deleteOne({ _id: card._id });
     res.json({ ok: true });
   }),
@@ -505,8 +540,7 @@ cardsRouter.post(
   '/:cardId/time-entries',
   asyncHandler(async (req: Request, res: Response) => {
     const cardId = req.params.cardId as string;
-    const teamId = await teamIdFromCard(cardId);
-    const membership = await requireMembership(teamId, req.userId);
+    const access = await requireProjectAccessFromCard(cardId, req.userId);
     const card = await CardModel.findById(asObjectId(cardId)).lean();
 
     if (!card) {
@@ -515,7 +549,7 @@ cardsRouter.post(
 
     if (
       !canLogOnCard(
-        membership.role,
+        access.role,
         card.assigneeId?.toString() ?? null,
         req.userId,
       )
@@ -561,8 +595,10 @@ cardsRouter.patch(
       throw new AppError(404, 'Списание не найдено');
     }
 
-    const teamId = await teamIdFromCard(entry.cardId.toString());
-    const membership = await requireMembership(teamId, req.userId);
+    const access = await requireProjectAccessFromCard(
+      entry.cardId.toString(),
+      req.userId,
+    );
     const card = await CardModel.findById(entry.cardId).lean();
 
     if (!card) {
@@ -571,12 +607,12 @@ cardsRouter.patch(
 
     const isOwn = entry.userId.toString() === req.userId;
 
-    if (membership.role === 'member') {
+    if (access.role === 'member') {
       if (!isOwn || card.assigneeId?.toString() !== req.userId) {
         throw new AppError(403, 'Недостаточно прав');
       }
     } else {
-      assertRole(membership.role, ['owner', 'admin']);
+      assertRole(access.role, ['owner', 'admin']);
     }
 
     entry.hours = readHours(req.body, 'hours');
@@ -596,8 +632,10 @@ cardsRouter.delete(
       throw new AppError(404, 'Списание не найдено');
     }
 
-    const teamId = await teamIdFromCard(entry.cardId.toString());
-    const membership = await requireMembership(teamId, req.userId);
+    const access = await requireProjectAccessFromCard(
+      entry.cardId.toString(),
+      req.userId,
+    );
     const card = await CardModel.findById(entry.cardId).lean();
 
     if (!card) {
@@ -606,12 +644,12 @@ cardsRouter.delete(
 
     const isOwn = entry.userId.toString() === req.userId;
 
-    if (membership.role === 'member') {
+    if (access.role === 'member') {
       if (!isOwn || card.assigneeId?.toString() !== req.userId) {
         throw new AppError(403, 'Недостаточно прав');
       }
     } else {
-      assertRole(membership.role, ['owner', 'admin']);
+      assertRole(access.role, ['owner', 'admin']);
     }
 
     await entry.deleteOne();
@@ -623,14 +661,41 @@ cardsRouter.post(
   '/:cardId/comments',
   asyncHandler(async (req: Request, res: Response) => {
     const cardId = req.params.cardId as string;
-    const teamId = await teamIdFromCard(cardId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin', 'member']);
+    const access = await requireProjectAccessFromCard(cardId, req.userId);
+    assertRole(access.role, ['owner', 'admin', 'member']);
 
-    const body = readString(req.body, 'body');
+    const body = assertMaxLength(
+      readString(req.body, 'body'),
+      'body',
+      COMMENT_BODY_MAX,
+    );
+    const parentRaw = readOptionalString(req.body, 'parentId');
+    let parentId: mongoose.Types.ObjectId | null = null;
+    let rootAuthorId: string | null = null;
+
+    if (parentRaw) {
+      const parent = await CommentModel.findById(
+        asObjectId(parentRaw, 'parentId'),
+      );
+
+      if (!parent || parent.cardId.toString() !== cardId) {
+        throw new AppError(400, 'Родительский комментарий не найден');
+      }
+
+      parentId = parent.parentId ?? parent._id;
+
+      if (parent.parentId) {
+        const root = await CommentModel.findById(parent.parentId).lean();
+        rootAuthorId = root?.userId.toString() ?? null;
+      } else {
+        rootAuthorId = parent.userId.toString();
+      }
+    }
+
     const comment = await CommentModel.create({
       cardId: asObjectId(cardId),
       userId: asObjectId(req.userId),
+      parentId,
       body,
     });
 
@@ -640,19 +705,91 @@ cardsRouter.post(
       : null;
 
     if (card && board) {
+      const detail = truncateDetail(body);
+
       recordActivity({
-        teamId,
+        teamId: access.teamId,
         projectId: board.projectId,
         boardId: card.boardId,
         cardId: card._id,
         actorId: req.userId,
         kind: 'comment_added',
         cardTitle: card.title,
-        detail: truncateDetail(body),
+        detail,
       });
+
+      const assigneeId = card.assigneeId?.toString() ?? null;
+
+      if (rootAuthorId && rootAuthorId !== req.userId) {
+        notifyUser({
+          recipientId: rootAuthorId,
+          actorId: req.userId,
+          kind: 'comment_reply',
+          teamId: access.teamId,
+          projectId: board.projectId,
+          boardId: card.boardId,
+          cardId: card._id,
+          cardTitle: card.title,
+          detail,
+        });
+      }
+
+      if (
+        assigneeId
+        && assigneeId !== req.userId
+        && assigneeId !== rootAuthorId
+      ) {
+        notifyUser({
+          recipientId: assigneeId,
+          actorId: req.userId,
+          kind: 'comment_added',
+          teamId: access.teamId,
+          projectId: board.projectId,
+          boardId: card.boardId,
+          cardId: card._id,
+          cardTitle: card.title,
+          detail,
+        });
+      }
     }
 
     res.status(201).json({ id: comment._id.toString(), body: comment.body });
+  }),
+);
+
+cardsRouter.patch(
+  '/comments/:commentId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const commentId = req.params.commentId as string;
+    const comment = await CommentModel.findById(
+      asObjectId(commentId, 'commentId'),
+    );
+
+    if (!comment) {
+      throw new AppError(404, 'Комментарий не найден');
+    }
+
+    await requireProjectAccessFromCard(comment.cardId.toString(), req.userId);
+
+    if (comment.userId.toString() !== req.userId) {
+      throw new AppError(403, 'Редактировать можно только свой комментарий');
+    }
+
+    const body = assertMaxLength(
+      readString(req.body, 'body'),
+      'body',
+      COMMENT_BODY_MAX,
+    );
+
+    comment.body = body;
+    comment.editedAt = new Date();
+    await comment.save();
+
+    res.json({
+      id: comment._id.toString(),
+      body: comment.body,
+      editedAt: comment.editedAt,
+    });
   }),
 );
 
@@ -668,12 +805,18 @@ cardsRouter.delete(
       throw new AppError(404, 'Комментарий не найден');
     }
 
-    const teamId = await teamIdFromCard(comment.cardId.toString());
-    const membership = await requireMembership(teamId, req.userId);
+    const access = await requireProjectAccessFromCard(
+      comment.cardId.toString(),
+      req.userId,
+    );
     const isAuthor = comment.userId.toString() === req.userId;
 
     if (!isAuthor) {
-      assertRole(membership.role, ['owner', 'admin']);
+      assertRole(access.role, ['owner', 'admin']);
+    }
+
+    if (!comment.parentId) {
+      await CommentModel.deleteMany({ parentId: comment._id });
     }
 
     await comment.deleteOne();

@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { ProjectMemberRateModel } from '../models/project-member-rate.js';
-import { TeamMemberModel } from '../models/team-member.js';
+import { ProjectMemberModel } from '../models/project-member.js';
 import { ProjectModel } from '../models/project.js';
 import { CardModel } from '../models/card.js';
 import { AppError } from '../errors/app-error.js';
@@ -17,8 +17,8 @@ export async function rateForUser(
     throw new AppError(404, 'Проект не найден');
   }
 
-  const member = await TeamMemberModel.findOne({
-    teamId: project.teamId,
+  const member = await ProjectMemberModel.findOne({
+    projectId,
     userId,
   }).lean();
 
@@ -92,8 +92,8 @@ export async function recalcRolePlans(
     return;
   }
 
-  const members = await TeamMemberModel.find({
-    teamId: project.teamId,
+  const members = await ProjectMemberModel.find({
+    projectId,
     role,
   }).lean();
 

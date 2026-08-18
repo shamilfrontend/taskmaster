@@ -5,18 +5,23 @@ import { AppError } from '../errors/app-error.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import {
-  requireMembership,
-  teamIdFromProject,
+  canManageProjectMember,
+  canManageProjectMembers,
+  requireProjectAccess,
 } from '../middleware/access.js';
 import { BoardModel } from '../models/board.js';
 import { CardModel } from '../models/card.js';
 import { ProjectModel } from '../models/project.js';
+import { ProjectMemberModel } from '../models/project-member.js';
 import { ProjectMemberRateModel } from '../models/project-member-rate.js';
 import { ReleaseModel } from '../models/release.js';
 import { TeamMemberModel } from '../models/team-member.js';
 import { TimeEntryModel } from '../models/time-entry.js';
 import { UserModel } from '../models/user.js';
-import { deleteProjectCascade } from '../services/cascade.js';
+import {
+  deleteProjectCascade,
+  unassignUserInProject,
+} from '../services/cascade.js';
 import { recalcAssigneePlans, recalcRolePlans } from '../services/plan.js';
 import {
   createDefaultBoard,
@@ -32,6 +37,7 @@ import {
   readBoolean,
   readBoardBackground,
   readBudget,
+  readNonOwnerRole,
   readNumber,
   readOptionalDate,
   readOptionalNumber,
@@ -59,9 +65,8 @@ projectsRouter.post(
   '/:projectId/releases',
   asyncHandler(async (req: Request, res: Response) => {
     const projectId = req.params.projectId as string;
-    const teamId = await teamIdFromProject(projectId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin']);
+    const access = await requireProjectAccess(projectId, req.userId);
+    assertRole(access.role, ['owner', 'admin']);
 
     const project = await ProjectModel.findById(asObjectId(projectId)).lean();
 
@@ -104,8 +109,7 @@ projectsRouter.get(
   '/:projectId',
   asyncHandler(async (req: Request, res: Response) => {
     const projectId = req.params.projectId as string;
-    const teamId = await teamIdFromProject(projectId);
-    const membership = await requireMembership(teamId, req.userId);
+    const access = await requireProjectAccess(projectId, req.userId);
     const project = await ProjectModel.findById(asObjectId(projectId)).lean();
 
     if (!project) {
@@ -115,7 +119,9 @@ projectsRouter.get(
     const board = await resolveProjectBoard(project._id);
     const cards = await CardModel.find({ boardId: board._id }).lean();
     const releases = await ReleaseModel.find({ projectId: project._id }).lean();
-    const members = await TeamMemberModel.find({ teamId: project.teamId }).lean();
+    const members = await ProjectMemberModel.find({
+      projectId: project._id,
+    }).lean();
     const users = await UserModel.find({
       _id: { $in: members.map((item) => item.userId) },
     }).lean();
@@ -128,10 +134,10 @@ projectsRouter.get(
     const budgetEnabled = isFeatureOn(project.budgetEnabled);
 
     const canSeeBudget = budgetEnabled
-      && (membership.role === 'owner' || membership.role === 'admin');
-    const canSeeRates = membership.role === 'owner' || membership.role === 'admin';
+      && (access.role === 'owner' || access.role === 'admin');
+    const canSeeRates = access.role === 'owner' || access.role === 'admin';
     const canSeeRemainder = budgetEnabled
-      && (canSeeBudget || membership.role === 'member');
+      && (canSeeBudget || access.role === 'member');
 
     const rates = members.map((member) => {
       const personal = personalRates.find(
@@ -158,9 +164,10 @@ projectsRouter.get(
 
     res.json({
       id: project._id.toString(),
-      teamId,
+      teamId: access.teamId,
       name: project.name,
-      role: membership.role,
+      role: access.role,
+      teamRole: access.teamRole,
       releasesEnabled,
       budgetEnabled,
       boardBackground: project.boardBackground ?? 'default',
@@ -189,39 +196,36 @@ projectsRouter.patch(
   '/:projectId',
   asyncHandler(async (req: Request, res: Response) => {
     const projectId = req.params.projectId as string;
-    const teamId = await teamIdFromProject(projectId);
-    const membership = await requireMembership(teamId, req.userId);
+    const access = await requireProjectAccess(projectId, req.userId);
     const project = await ProjectModel.findById(asObjectId(projectId));
 
     if (!project) {
       throw new AppError(404, 'Проект не найден');
     }
 
-    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : undefined;
-
-    if (name) {
-      assertRole(membership.role, ['owner', 'admin']);
-      project.name = name;
+    if (req.body?.name !== undefined) {
+      assertRole(access.role, ['owner', 'admin']);
+      project.name = readString(req.body, 'name');
     }
 
     if (req.body?.releasesEnabled !== undefined) {
-      assertRole(membership.role, ['owner', 'admin']);
+      assertRole(access.role, ['owner', 'admin']);
       project.releasesEnabled = readBoolean(req.body, 'releasesEnabled');
     }
 
     if (req.body?.budgetEnabled !== undefined) {
-      assertRole(membership.role, ['owner', 'admin']);
+      assertRole(access.role, ['owner', 'admin']);
       project.budgetEnabled = readBoolean(req.body, 'budgetEnabled');
     }
 
     if (req.body?.budgetLimit !== undefined) {
-      assertRole(membership.role, ['owner'], 'Бюджет меняет только Owner');
+      assertRole(access.role, ['owner'], 'Бюджет меняет только Owner');
       assertFeatureOn(project.budgetEnabled, 'Бюджет выключен в проекте');
       project.budgetLimit = readBudget(req.body, 'budgetLimit');
     }
 
     if (req.body?.boardBackground !== undefined) {
-      assertRole(membership.role, ['owner', 'admin']);
+      assertRole(access.role, ['owner', 'admin']);
       project.boardBackground = readBoardBackground(req.body, 'boardBackground');
     }
 
@@ -241,9 +245,8 @@ projectsRouter.post(
   '/:projectId/duplicate',
   asyncHandler(async (req: Request, res: Response) => {
     const projectId = req.params.projectId as string;
-    const teamId = await teamIdFromProject(projectId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin']);
+    const access = await requireProjectAccess(projectId, req.userId);
+    assertRole(access.role, ['owner', 'admin']);
 
     const source = await ProjectModel.findById(asObjectId(projectId)).lean();
 
@@ -262,6 +265,20 @@ projectsRouter.post(
     });
 
     await createDefaultBoard(project._id);
+
+    const sourceMembers = await ProjectMemberModel.find({
+      projectId: source._id,
+    }).lean();
+
+    if (sourceMembers.length > 0) {
+      await ProjectMemberModel.insertMany(
+        sourceMembers.map((member) => ({
+          projectId: project._id,
+          userId: member.userId,
+          role: member.role,
+        })),
+      );
+    }
 
     const memberRates = await ProjectMemberRateModel.find({
       projectId: source._id,
@@ -285,9 +302,8 @@ projectsRouter.delete(
   '/:projectId',
   asyncHandler(async (req: Request, res: Response) => {
     const projectId = req.params.projectId as string;
-    const teamId = await teamIdFromProject(projectId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin']);
+    const access = await requireProjectAccess(projectId, req.userId);
+    assertRole(access.role, ['owner', 'admin']);
 
     const project = await ProjectModel.findById(asObjectId(projectId)).lean();
 
@@ -304,9 +320,8 @@ projectsRouter.put(
   '/:projectId/role-rates',
   asyncHandler(async (req: Request, res: Response) => {
     const projectId = req.params.projectId as string;
-    const teamId = await teamIdFromProject(projectId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin']);
+    const access = await requireProjectAccess(projectId, req.userId);
+    assertRole(access.role, ['owner', 'admin']);
 
     const project = await ProjectModel.findById(asObjectId(projectId));
 
@@ -340,14 +355,21 @@ projectsRouter.put(
   '/:projectId/member-rates',
   asyncHandler(async (req: Request, res: Response) => {
     const projectId = req.params.projectId as string;
-    const teamId = await teamIdFromProject(projectId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin']);
+    const access = await requireProjectAccess(projectId, req.userId);
+    assertRole(access.role, ['owner', 'admin']);
 
     const userId = readString(req.body, 'userId');
     const amount = readOptionalNumber(req.body, 'amount');
     const projectOid = asObjectId(projectId);
     const userOid = asObjectId(userId, 'userId');
+    const projectMember = await ProjectMemberModel.findOne({
+      projectId: projectOid,
+      userId: userOid,
+    }).lean();
+
+    if (!projectMember) {
+      throw new AppError(400, 'Пользователь не в составе проекта');
+    }
 
     if (amount === undefined) {
       await ProjectMemberRateModel.deleteOne({
@@ -367,6 +389,174 @@ projectsRouter.put(
     }
 
     await recalcAssigneePlans(projectOid, userOid);
+    res.json({ ok: true });
+  }),
+);
+
+projectsRouter.get(
+  '/:projectId/members',
+  asyncHandler(async (req: Request, res: Response) => {
+    const projectId = req.params.projectId as string;
+    const access = await requireProjectAccess(projectId, req.userId);
+    const project = await ProjectModel.findById(asObjectId(projectId)).lean();
+
+    if (!project) {
+      throw new AppError(404, 'Проект не найден');
+    }
+
+    const members = await ProjectMemberModel.find({
+      projectId: project._id,
+    }).lean();
+    const teamMembers = await TeamMemberModel.find({
+      teamId: project.teamId,
+    }).lean();
+    const users = await UserModel.find({
+      _id: { $in: teamMembers.map((item) => item.userId) },
+    }).lean();
+    const userMap = new Map(users.map((user) => [user._id.toString(), user]));
+    const memberIds = new Set(members.map((item) => item.userId.toString()));
+
+    res.json({
+      role: access.role,
+      teamRole: access.teamRole,
+      members: members.map((item) => {
+        const user = userMap.get(item.userId.toString());
+
+        return {
+          userId: item.userId.toString(),
+          role: item.role,
+          displayName: user?.displayName ?? '',
+          email: user?.email ?? '',
+          avatarUrl: user?.avatarUrl ?? '',
+        };
+      }),
+      candidates: teamMembers
+        .filter((item) => !memberIds.has(item.userId.toString()))
+        .map((item) => {
+          const user = userMap.get(item.userId.toString());
+
+          return {
+            userId: item.userId.toString(),
+            displayName: user?.displayName ?? '',
+            email: user?.email ?? '',
+            avatarUrl: user?.avatarUrl ?? '',
+          };
+        }),
+    });
+  }),
+);
+
+projectsRouter.post(
+  '/:projectId/members',
+  asyncHandler(async (req: Request, res: Response) => {
+    const projectId = req.params.projectId as string;
+    const access = await requireProjectAccess(projectId, req.userId);
+
+    if (!canManageProjectMembers(access)) {
+      throw new AppError(403, 'Недостаточно прав');
+    }
+
+    const userId = readString(req.body, 'userId');
+    const role = readNonOwnerRole(req.body, 'role');
+    const projectOid = asObjectId(projectId);
+    const userOid = asObjectId(userId, 'userId');
+    const project = await ProjectModel.findById(projectOid).lean();
+
+    if (!project) {
+      throw new AppError(404, 'Проект не найден');
+    }
+
+    const teamMember = await TeamMemberModel.findOne({
+      teamId: project.teamId,
+      userId: userOid,
+    }).lean();
+
+    if (!teamMember) {
+      throw new AppError(400, 'Пользователь не в команде');
+    }
+
+    if (!canManageProjectMember(access, role)) {
+      throw new AppError(403, 'Недостаточно прав');
+    }
+
+    const existing = await ProjectMemberModel.findOne({
+      projectId: projectOid,
+      userId: userOid,
+    }).lean();
+
+    if (existing) {
+      throw new AppError(409, 'Участник уже в проекте');
+    }
+
+    await ProjectMemberModel.create({
+      projectId: projectOid,
+      userId: userOid,
+      role,
+    });
+
+    res.status(201).json({ ok: true, role });
+  }),
+);
+
+projectsRouter.patch(
+  '/:projectId/members/:userId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const projectId = req.params.projectId as string;
+    const targetUserId = req.params.userId as string;
+    const access = await requireProjectAccess(projectId, req.userId);
+    const nextRole = readNonOwnerRole(req.body, 'role');
+    const target = await ProjectMemberModel.findOne({
+      projectId: asObjectId(projectId),
+      userId: asObjectId(targetUserId, 'userId'),
+    });
+
+    if (!target) {
+      throw new AppError(404, 'Участник не найден');
+    }
+
+    if (!canManageProjectMember(access, target.role)
+      || !canManageProjectMember(access, nextRole)) {
+      throw new AppError(403, 'Недостаточно прав');
+    }
+
+    const roleChanged = target.role !== nextRole;
+    target.role = nextRole;
+    await target.save();
+
+    if (roleChanged) {
+      await recalcAssigneePlans(target.projectId, target.userId);
+    }
+
+    res.json({ ok: true, role: nextRole });
+  }),
+);
+
+projectsRouter.delete(
+  '/:projectId/members/:userId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const projectId = req.params.projectId as string;
+    const targetUserId = req.params.userId as string;
+    const access = await requireProjectAccess(projectId, req.userId);
+    const isSelf = targetUserId === req.userId;
+    const target = await ProjectMemberModel.findOne({
+      projectId: asObjectId(projectId),
+      userId: asObjectId(targetUserId, 'userId'),
+    });
+
+    if (!target) {
+      throw new AppError(404, 'Участник не найден');
+    }
+
+    if (isSelf) {
+      if (target.role === 'owner') {
+        throw new AppError(400, 'Owner не может выйти из проекта');
+      }
+    } else if (!canManageProjectMember(access, target.role)) {
+      throw new AppError(403, 'Недостаточно прав');
+    }
+
+    await unassignUserInProject(target.projectId, target.userId);
+    await target.deleteOne();
     res.json({ ok: true });
   }),
 );

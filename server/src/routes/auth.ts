@@ -5,7 +5,7 @@ import { AppError } from '../errors/app-error.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { UserModel } from '../models/user.js';
-import { ensureDemoData } from '../services/demo-seed.js';
+import { ensureDemoData, refreshDemoNotifications } from '../services/demo-seed.js';
 import { signToken } from '../utils/crypto.js';
 
 export const authRouter = Router();
@@ -134,6 +134,7 @@ authRouter.post(
     }
 
     await ensureDemoData(user._id);
+    await refreshDemoNotifications(user._id);
     res.cookie(
       config.cookieName,
       signToken(user._id.toString()),

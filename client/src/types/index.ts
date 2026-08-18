@@ -78,6 +78,7 @@ export interface TeamMember {
 export interface TeamProject {
   id: string;
   name: string;
+  role: TeamRole;
   budgetEnabled: boolean;
   budgetLimit?: number;
 }
@@ -117,6 +118,58 @@ export interface TeamActivityPage {
   hasMore: boolean;
 }
 
+export type NotificationKind =
+  | 'card_assigned'
+  | 'comment_added'
+  | 'comment_reply';
+
+export interface NotificationItem {
+  id: string;
+  kind: NotificationKind;
+  readAt: string | null;
+  actorId: string;
+  actorName: string;
+  actorAvatarUrl: string;
+  cardId: string;
+  cardTitle: string;
+  projectId: string;
+  projectName: string;
+  teamId: string;
+  teamName: string;
+  detail: string;
+  createdAt: string;
+}
+
+export interface NotificationPage {
+  items: NotificationItem[];
+  hasMore: boolean;
+  unreadCount: number;
+}
+
+export interface MyTaskItem {
+  id: string;
+  title: string;
+  dueDate: string | null;
+  estimateHours: number;
+  teamId: string;
+  teamName: string;
+  projectId: string;
+  projectName: string;
+  columnId: string;
+  columnName: string;
+  isDone: boolean;
+  releaseId: string | null;
+  releaseName: string | null;
+  checklistDone: number;
+  checklistTotal: number;
+}
+
+export interface MyTasksPayload {
+  items: MyTaskItem[];
+  teams: { id: string; name: string }[];
+  projects: { id: string; name: string; teamId: string }[];
+}
+
 export interface InvitePreview {
   teamName: string;
   role: InviteRole;
@@ -139,11 +192,34 @@ export interface ProjectRateRow {
   amount?: number;
 }
 
+export interface ProjectMember {
+  userId: string;
+  role: TeamRole;
+  displayName: string;
+  email: string;
+  avatarUrl: string;
+}
+
+export interface ProjectMemberCandidate {
+  userId: string;
+  displayName: string;
+  email: string;
+  avatarUrl: string;
+}
+
+export interface ProjectMembersPayload {
+  role: TeamRole;
+  teamRole: TeamRole;
+  members: ProjectMember[];
+  candidates: ProjectMemberCandidate[];
+}
+
 export interface ProjectDetails {
   id: string;
   teamId: string;
   name: string;
   role: TeamRole;
+  teamRole: TeamRole;
   releasesEnabled: boolean;
   budgetEnabled: boolean;
   boardBackground: BoardBackgroundId;
@@ -175,6 +251,7 @@ export interface BoardCard {
   title: string;
   assigneeId: string | null;
   assigneeName: string | null;
+  assigneeAvatarUrl: string | null;
   dueDate: string | null;
   estimateHours: number;
   factHours: number;
@@ -214,8 +291,11 @@ export interface CardComment {
   id: string;
   userId: string;
   displayName: string;
+  avatarUrl: string;
+  parentId: string | null;
   body: string;
   createdAt?: string;
+  editedAt?: string | null;
 }
 
 export interface ChecklistItem {
@@ -263,6 +343,47 @@ export interface ReleaseDetails {
     columnName: string;
     assigneeName: string | null;
   }[];
+}
+
+export type TimesheetView = 'week' | 'list';
+
+export interface TimesheetMember {
+  id: string;
+  displayName: string;
+}
+
+export interface TimesheetLoggableCard {
+  id: string;
+  title: string;
+  columnName: string;
+  assigneeId: string | null;
+}
+
+export interface TimesheetEntry {
+  id: string;
+  cardId: string;
+  cardTitle: string;
+  columnName: string;
+  userId: string;
+  displayName: string;
+  hours: number;
+  rateSnapshot?: number;
+  amount?: number;
+  workedAt: string;
+}
+
+export interface TimesheetPayload {
+  from: string;
+  to: string;
+  role: TeamRole;
+  budgetEnabled: boolean;
+  members: TimesheetMember[];
+  entries: TimesheetEntry[];
+  loggableCards: TimesheetLoggableCard[];
+  totals: {
+    hours: number;
+    amount?: number;
+  };
 }
 
 export interface AnalyticsPayload {
