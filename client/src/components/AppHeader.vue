@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.ts';
 import { useNotificationsStore } from '../stores/notifications.ts';
 import { useBreadcrumbs } from '../composables/breadcrumbs.ts';
@@ -9,6 +9,7 @@ import ProductSwitcher from './ProductSwitcher.vue';
 import UserAvatar from './UserAvatar.vue';
 
 const router = useRouter();
+const route = useRoute();
 const auth = useAuthStore();
 const notifications = useNotificationsStore();
 const { crumbs } = useBreadcrumbs();
@@ -71,6 +72,13 @@ onUnmounted(() => {
       </template>
     </nav>
     <div class="header-right">
+      <router-link
+        :to="{ name: 'my-tasks' }"
+        class="btn btn-ghost"
+        :class="{ 'is-open': route.name === 'my-tasks' }"
+      >
+        Мои задачи
+      </router-link>
       <button
         type="button"
         class="bell-btn"
@@ -132,8 +140,10 @@ onUnmounted(() => {
   .btn-ghost {
     color: #fff;
     font-size: 16px;
+    text-decoration: none;
 
-    &:hover:not(:disabled) {
+    &:hover:not(:disabled),
+    &.is-open {
       background: rgb(255 255 255 / 20%);
     }
   }

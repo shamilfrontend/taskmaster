@@ -79,6 +79,18 @@ JWT + доступ к проекту (участник проекта или own
 
 GET проекта: Viewer без ставок/бюджета; Member видит `remainder`, не видит чужие ставки; O/A видят `budgetLimit`, `fact`, `roleRates`.
 
+## Me `/api/me`
+
+Личные данные текущего пользователя, не привязанные к одному проекту.
+
+| Метод | Путь | Auth | Query | Ответ |
+| --- | --- | --- | --- | --- |
+| GET | `/tasks` | JWT | `done=1?`, `teamId?`, `projectId?` | `MyTasksPayload` |
+
+Карточки с `assigneeId = я` по доступным проектам (участник или owner команды). По умолчанию без колонок `isDone`; `done=1` включает готовые. Лимит 200, сортировка: просроченные, затем срок, затем название. Деньги не отдаются.
+
+Элемент: `id`, `title`, `dueDate`, `estimateHours`, `teamId` / `teamName`, `projectId` / `projectName`, `columnId` / `columnName` / `isDone`, `releaseId` / `releaseName`, `checklistDone` / `checklistTotal`. Рядом: `teams[]`, `projects[]` для фильтров.
+
 ## Analytics `/api/projects`
 
 | Метод | Путь | Auth | Query | Ответ |
@@ -86,6 +98,14 @@ GET проекта: Viewer без ставок/бюджета; Member видит
 | GET | `/:projectId/analytics` | доступ к проекту | `period=today\|7d\|30d\|quarter\|year\|3y\|5y` или `from`+`to` | `AnalyticsPayload` |
 
 Сводка, статусы, риски, релизы «готово/всего» — снимок сейчас. План vs факт, загрузка, недели — списания с `workedAt` в периоде. Burn бюджета — всё время. Viewer без денег; Member — часы всех, ₽ только свои + remainder.
+
+## Timesheet `/api/projects`
+
+| Метод | Путь | Auth | Query | Ответ |
+| --- | --- | --- | --- | --- |
+| GET | `/:projectId/time-entries` | доступ к проекту | `from`+`to` (обяз.), `userId?` | `TimesheetPayload` |
+
+Списания за период по карточкам проекта. Member/Viewer видят только свои записи (`userId` игнорируется). Owner/Admin/owner команды: без `userId` — все участники; с `userId` — один человек (режим недели). В ответе: `entries`, `members`, `loggableCards` (карточки, куда текущий пользователь может списать), `totals`. Мутации — те же `POST/PATCH/DELETE` на `/api/cards/.../time-entries`. Деньги по тем же правилам, что аналитика.
 
 ## Boards `/api/boards`
 

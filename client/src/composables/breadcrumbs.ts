@@ -11,6 +11,7 @@ export interface Crumb {
 
 const PROJECT_ROUTE_NAMES = new Set([
   'project',
+  'project-expenses',
   'project-releases',
   'project-settings',
   'analytics',
@@ -28,6 +29,10 @@ export function useBreadcrumbs(): { crumbs: ComputedRef<Crumb[]> } {
 
     // TeamView owns fetch for route `team`
     if (name === 'team') {
+      return;
+    }
+
+    if (name === 'my-tasks') {
       return;
     }
 
@@ -85,6 +90,10 @@ export function useBreadcrumbs(): { crumbs: ComputedRef<Crumb[]> } {
       return [{ label: teamName }];
     }
 
+    if (name === 'my-tasks') {
+      return [{ label: 'Мои задачи' }];
+    }
+
     const projectMatches = Boolean(
       teamCrumb
       && projectCrumb
@@ -107,6 +116,10 @@ export function useBreadcrumbs(): { crumbs: ComputedRef<Crumb[]> } {
 
     if (name === 'analytics' && projectMatches && teamCrumb && projectCrumb) {
       return [teamCrumb, projectCrumb, { label: 'Аналитика' }];
+    }
+
+    if (name === 'project-expenses' && projectMatches && teamCrumb && projectCrumb) {
+      return [teamCrumb, projectCrumb, { label: 'Учёт расходов' }];
     }
 
     if (

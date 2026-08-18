@@ -146,6 +146,30 @@ export interface NotificationPage {
   unreadCount: number;
 }
 
+export interface MyTaskItem {
+  id: string;
+  title: string;
+  dueDate: string | null;
+  estimateHours: number;
+  teamId: string;
+  teamName: string;
+  projectId: string;
+  projectName: string;
+  columnId: string;
+  columnName: string;
+  isDone: boolean;
+  releaseId: string | null;
+  releaseName: string | null;
+  checklistDone: number;
+  checklistTotal: number;
+}
+
+export interface MyTasksPayload {
+  items: MyTaskItem[];
+  teams: { id: string; name: string }[];
+  projects: { id: string; name: string; teamId: string }[];
+}
+
 export interface InvitePreview {
   teamName: string;
   role: InviteRole;
@@ -319,6 +343,47 @@ export interface ReleaseDetails {
     columnName: string;
     assigneeName: string | null;
   }[];
+}
+
+export type TimesheetView = 'week' | 'list';
+
+export interface TimesheetMember {
+  id: string;
+  displayName: string;
+}
+
+export interface TimesheetLoggableCard {
+  id: string;
+  title: string;
+  columnName: string;
+  assigneeId: string | null;
+}
+
+export interface TimesheetEntry {
+  id: string;
+  cardId: string;
+  cardTitle: string;
+  columnName: string;
+  userId: string;
+  displayName: string;
+  hours: number;
+  rateSnapshot?: number;
+  amount?: number;
+  workedAt: string;
+}
+
+export interface TimesheetPayload {
+  from: string;
+  to: string;
+  role: TeamRole;
+  budgetEnabled: boolean;
+  members: TimesheetMember[];
+  entries: TimesheetEntry[];
+  loggableCards: TimesheetLoggableCard[];
+  totals: {
+    hours: number;
+    amount?: number;
+  };
 }
 
 export interface AnalyticsPayload {

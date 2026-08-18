@@ -15,6 +15,14 @@ export function useProjectTabs(
         label: 'Доска',
         to: { name: 'project', params: { projectId: projectId.value } },
       },
+      {
+        id: 'expenses',
+        label: 'Учёт расходов',
+        to: {
+          name: 'project-expenses',
+          params: { projectId: projectId.value },
+        },
+      },
     ];
 
     if (releasesEnabled.value) {

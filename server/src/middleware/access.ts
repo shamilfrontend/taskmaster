@@ -98,6 +98,52 @@ export async function listAccessibleProjectIds(
   return members.map((member) => member.projectId);
 }
 
+export async function listAllAccessibleProjectIds(
+  userId: string,
+): Promise<mongoose.Types.ObjectId[]> {
+  const userObjectId = asObjectId(userId, 'userId');
+  const memberships = await TeamMemberModel.find({ userId: userObjectId })
+    .lean();
+
+  if (memberships.length === 0) {
+    return [];
+  }
+
+  const ownerTeamIds = memberships
+    .filter((item) => item.role === 'owner')
+    .map((item) => item.teamId);
+  const allTeamIds = memberships.map((item) => item.teamId);
+  const projects = await ProjectModel.find({ teamId: { $in: allTeamIds } })
+    .select({ _id: 1, teamId: 1 })
+    .lean();
+
+  const ownerTeamSet = new Set(
+    ownerTeamIds.map((id) => id.toString()),
+  );
+  const ownerProjectIds = projects
+    .filter((project) => ownerTeamSet.has(project.teamId.toString()))
+    .map((project) => project._id);
+  const remaining = projects.filter(
+    (project) => !ownerTeamSet.has(project.teamId.toString()),
+  );
+
+  if (remaining.length === 0) {
+    return ownerProjectIds;
+  }
+
+  const members = await ProjectMemberModel.find({
+    userId: userObjectId,
+    projectId: { $in: remaining.map((project) => project._id) },
+  })
+    .select({ projectId: 1 })
+    .lean();
+
+  return [
+    ...ownerProjectIds,
+    ...members.map((member) => member.projectId),
+  ];
+}
+
 export function canManageProjectMember(
   access: ProjectAccess,
   targetRole: TeamRole,

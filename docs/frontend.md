@@ -12,9 +12,11 @@ flowchart TB
   Login["/login redirect"]
   Invite["/invite/:token InviteView public"]
   Teams["/ TeamsView"]
+  MyTasks["/my-tasks MyTasksView"]
   Team["/teams/:teamId TeamView"]
   Layout["/projects/:projectId ProjectLayout"]
   Board["'' ProjectView канбан"]
+  Expenses["expenses ExpensesView"]
   Releases["releases ProjectReleasesView"]
   Release["releases/:releaseId ReleaseView"]
   Analytics["analytics AnalyticsView"]
@@ -26,8 +28,10 @@ flowchart TB
   Landing -->|OAuth или демо| Teams
   Invite -->|accept| Team
   Teams --> Team
+  Teams --> MyTasks
   Team --> Layout
   Layout --> Board
+  Layout --> Expenses
   Layout --> Releases
   Layout --> Release
   Layout --> Analytics
@@ -46,9 +50,11 @@ flowchart TB
 | `/login` | `login` | redirect | — | На `/landing`, `?next=` сохраняется |
 | `/invite/:token` | `invite` | `InviteView` | `public`, `chrome: false` | Превью и принятие инвайта |
 | `/` | `teams` | `TeamsView` | `chrome: true` | Список команд, создать команду |
+| `/my-tasks` | `my-tasks` | `MyTasksView` | `chrome: true` | Карточки, где вы исполнитель |
 | `/teams/:teamId` | `team` | `TeamView` | `chrome: true` | Участники, инвайты, проекты, действия |
 | `/projects/:projectId` | layout | `ProjectLayout` | `chrome: true` | Оболочка проекта: вкладки, хлебные крошки |
 | `/projects/:projectId` | `project` | `ProjectView` | дочерний | Канбан |
+| `/projects/:projectId/expenses` | `project-expenses` | `ExpensesView` | дочерний | Табель списаний: неделя и список |
 | `/projects/:projectId/releases` | `project-releases` | `ProjectReleasesView` | дочерний | Список релизов (если `releasesEnabled`) |
 | `/projects/:projectId/releases/:releaseId` | `release` | `ReleaseView` | дочерний | Релиз: карточки, статус, дата |
 | `/projects/:projectId/analytics` | `analytics` | `AnalyticsView` | дочерний | Отчёты за период |
@@ -58,7 +64,11 @@ flowchart TB
 
 Legacy query `?tab=releases|settings` на канбане редиректится на именованные дочерние маршруты.
 
-Вкладки проекта (`useProjectTabs`): Доска всегда; Релизы — если включены; Аналитика всегда; Настройки — owner/admin проекта или owner команды.
+Вкладки проекта (`useProjectTabs`): Доска всегда; Учёт расходов всегда; Релизы — если включены; Аналитика всегда; Настройки — owner/admin проекта или owner команды.
+
+Query на `/expenses`: `view=week|list` (по умолчанию неделя), `from=YYYY-MM-DD` (понедельник), `userId` — для owner/admin в режиме недели.
+
+Query на `/my-tasks`: `done=1` (готовые колонки), `teamId`, `projectId`. Клик открывает `/projects/:id?card=`.
 
 ## Guard
 
@@ -68,7 +78,7 @@ Legacy query `?tab=releases|settings` на канбане редиректитс
 2. `meta.public`: залогиненный на `landing` уходит на `query.next` или `/`.
 3. Остальные маршруты без сессии → `/landing?next=<fullPath>` (кроме уже `/`, который просто на landing).
 
-`chrome: true` — шапка с хлебными крошками, колокольчиком уведомлений и переключателем продуктов. Public-экраны без хрома.
+`chrome: true` — шапка с хлебными крошками, ссылкой «Мои задачи», колокольчиком уведомлений и переключателем продуктов. Public-экраны без хрома.
 
 После навигации — хит Яндекс.Метрики.
 
@@ -80,6 +90,8 @@ Legacy query `?tab=releases|settings` на канбане редиректитс
 | `teams` | [`client/src/stores/teams.ts`](../client/src/stores/teams.ts) | Список и текущая команда, activity, инвайты, участники, создание проекта и импорт Trello. |
 | `project` | [`client/src/stores/project.ts`](../client/src/stores/project.ts) | Детали проекта, members, analytics, ставки ролей, дублирование, релизы create. |
 | `board` | [`client/src/stores/board.ts`](../client/src/stores/board.ts) | Колонки, карточки, метки, списания, комментарии, чеклисты, релизы attach/detach. |
+| `timesheet` | [`client/src/stores/timesheet.ts`](../client/src/stores/timesheet.ts) | Табель: `GET /projects/:id/time-entries`, списание/правка через `/cards/.../time-entries`. |
+| `my-tasks` | [`client/src/stores/my-tasks.ts`](../client/src/stores/my-tasks.ts) | Карточки текущего исполнителя: `GET /me/tasks`. |
 | `notifications` | [`client/src/stores/notifications.ts`](../client/src/stores/notifications.ts) | Инбокс, `unreadCount`, polling 10 с, `markRead` / `markAllRead`. Drawer в шапке. |
 
 ## HTTP-клиент
@@ -95,8 +107,10 @@ Legacy query `?tab=releases|settings` на канбане редиректитс
 | Landing | Возможности, вход через Яндекс ID, демо-доступ |
 | Invite | Имя команды, роль, срок; если нет сессии — OAuth с `next=/invite/:token` |
 | Teams | Свои команды, счётчики участников и доступных проектов |
+| Мои задачи | Назначенные карточки по проектам, группы по сроку |
 | Team | Состав, инвайты (owner/admin), проекты, лента действий, настройки/удаление |
 | Project (канбан) | Колонки, карточки, фон, DnD, модалка карточки |
+| Учёт расходов | Недельная сетка (Tempo), список списаний, списание часов по карточкам |
 | Модалка карточки | Исполнитель, срок, оценка, описание, чеклисты, релиз, списания, метки, комментарии |
 | Releases | Список релизов проекта |
 | Release | Название, дата, статус, прикреплённые карточки |

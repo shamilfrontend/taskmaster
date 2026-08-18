@@ -92,6 +92,12 @@ export const router = createRouter({
       meta: { chrome: true },
     },
     {
+      path: '/my-tasks',
+      name: 'my-tasks',
+      component: () => import('../views/MyTasksView.vue'),
+      meta: { chrome: true },
+    },
+    {
       path: '/teams/:teamId',
       name: 'team',
       component: () => import('../views/TeamView.vue'),
@@ -107,6 +113,11 @@ export const router = createRouter({
           name: 'project',
           component: () => import('../views/ProjectView.vue'),
           beforeEnter: redirectLegacyProjectTab,
+        },
+        {
+          path: 'expenses',
+          name: 'project-expenses',
+          component: () => import('../views/ExpensesView.vue'),
         },
         {
           path: 'releases',
