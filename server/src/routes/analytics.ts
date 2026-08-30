@@ -17,7 +17,12 @@ import { UserModel } from '../models/user.js';
 import {
   addDays, periodRange, queryDateRange, startOfDay, weekStart,
 } from '../utils/dates.js';
-import { asObjectId, isFeatureOn, readPeriod } from '../utils/validate.js';
+import {
+  asObjectId,
+  assertFeatureOn,
+  isFeatureOn,
+  readPeriod,
+} from '../utils/validate.js';
 
 export const analyticsRouter = Router();
 analyticsRouter.use(requireAuth);
@@ -45,6 +50,8 @@ analyticsRouter.get(
     if (!project) {
       throw new AppError(404, 'Проект не найден');
     }
+
+    assertFeatureOn(project.analyticsEnabled, 'Аналитика выключена в проекте');
 
     const boards = await BoardModel.find({ projectId: project._id }).lean();
     const boardIds = boards.map((board) => board._id);

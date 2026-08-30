@@ -80,6 +80,7 @@ export interface ProjectSnapshot {
   project: {
     name: string;
     releasesEnabled: boolean;
+    analyticsEnabled: boolean;
     boardBackground: BoardBackground;
   };
   people: SnapshotPerson[];

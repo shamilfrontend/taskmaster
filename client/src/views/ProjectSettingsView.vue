@@ -33,11 +33,13 @@ const memberAction = ref<'remove' | 'leave'>('remove');
 const memberTargetId = ref('');
 const memberTargetName = ref('');
 const releasesDraft = ref(false);
+const analyticsDraft = ref(false);
 const projectNameDraft = ref('');
 const assignableRoles: InviteRole[] = ['admin', 'member', 'viewer'];
 
 function syncFeatureDrafts(): void {
   releasesDraft.value = Boolean(projects.current?.releasesEnabled);
+  analyticsDraft.value = Boolean(projects.current?.analyticsEnabled);
 }
 
 function syncProjectNameDraft(): void {
@@ -216,6 +218,7 @@ async function saveProjectName(): Promise<void> {
 async function saveFeatures(): Promise<void> {
   await projects.updateSettings(projectId.value, {
     releasesEnabled: releasesDraft.value,
+    analyticsEnabled: analyticsDraft.value,
   });
   syncFeatureDrafts();
 }
@@ -390,6 +393,13 @@ async function removeProject(): Promise<void> {
             type="checkbox"
           >
           <span>Релизы</span>
+        </label>
+        <label class="choice">
+          <input
+            v-model="analyticsDraft"
+            type="checkbox"
+          >
+          <span>Аналитика</span>
         </label>
       </div>
       <div class="actions actions--start">

@@ -102,6 +102,7 @@ interface DemoReleaseSeed {
 interface DemoProjectSeed {
   name: string;
   releasesEnabled?: boolean;
+  analyticsEnabled?: boolean;
   boardBackground?: BoardBackground;
   labels?: DemoLabelSeed[];
   releases?: DemoReleaseSeed[];
@@ -140,6 +141,7 @@ const TEAMS: DemoTeamSeed[] = [
       {
         name: 'CRM-система',
         releasesEnabled: true,
+        analyticsEnabled: true,
         boardBackground: 'bg-20',
         labels: [
           { key: 'backend', name: 'Бэкенд', color: 'blue' },
@@ -965,6 +967,7 @@ async function seedProject(
     teamId,
     name: projectSeed.name,
     releasesEnabled: projectSeed.releasesEnabled ?? false,
+    analyticsEnabled: projectSeed.analyticsEnabled ?? false,
     boardBackground: projectSeed.boardBackground ?? 'default',
   });
 

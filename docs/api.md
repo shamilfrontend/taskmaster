@@ -67,7 +67,7 @@ JWT + доступ к проекту (участник проекта или own
 | Метод | Путь | Роль | Тело | Ответ |
 | --- | --- | --- | --- | --- |
 | GET | `/:projectId` | любой доступ | — | Детали: флаги, board.id, releases, people |
-| PATCH | `/:projectId` | O/A | `name`, `releasesEnabled`, `boardBackground` | Обновлённые поля |
+| PATCH | `/:projectId` | O/A | `name`, `releasesEnabled`, `analyticsEnabled`, `boardBackground` | Обновлённые поля |
 | POST | `/:projectId/duplicate` | O/A | — | 201 `{ id }` копия с составом, пустая доска |
 | GET | `/:projectId/export` | O/A | — | JSON-снимок: доска, карточки, релизы, комментарии, списания; без состава |
 | DELETE | `/:projectId` | O/A | — | Каскад колонок, карточек, релизов |
@@ -95,7 +95,9 @@ GET проекта отдаёт `people` — участники для филь�
 
 | Метод | Путь | Auth | Query | Ответ |
 | --- | --- | --- | --- | --- |
-| GET | `/:projectId/analytics` | доступ к проекту | `period=today\|7d\|30d\|quarter\|year\|3y\|5y` или `from`+`to` | `AnalyticsPayload` |
+| GET | `/:projectId/analytics` | доступ к проекту | `period=today\|7d\|30d\|quarter\|year\|3y\|5y` или `from`+`to` | `AnalyticsPayload`; нужен `analyticsEnabled` |
+
+Нужен `analyticsEnabled` на проекте.
 
 Сводка, статусы, риски, релизы «готово/всего» — снимок сейчас. План vs факт (часы), загрузка, недели — списания с `workedAt` в периоде.
 

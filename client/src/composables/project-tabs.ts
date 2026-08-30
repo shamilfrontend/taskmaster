@@ -6,6 +6,7 @@ export function useProjectTabs(
   projectId: ComputedRef<string>,
   role: ComputedRef<TeamRole | undefined>,
   releasesEnabled: ComputedRef<boolean>,
+  analyticsEnabled: ComputedRef<boolean>,
   teamRole: ComputedRef<TeamRole | undefined>,
 ): ComputedRef<PageTab[]> {
   return computed(() => {
@@ -28,11 +29,13 @@ export function useProjectTabs(
       });
     }
 
-    items.push({
-      id: 'analytics',
-      label: 'Аналитика',
-      to: { name: 'analytics', params: { projectId: projectId.value } },
-    });
+    if (analyticsEnabled.value) {
+      items.push({
+        id: 'analytics',
+        label: 'Аналитика',
+        to: { name: 'analytics', params: { projectId: projectId.value } },
+      });
+    }
 
     if (
       role.value === 'owner'

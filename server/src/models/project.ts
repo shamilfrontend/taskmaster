@@ -9,6 +9,7 @@ export interface ProjectPojo {
   teamId: mongoose.Types.ObjectId;
   name: string;
   releasesEnabled: boolean;
+  analyticsEnabled: boolean;
   boardBackground: BoardBackground;
 }
 
@@ -17,6 +18,7 @@ const projectSchema = new Schema<ProjectPojo>(
     teamId: { type: Schema.Types.ObjectId, ref: 'Team', required: true },
     name: { type: String, required: true },
     releasesEnabled: { type: Boolean, required: true, default: false },
+    analyticsEnabled: { type: Boolean, required: true, default: false },
     boardBackground: {
       type: String,
       required: true,

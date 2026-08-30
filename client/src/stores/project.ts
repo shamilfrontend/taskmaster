@@ -92,6 +92,7 @@ export const useProjectStore = defineStore('project', () => {
     projectId: string,
     payload: {
       releasesEnabled?: boolean;
+      analyticsEnabled?: boolean;
       boardBackground?: BoardBackgroundId;
     },
   ): Promise<void> {

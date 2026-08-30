@@ -325,6 +325,7 @@ function parseSnapshot(value: unknown): ProjectSnapshot {
     project: {
       name: fallbackName(asString(project.name)),
       releasesEnabled: project.releasesEnabled === true,
+      analyticsEnabled: project.analyticsEnabled === true,
       boardBackground: BOARD_BACKGROUNDS.includes(background as BoardBackground)
         ? (background as BoardBackground)
         : DEFAULT_BOARD_BACKGROUND,
@@ -398,6 +399,7 @@ export async function importProjectSnapshot(params: {
       teamId: params.teamId,
       name: params.name,
       releasesEnabled: snapshot.project.releasesEnabled,
+      analyticsEnabled: snapshot.project.analyticsEnabled,
       boardBackground: snapshot.project.boardBackground,
     });
 

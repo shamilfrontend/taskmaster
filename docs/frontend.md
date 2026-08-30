@@ -54,14 +54,14 @@ flowchart TB
 | `/projects/:projectId` | `project` | `ProjectView` | дочерний | Канбан |
 | `/projects/:projectId/releases` | `project-releases` | `ProjectReleasesView` | дочерний | Список релизов (если `releasesEnabled`) |
 | `/projects/:projectId/releases/:releaseId` | `release` | `ReleaseView` | дочерний | Релиз: карточки, статус, дата |
-| `/projects/:projectId/analytics` | `analytics` | `AnalyticsView` | дочерний | Отчёты за период |
+| `/projects/:projectId/analytics` | `analytics` | `AnalyticsView` | дочерний | Отчёты за период (если `analyticsEnabled`) |
 | `/projects/:projectId/settings` | `project-settings` | `ProjectSettingsView` | дочерний | Настройки, состав, фон, релизы, экспорт |
 | `/boards/:boardId` | `board` | пустой + `beforeEnter` | — | `GET /boards/:id` → `project` |
 | `/releases/:releaseId` | `legacy-release` | пустой + `beforeEnter` | — | `GET /releases/:id` → вложенный `release` |
 
 Legacy query `?tab=releases|settings` на канбане редиректится на именованные дочерние маршруты.
 
-Вкладки проекта (`useProjectTabs`): Доска всегда; Релизы — если включены; Аналитика всегда; Настройки — owner/admin проекта или owner команды.
+Вкладки проекта (`useProjectTabs`): Доска всегда; Релизы — если включены; Аналитика — если включена; Настройки — owner/admin проекта или owner команды.
 
 Query на `/my-tasks`: `done=1` (готовые колонки), `teamId`, `projectId`. Клик открывает `/projects/:id?card=`.
 
@@ -108,5 +108,5 @@ Query на `/my-tasks`: `done=1` (готовые колонки), `teamId`, `pro
 | Releases | Список релизов проекта |
 | Release | Название, дата, статус, прикреплённые карточки |
 | Analytics | Период, сводка, статусы, план/факт по часам, загрузка, релизы, недели, риски |
-| Settings | Имя, флаг релизов, фон, состав, удаление |
+| Settings | Имя, флаги релизов и аналитики, фон, состав, удаление |
 | Уведомления | Колокольчик слева от аватарки, drawer, подгрузка; назначение, комментарии, просрочка и срок на этой неделе; клик открывает карточку |

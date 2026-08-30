@@ -290,6 +290,7 @@ export async function importTrelloBoard(params: {
       teamId: params.teamId,
       name: params.name,
       releasesEnabled: false,
+      analyticsEnabled: false,
     });
 
     projectId = project._id;

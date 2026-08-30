@@ -143,6 +143,7 @@ teamsRouter.post(
       teamId: asObjectId(teamId),
       name,
       releasesEnabled: false,
+      analyticsEnabled: false,
     });
 
     await createDefaultBoard(project._id);

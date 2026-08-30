@@ -104,6 +104,7 @@ projectsRouter.get(
       _id: { $in: members.map((item) => item.userId) },
     }).lean();
     const releasesEnabled = isFeatureOn(project.releasesEnabled);
+    const analyticsEnabled = isFeatureOn(project.analyticsEnabled);
     const people = members.map((member) => {
       const user = users.find(
         (item) => item._id.toString() === member.userId.toString(),
@@ -123,6 +124,7 @@ projectsRouter.get(
       role: access.role,
       teamRole: access.teamRole,
       releasesEnabled,
+      analyticsEnabled,
       boardBackground: project.boardBackground ?? 'default',
       people,
       board: { id: board._id.toString() },
@@ -174,6 +176,11 @@ projectsRouter.patch(
       project.releasesEnabled = readBoolean(req.body, 'releasesEnabled');
     }
 
+    if (req.body?.analyticsEnabled !== undefined) {
+      assertRole(access.role, ['owner', 'admin']);
+      project.analyticsEnabled = readBoolean(req.body, 'analyticsEnabled');
+    }
+
     if (req.body?.boardBackground !== undefined) {
       assertRole(access.role, ['owner', 'admin']);
       project.boardBackground = readBoardBackground(req.body, 'boardBackground');
@@ -184,6 +191,7 @@ projectsRouter.patch(
       id: project._id.toString(),
       name: project.name,
       releasesEnabled: project.releasesEnabled,
+      analyticsEnabled: project.analyticsEnabled,
       boardBackground: project.boardBackground,
     });
   }),
@@ -206,6 +214,7 @@ projectsRouter.post(
       teamId: source.teamId,
       name: `${source.name} (копия)`,
       releasesEnabled: source.releasesEnabled,
+      analyticsEnabled: source.analyticsEnabled,
       boardBackground: source.boardBackground,
     });
 

@@ -221,6 +221,7 @@ export interface ProjectDetails {
   role: TeamRole;
   teamRole: TeamRole;
   releasesEnabled: boolean;
+  analyticsEnabled: boolean;
   boardBackground: BoardBackgroundId;
   people: ProjectPerson[];
   board: { id: string };

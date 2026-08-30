@@ -99,6 +99,7 @@ export async function exportProject(
     project: {
       name: project.name,
       releasesEnabled: project.releasesEnabled === true,
+      analyticsEnabled: project.analyticsEnabled === true,
       boardBackground: project.boardBackground ?? DEFAULT_BOARD_BACKGROUND,
     },
     people,

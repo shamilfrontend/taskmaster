@@ -42,11 +42,20 @@ watch(
 
     const { name } = route;
     const releasesOn = Boolean(project.releasesEnabled);
+    const analyticsOn = Boolean(project.analyticsEnabled);
 
     if (
       (name === 'project-releases' || name === 'release')
       && !releasesOn
     ) {
+      void router.replace({
+        name: 'project',
+        params: { projectId: projectId.value },
+      });
+      return;
+    }
+
+    if (name === 'analytics' && !analyticsOn) {
       void router.replace({
         name: 'project',
         params: { projectId: projectId.value },
@@ -82,6 +91,7 @@ const tabs = useProjectTabs(
   projectId,
   computed(() => projects.current?.role),
   computed(() => Boolean(projects.current?.releasesEnabled)),
+  computed(() => Boolean(projects.current?.analyticsEnabled)),
   computed(() => projects.current?.teamRole),
 );
 
@@ -94,8 +104,13 @@ const isRouteAllowed = computed(() => {
 
   const { name } = route;
   const releasesOn = Boolean(project.releasesEnabled);
+  const analyticsOn = Boolean(project.analyticsEnabled);
 
   if ((name === 'project-releases' || name === 'release') && !releasesOn) {
+    return false;
+  }
+
+  if (name === 'analytics' && !analyticsOn) {
     return false;
   }
 

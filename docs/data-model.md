@@ -76,6 +76,7 @@ erDiagram
     ObjectId teamId
     string name
     boolean releasesEnabled
+    boolean analyticsEnabled
     string boardBackground
   }
 
@@ -249,6 +250,7 @@ Owner один по смыслу продукта: роль Owner через с�
 | `teamId` | ObjectId → Team | Родительская команда |
 | `name` | string | Название проекта |
 | `releasesEnabled` | boolean, default false | Вкладка релизов и поле релиза на карточке |
+| `analyticsEnabled` | boolean, default false | Вкладка аналитики |
 | `boardBackground` | `default \| bg-01…bg-36` | Фон канбана |
 | `createdAt` / `updatedAt` | Date | Служебные |
 
