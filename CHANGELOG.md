@@ -26,7 +26,8 @@
 
 ### Changed
 
-- Экраны проекта открываются по вложенным URL: доска `/projects/:id`, релизы `/projects/:id/releases`, релиз `/projects/:id/releases/:releaseId`, аналитика `/projects/:id/analytics`, настройки `/projects/:id/settings`. Старые адреса (`?tab=`, `/releases/:id`) редиректятся.
+- Экраны проекта открываются по вложенным URL: доска `/projects/:id`, участники `/projects/:id/members`, релизы `/projects/:id/releases`, релиз `/projects/:id/releases/:releaseId`, аналитика `/projects/:id/analytics`, настройки `/projects/:id/settings`. Старые адреса (`?tab=`, `/releases/:id`) редиректятся.
+- Состав проекта переехал из настроек на вкладку «Участники» (`/projects/:id/members`), сразу после «Доска».
 - CI: после линта запускаются unit-тесты клиента; деплой на `main` зависит от успешного `test`.
 - Лендинг адаптирован под телефоны и планшеты: сетка карточек 3/2/1, hero-скриншот во всю ширину экрана, кнопки CTA в столбик.
 - В шапке лендинга осталась одна кнопка «Войти через Яндекс ID»; демо-доступ доступен из hero и блока CTA.

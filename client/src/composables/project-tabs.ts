@@ -16,6 +16,14 @@ export function useProjectTabs(
         label: 'Доска',
         to: { name: 'project', params: { projectId: projectId.value } },
       },
+      {
+        id: 'members',
+        label: 'Участники',
+        to: {
+          name: 'project-members',
+          params: { projectId: projectId.value },
+        },
+      },
     ];
 
     if (releasesEnabled.value) {

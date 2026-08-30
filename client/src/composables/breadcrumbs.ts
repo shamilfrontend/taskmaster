@@ -13,6 +13,7 @@ const PROJECT_ROUTE_NAMES = new Set([
   'project',
   'project-releases',
   'project-settings',
+  'project-members',
   'analytics',
   'release',
 ]);
@@ -107,6 +108,10 @@ export function useBreadcrumbs(): { crumbs: ComputedRef<Crumb[]> } {
 
     if (name === 'project-releases' && projectMatches && teamCrumb && projectCrumb) {
       return [teamCrumb, projectCrumb, { label: 'Релизы' }];
+    }
+
+    if (name === 'project-members' && projectMatches && teamCrumb && projectCrumb) {
+      return [teamCrumb, projectCrumb, { label: 'Участники' }];
     }
 
     if (name === 'project-settings' && projectMatches && teamCrumb && projectCrumb) {

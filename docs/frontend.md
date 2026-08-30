@@ -19,6 +19,7 @@ flowchart TB
   Releases["releases ProjectReleasesView"]
   Release["releases/:releaseId ReleaseView"]
   Analytics["analytics AnalyticsView"]
+  Members["members ProjectMembersView"]
   Settings["settings ProjectSettingsView"]
   LegacyBoard["/boards/:boardId redirect"]
   LegacyRelease["/releases/:releaseId redirect"]
@@ -30,6 +31,7 @@ flowchart TB
   Teams --> MyTasks
   Team --> Layout
   Layout --> Board
+  Layout --> Members
   Layout --> Releases
   Layout --> Release
   Layout --> Analytics
@@ -55,13 +57,14 @@ flowchart TB
 | `/projects/:projectId/releases` | `project-releases` | `ProjectReleasesView` | дочерний | Список релизов (если `releasesEnabled`) |
 | `/projects/:projectId/releases/:releaseId` | `release` | `ReleaseView` | дочерний | Релиз: карточки, статус, дата |
 | `/projects/:projectId/analytics` | `analytics` | `AnalyticsView` | дочерний | Отчёты за период (если `analyticsEnabled`) |
-| `/projects/:projectId/settings` | `project-settings` | `ProjectSettingsView` | дочерний | Настройки, состав, фон, релизы, экспорт |
+| `/projects/:projectId/members` | `project-members` | `ProjectMembersView` | дочерний | Состав проекта |
+| `/projects/:projectId/settings` | `project-settings` | `ProjectSettingsView` | дочерний | Настройки, фон, релизы, экспорт |
 | `/boards/:boardId` | `board` | пустой + `beforeEnter` | — | `GET /boards/:id` → `project` |
 | `/releases/:releaseId` | `legacy-release` | пустой + `beforeEnter` | — | `GET /releases/:id` → вложенный `release` |
 
-Legacy query `?tab=releases|settings` на канбане редиректится на именованные дочерние маршруты.
+Legacy query `?tab=releases|members|settings` на канбане редиректится на именованные дочерние маршруты.
 
-Вкладки проекта (`useProjectTabs`): Доска всегда; Релизы — если включены; Аналитика — если включена; Настройки — owner/admin проекта или owner команды.
+Вкладки проекта (`useProjectTabs`): Доска и Участники всегда; Релизы — если включены; Аналитика — если включена; Настройки — owner/admin проекта или owner команды.
 
 Query на `/my-tasks`: `done=1` (готовые колонки), `teamId`, `projectId`. Клик открывает `/projects/:id?card=`.
 
@@ -108,5 +111,6 @@ Query на `/my-tasks`: `done=1` (готовые колонки), `teamId`, `pro
 | Releases | Список релизов проекта |
 | Release | Название, дата, статус, прикреплённые карточки |
 | Analytics | Период, сводка, статусы, план/факт по часам, загрузка, релизы, недели, риски |
-| Settings | Имя, флаги релизов и аналитики, фон, состав, удаление |
+| Members | Состав проекта, роли, добавление из команды, исключение и выход |
+| Settings | Имя, флаги релизов и аналитики, фон, удаление |
 | Уведомления | Колокольчик слева от аватарки, drawer, подгрузка; назначение, комментарии, просрочка и срок на этой неделе; клик открывает карточку |

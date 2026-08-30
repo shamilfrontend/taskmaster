@@ -38,6 +38,14 @@ function redirectLegacyProjectTab(to: RouteLocationNormalized) {
     };
   }
 
+  if (tab === 'members') {
+    return {
+      name: 'project-members',
+      params: { projectId: to.params.projectId },
+      query: queryWithoutTab(to.query),
+    };
+  }
+
   if (tab === 'settings') {
     return {
       name: 'project-settings',
@@ -128,6 +136,11 @@ export const router = createRouter({
           path: 'analytics',
           name: 'analytics',
           component: () => import('../views/AnalyticsView.vue'),
+        },
+        {
+          path: 'members',
+          name: 'project-members',
+          component: () => import('../views/ProjectMembersView.vue'),
         },
         {
           path: 'settings',
