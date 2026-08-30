@@ -38,12 +38,9 @@ export function useBreadcrumbs(): { crumbs: ComputedRef<Crumb[]> } {
 
     if (typeof name === 'string' && PROJECT_ROUTE_NAMES.has(name)) {
       const projectId = String(route.params.projectId);
-
-      if (project.current?.id !== projectId) {
-        await project.fetchOne(projectId);
-      }
-
-      const teamId = project.current?.teamId;
+      const teamId = project.current?.id === projectId
+        ? project.current.teamId
+        : undefined;
 
       if (teamId && teams.current?.id !== teamId) {
         await teams.fetchOne(teamId);
@@ -60,7 +57,7 @@ export function useBreadcrumbs(): { crumbs: ComputedRef<Crumb[]> } {
   }
 
   watch(
-    () => route.fullPath,
+    () => [route.fullPath, project.current?.teamId] as const,
     () => {
       void loadParents();
     },

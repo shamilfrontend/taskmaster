@@ -27,6 +27,7 @@
 
 ### Changed
 
+- Проект на `/projects/:id/*` загружается один раз: крошки читают стор, `fetchOne` дедуплицирует параллельные вызовы.
 - Экраны проекта открываются по вложенным URL: доска `/projects/:id`, участники `/projects/:id/members`, релизы `/projects/:id/releases`, релиз `/projects/:id/releases/:releaseId`, аналитика `/projects/:id/analytics`, настройки `/projects/:id/settings`. Старые адреса (`?tab=`, `/releases/:id`) редиректятся.
 - Состав проекта переехал из настроек на вкладку «Участники» (`/projects/:id/members`), сразу после «Доска».
 - CI: после линта запускаются unit-тесты клиента; деплой на `main` зависит от успешного `test`.

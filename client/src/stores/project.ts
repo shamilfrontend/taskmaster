@@ -36,19 +36,50 @@ export const useProjectStore = defineStore('project', () => {
   const analytics = ref<AnalyticsPayload | null>(null);
   const isLoading = ref(false);
   const error = ref<string | null>(null);
+  let fetchSeq = 0;
+  let inFlightId: string | null = null;
+  let inFlight: Promise<void> | null = null;
 
   async function fetchOne(projectId: string): Promise<void> {
+    if (inFlight && inFlightId === projectId) {
+      return inFlight;
+    }
+
+    fetchSeq += 1;
+    const seq = fetchSeq;
     isLoading.value = true;
     error.value = null;
 
-    try {
-      const { data } = await http.get<ProjectPayload>(`/projects/${projectId}`);
-      current.value = toProjectDetails(data);
-    } catch (err: unknown) {
-      error.value = errorMessage(err);
-    } finally {
-      isLoading.value = false;
-    }
+    const request = (async () => {
+      try {
+        const { data } = await http.get<ProjectPayload>(`/projects/${projectId}`);
+
+        if (seq !== fetchSeq) {
+          return;
+        }
+
+        current.value = toProjectDetails(data);
+      } catch (err: unknown) {
+        if (seq !== fetchSeq) {
+          return;
+        }
+
+        error.value = errorMessage(err);
+      } finally {
+        if (seq === fetchSeq) {
+          isLoading.value = false;
+        }
+
+        if (inFlightId === projectId) {
+          inFlight = null;
+          inFlightId = null;
+        }
+      }
+    })();
+
+    inFlightId = projectId;
+    inFlight = request;
+    return request;
   }
 
   async function renameProject(
