@@ -102,8 +102,6 @@ GET проекта отдаёт `people` — участники для филь�
 | Метод | Путь | Роль | Тело | Ответ |
 | --- | --- | --- | --- | --- |
 | GET | `/:boardId` | доступ к проекту | — | Колонки, метки, карточки (агрегаты часов), релизы |
-| PATCH | `/:boardId` | O/A | `{ name }` | `{ id, name }` |
-| DELETE | `/:boardId` | O/A | — | Каскад доски |
 | POST | `/:boardId/columns` | O/A | `{ name }` | 201 колонка, `isDone: false`, position в конец |
 | PATCH | `/columns/:columnId` | O/A | `{ name?, position? }` | Колонка |
 | DELETE | `/columns/:columnId` | O/A | — | 409 если есть карточки |

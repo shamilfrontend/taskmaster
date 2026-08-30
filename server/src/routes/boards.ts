@@ -16,7 +16,6 @@ import { ProjectModel } from '../models/project.js';
 import { ReleaseModel } from '../models/release.js';
 import { TimeEntryModel } from '../models/time-entry.js';
 import { UserModel } from '../models/user.js';
-import { deleteBoardCascade } from '../services/cascade.js';
 import {
   asObjectId,
   assertRole,
@@ -131,36 +130,6 @@ boardsRouter.get(
         };
       }),
     });
-  }),
-);
-
-boardsRouter.patch(
-  '/:boardId',
-  asyncHandler(async (req: Request, res: Response) => {
-    const boardId = req.params.boardId as string;
-    const access = await requireProjectAccessFromBoard(boardId, req.userId);
-    assertRole(access.role, ['owner', 'admin']);
-
-    const board = await BoardModel.findById(asObjectId(boardId));
-
-    if (!board) {
-      throw new AppError(404, 'Доска не найдена');
-    }
-
-    board.name = readString(req.body, 'name');
-    await board.save();
-    res.json({ id: board._id.toString(), name: board.name });
-  }),
-);
-
-boardsRouter.delete(
-  '/:boardId',
-  asyncHandler(async (req: Request, res: Response) => {
-    const boardId = req.params.boardId as string;
-    const access = await requireProjectAccessFromBoard(boardId, req.userId);
-    assertRole(access.role, ['owner', 'admin']);
-    await deleteBoardCascade(asObjectId(boardId));
-    res.json({ ok: true });
   }),
 );
 

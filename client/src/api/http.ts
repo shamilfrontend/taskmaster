@@ -2,9 +2,9 @@ import axios, { isAxiosError } from 'axios';
 import { notify } from '@kyvg/vue3-notification';
 import type { ApiErrorBody } from '../types/index.ts';
 
-export const DEMO_BLOCKED_MESSAGE = 'Действия в демо-доступе отключены';
+const DEMO_BLOCKED_MESSAGE = 'Действия в демо-доступе отключены';
 
-export class DemoBlockedError extends Error {
+class DemoBlockedError extends Error {
   constructor() {
     super(DEMO_BLOCKED_MESSAGE);
     this.name = 'DemoBlockedError';

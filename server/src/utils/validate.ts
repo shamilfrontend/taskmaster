@@ -78,29 +78,6 @@ export function readNumber(body: unknown, field: string): number {
   return num;
 }
 
-export function readOptionalNumber(
-  body: unknown,
-  field: string,
-): number | undefined {
-  if (typeof body !== 'object' || body === null) {
-    throw new AppError(400, 'Некорректное тело запроса');
-  }
-
-  const value = (body as Record<string, unknown>)[field];
-
-  if (value === undefined || value === null || value === '') {
-    return undefined;
-  }
-
-  const num = typeof value === 'number' ? value : Number(value);
-
-  if (!Number.isFinite(num)) {
-    throw new AppError(400, `Поле ${field} должно быть числом`);
-  }
-
-  return num;
-}
-
 function isHalfStep(value: number): boolean {
   return Math.abs(value * 2 - Math.round(value * 2)) < 1e-9;
 }

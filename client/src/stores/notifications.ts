@@ -1,6 +1,6 @@
 import { acceptHMRUpdate, defineStore } from 'pinia';
 import { ref } from 'vue';
-import { http, errorMessage, toastError } from '../api/http.ts';
+import { http, toastError } from '../api/http.ts';
 import type { NotificationItem, NotificationPage } from '../types/index.ts';
 
 const POLL_MS = 10000;
@@ -11,7 +11,6 @@ export const useNotificationsStore = defineStore('notifications', () => {
   const unreadCount = ref(0);
   const isLoading = ref(false);
   const isOpen = ref(false);
-  const error = ref<string | null>(null);
 
   let pollTimer: ReturnType<typeof setInterval> | null = null;
   let inFlight = false;
@@ -49,8 +48,6 @@ export const useNotificationsStore = defineStore('notifications', () => {
       isLoading.value = true;
     }
 
-    error.value = null;
-
     try {
       const last = items.value[items.value.length - 1];
       const { data } = await http.get<NotificationPage>('/notifications', {
@@ -73,9 +70,7 @@ export const useNotificationsStore = defineStore('notifications', () => {
       }
 
       unreadCount.value = data.unreadCount;
-    } catch (err: unknown) {
-      error.value = errorMessage(err);
-
+    } catch {
       if (reset && !items.value.length) {
         hasMore.value = false;
       }
@@ -177,7 +172,6 @@ export const useNotificationsStore = defineStore('notifications', () => {
     hasMore.value = false;
     unreadCount.value = 0;
     isOpen.value = false;
-    error.value = null;
   }
 
   return {
@@ -186,12 +180,9 @@ export const useNotificationsStore = defineStore('notifications', () => {
     unreadCount,
     isLoading,
     isOpen,
-    error,
-    fetchList,
     loadMore,
     markRead,
     markAllRead,
-    openDrawer,
     closeDrawer,
     toggleDrawer,
     startPolling,

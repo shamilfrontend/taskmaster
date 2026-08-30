@@ -15,11 +15,10 @@ import { useTeamsStore } from './teams.ts';
 
 interface ProjectPayload extends Omit<ProjectDetails, 'board'> {
   board?: { id: string };
-  boards?: { id: string }[];
 }
 
 function toProjectDetails(data: ProjectPayload): ProjectDetails {
-  const boardId = data.board?.id ?? data.boards?.[0]?.id ?? '';
+  const boardId = data.board?.id ?? '';
 
   return {
     ...data,
