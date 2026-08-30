@@ -32,7 +32,7 @@ interface MenuPosition {
   right: string;
 }
 
-type ProjectSource = 'blank' | 'trello';
+type ProjectSource = 'blank' | 'trello' | 'taskmaster';
 
 const route = useRoute();
 const router = useRouter();
@@ -51,6 +51,9 @@ const projectSource = ref<ProjectSource>('blank');
 const trelloBoard = ref<unknown>(null);
 const trelloError = ref('');
 const trelloInputKey = ref(0);
+const taskmasterPayload = ref<unknown>(null);
+const taskmasterError = ref('');
+const taskmasterInputKey = ref(0);
 const deleteOpen = ref(false);
 const projectDeleteOpen = ref(false);
 const projectToDelete = ref<{ id: string; name: string } | null>(null);
@@ -260,6 +263,16 @@ async function duplicateProject(): Promise<void> {
   }
 }
 
+async function exportProject(): Promise<void> {
+  if (!menuProject.value) {
+    return;
+  }
+
+  const { id, name } = menuProject.value;
+  closeMenus();
+  await projects.exportProject(id, name);
+}
+
 function openProjectRename(): void {
   if (!menuProject.value) {
     return;
@@ -360,16 +373,37 @@ function isTrelloBoard(value: unknown): value is { name: string } {
   );
 }
 
+function isTaskmasterSnapshot(value: unknown): value is {
+  project?: { name?: string };
+} {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  return (value as Record<string, unknown>).format === 'taskmaster-project';
+}
+
 function resetTrelloFile(): void {
   trelloBoard.value = null;
   trelloError.value = '';
   trelloInputKey.value += 1;
 }
 
+function resetTaskmasterFile(): void {
+  taskmasterPayload.value = null;
+  taskmasterError.value = '';
+  taskmasterInputKey.value += 1;
+}
+
+function resetImportFiles(): void {
+  resetTrelloFile();
+  resetTaskmasterFile();
+}
+
 function openProjectModal(): void {
   projectName.value = '';
   projectSource.value = 'blank';
-  resetTrelloFile();
+  resetImportFiles();
   projectOpen.value = true;
 }
 
@@ -377,12 +411,16 @@ function closeProjectModal(): void {
   projectOpen.value = false;
   projectName.value = '';
   projectSource.value = 'blank';
-  resetTrelloFile();
+  resetImportFiles();
 }
 
 watch(projectSource, (source) => {
-  if (source === 'blank') {
+  if (source !== 'trello') {
     resetTrelloFile();
+  }
+
+  if (source !== 'taskmaster') {
+    resetTaskmasterFile();
   }
 });
 
@@ -413,19 +451,65 @@ function onTrelloFile(event: Event): void {
   });
 }
 
+function onTaskmasterFile(event: Event): void {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  taskmasterError.value = '';
+  taskmasterPayload.value = null;
+
+  if (!file) {
+    return;
+  }
+
+  void file.text().then((text) => {
+    try {
+      const parsed: unknown = JSON.parse(text);
+
+      if (!isTaskmasterSnapshot(parsed)) {
+        taskmasterError.value = 'Это не экспорт проекта Taskmaster';
+        return;
+      }
+
+      taskmasterPayload.value = parsed;
+      const importedName = parsed.project?.name?.trim();
+
+      if (importedName) {
+        projectName.value = importedName;
+      }
+    } catch {
+      taskmasterError.value = 'Не удалось прочитать JSON';
+    }
+  });
+}
+
 async function createProject(): Promise<void> {
   if (projectSource.value === 'trello' && !trelloBoard.value) {
     trelloError.value = 'Выберите JSON-файл Trello';
     return;
   }
 
-  const id = projectSource.value === 'trello' && trelloBoard.value
-    ? await teams.createProjectFromTrello(
+  if (projectSource.value === 'taskmaster' && !taskmasterPayload.value) {
+    taskmasterError.value = 'Выберите файл проекта Taskmaster';
+    return;
+  }
+
+  let id: string | null = null;
+
+  if (projectSource.value === 'trello' && trelloBoard.value) {
+    id = await teams.createProjectFromTrello(
       teamId.value,
       projectName.value,
       trelloBoard.value,
-    )
-    : await teams.createProject(teamId.value, projectName.value);
+    );
+  } else if (projectSource.value === 'taskmaster' && taskmasterPayload.value) {
+    id = await teams.createProjectFromTaskmaster(
+      teamId.value,
+      projectName.value,
+      taskmasterPayload.value,
+    );
+  } else {
+    id = await teams.createProject(teamId.value, projectName.value);
+  }
 
   if (id) {
     closeProjectModal();
@@ -1016,6 +1100,14 @@ async function confirmRevoke(): Promise<void> {
           >
           <span><strong>Из Trello</strong></span>
         </label>
+        <label class="choice">
+          <input
+            v-model="projectSource"
+            type="radio"
+            value="taskmaster"
+          >
+          <span><strong>Из файла</strong></span>
+        </label>
       </div>
       <div class="field">
         <label>Название</label>
@@ -1043,11 +1135,27 @@ async function confirmRevoke(): Promise<void> {
           @change="onTrelloFile"
         >
       </div>
+      <div
+        v-if="projectSource === 'taskmaster'"
+        class="field"
+      >
+        <p class="muted mb-16">
+          Файл, скачанный из настроек проекта или меню команды.
+        </p>
+        <label>Файл проекта</label>
+        <input
+          :key="taskmasterInputKey"
+          class="input"
+          type="file"
+          accept=".json,.taskmaster.json,application/json"
+          @change="onTaskmasterFile"
+        >
+      </div>
       <p
-        v-if="trelloError || teams.error"
+        v-if="trelloError || taskmasterError || teams.error"
         class="warn"
       >
-        {{ trelloError || teams.error }}
+        {{ trelloError || taskmasterError || teams.error }}
       </p>
       <div class="modal-foot">
         <button
@@ -1143,6 +1251,12 @@ async function confirmRevoke(): Promise<void> {
           @click="duplicateProject"
         >
           Дублировать
+        </button>
+        <button
+          type="button"
+          @click="exportProject"
+        >
+          Экспортировать
         </button>
         <button
           type="button"

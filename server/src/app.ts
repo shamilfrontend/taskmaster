@@ -25,7 +25,10 @@ export function createApp() {
     }),
   );
   app.use(
-    '/api/teams/:teamId/projects/from-trello',
+    [
+      '/api/teams/:teamId/projects/from-trello',
+      '/api/teams/:teamId/projects/from-taskmaster',
+    ],
     express.json({ limit: '10mb' }),
   );
   app.use(express.json());

@@ -6,7 +6,7 @@
 
 Ошибки: `{ "error": "текст" }` + HTTP-код (`AppError`). Health: `GET /api/health` → `{ "ok": true }`.
 
-Импорт из Trello: лимит тела `10mb` только на `POST /api/teams/:teamId/projects/from-trello`.
+Импорт из Trello и файла Taskmaster: лимит тела `10mb` на `POST /api/teams/:teamId/projects/from-trello` и `POST /api/teams/:teamId/projects/from-taskmaster`.
 
 ## Авторизация колонки Auth
 
@@ -49,6 +49,7 @@
 | DELETE | `/:teamId/invites/:inviteId` | team O/A | — | Отзыв, `{ ok: true }` |
 | POST | `/:teamId/projects` | team O/A | `{ name }` | 201 проект + доска по умолчанию |
 | POST | `/:teamId/projects/from-trello` | team O/A | `{ name, board }` | 201 импорт JSON Trello |
+| POST | `/:teamId/projects/from-taskmaster` | team O/A | `{ name, payload }` | 201 импорт JSON Taskmaster; `skippedComments`, `skippedTimeEntries`, `skippedAssignees` |
 
 Состав команды: Owner меняет/исключает любого; Admin — только Member/Viewer. Сам себя может удалить любой кроме Owner.
 
@@ -68,6 +69,7 @@ JWT + доступ к проекту (участник проекта или own
 | GET | `/:projectId` | любой доступ | — | Детали: флаги, board.id, releases, people |
 | PATCH | `/:projectId` | O/A | `name`, `releasesEnabled`, `boardBackground` | Обновлённые поля |
 | POST | `/:projectId/duplicate` | O/A | — | 201 `{ id }` копия с составом, пустая доска |
+| GET | `/:projectId/export` | O/A | — | JSON-снимок: доска, карточки, релизы, комментарии, списания; без состава |
 | DELETE | `/:projectId` | O/A | — | Каскад колонок, карточек, релизов |
 | GET | `/:projectId/members` | любой доступ | — | `{ role, teamRole, members, candidates }` |
 | POST | `/:projectId/members` | O/A проекта или owner команды | `{ userId, role }` | 201; роль не owner; кандидат из команды |

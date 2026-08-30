@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import {
   http, errorMessage, toastError, toastSuccess,
 } from '../api/http.ts';
+import { downloadJson, fileSlug } from '../composables/download.ts';
 import type {
   AnalyticsPayload,
   AnalyticsPeriod,
@@ -157,6 +158,26 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
+  async function exportProject(projectId: string, name?: string): Promise<boolean> {
+    isLoading.value = true;
+    error.value = null;
+
+    try {
+      const { data } = await http.get<unknown>(`/projects/${projectId}/export`);
+      const label = name
+        ?? (current.value?.id === projectId ? current.value.name : undefined);
+      downloadJson(`${fileSlug(label ?? 'project')}.taskmaster.json`, data);
+      toastSuccess('Проект экспортирован');
+      return true;
+    } catch (err: unknown) {
+      error.value = errorMessage(err);
+      toastError('Ошибка при экспорте проекта', err);
+      return false;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
   async function duplicateProject(projectId: string): Promise<string | null> {
     isLoading.value = true;
     error.value = null;
@@ -273,6 +294,7 @@ export const useProjectStore = defineStore('project', () => {
     updateSettings,
     createRelease,
     deleteProject,
+    exportProject,
     duplicateProject,
     fetchAnalytics,
   };

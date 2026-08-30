@@ -18,6 +18,7 @@ import {
   deleteProjectCascade,
   unassignUserInProject,
 } from '../services/cascade.js';
+import { exportProject } from '../services/project-export.js';
 import {
   createDefaultBoard,
   resolveProjectBoard,
@@ -137,6 +138,18 @@ projectsRouter.get(
         }))
         : [],
     });
+  }),
+);
+
+projectsRouter.get(
+  '/:projectId/export',
+  asyncHandler(async (req: Request, res: Response) => {
+    const projectId = req.params.projectId as string;
+    const access = await requireProjectAccess(projectId, req.userId);
+    assertRole(access.role, ['owner', 'admin']);
+
+    const payload = await exportProject(asObjectId(projectId));
+    res.json(payload);
   }),
 );
 

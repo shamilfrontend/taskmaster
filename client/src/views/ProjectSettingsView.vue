@@ -232,6 +232,10 @@ async function selectBackground(id: BoardBackgroundId): Promise<void> {
   await projects.updateSettings(projectId.value, { boardBackground: id });
 }
 
+async function exportProject(): Promise<void> {
+  await projects.exportProject(projectId.value, projects.current?.name);
+}
+
 async function removeProject(): Promise<void> {
   const teamId = projects.current?.teamId;
   const ok = await projects.deleteProject(projectId.value);
@@ -396,6 +400,25 @@ async function removeProject(): Promise<void> {
           @click="saveFeatures"
         >
           Сохранить
+        </button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Экспорт</h2>
+      </div>
+      <p class="muted mb-16">
+        Скачивается JSON с доской, карточками, релизами, комментариями
+        и списаниями. Состав проекта в файл не входит.
+      </p>
+      <div class="actions actions--start">
+        <button
+          type="button"
+          class="btn"
+          :disabled="projects.isLoading"
+          @click="exportProject"
+        >
+          Скачать файл
         </button>
       </div>
     </div>

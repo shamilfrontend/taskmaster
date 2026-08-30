@@ -227,6 +227,14 @@ export interface ProjectDetails {
   releases: ProjectRelease[];
 }
 
+export interface ProjectImportResult {
+  id: string;
+  name: string;
+  skippedComments: number;
+  skippedTimeEntries: number;
+  skippedAssignees: number;
+}
+
 export interface BoardColumn {
   id: string;
   name: string;

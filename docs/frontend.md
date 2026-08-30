@@ -55,7 +55,7 @@ flowchart TB
 | `/projects/:projectId/releases` | `project-releases` | `ProjectReleasesView` | дочерний | Список релизов (если `releasesEnabled`) |
 | `/projects/:projectId/releases/:releaseId` | `release` | `ReleaseView` | дочерний | Релиз: карточки, статус, дата |
 | `/projects/:projectId/analytics` | `analytics` | `AnalyticsView` | дочерний | Отчёты за период |
-| `/projects/:projectId/settings` | `project-settings` | `ProjectSettingsView` | дочерний | Настройки, состав, фон, релизы |
+| `/projects/:projectId/settings` | `project-settings` | `ProjectSettingsView` | дочерний | Настройки, состав, фон, релизы, экспорт |
 | `/boards/:boardId` | `board` | пустой + `beforeEnter` | — | `GET /boards/:id` → `project` |
 | `/releases/:releaseId` | `legacy-release` | пустой + `beforeEnter` | — | `GET /releases/:id` → вложенный `release` |
 
@@ -82,8 +82,8 @@ Query на `/my-tasks`: `done=1` (готовые колонки), `teamId`, `pro
 | Store | Файл | Состояние и вызовы |
 | --- | --- | --- |
 | `auth` | [`client/src/stores/auth.ts`](../client/src/stores/auth.ts) | `user`, `fetchMe`, `login` → `/api/auth/yandex`, `loginDemo`, `logout`. Ставит `setDemoMode`. |
-| `teams` | [`client/src/stores/teams.ts`](../client/src/stores/teams.ts) | Список и текущая команда, activity, инвайты, участники, создание проекта и импорт Trello. |
-| `project` | [`client/src/stores/project.ts`](../client/src/stores/project.ts) | Детали проекта, members, analytics, дублирование, релизы create. |
+| `teams` | [`client/src/stores/teams.ts`](../client/src/stores/teams.ts) | Список и текущая команда, activity, инвайты, участники, создание проекта, импорт Trello и файла Taskmaster. |
+| `project` | [`client/src/stores/project.ts`](../client/src/stores/project.ts) | Детали проекта, members, analytics, дублирование, экспорт, релизы create. |
 | `board` | [`client/src/stores/board.ts`](../client/src/stores/board.ts) | Колонки, карточки, метки, списания, комментарии, чеклисты, релизы attach/detach. |
 | `my-tasks` | [`client/src/stores/my-tasks.ts`](../client/src/stores/my-tasks.ts) | Карточки текущего исполнителя: `GET /me/tasks`. |
 | `notifications` | [`client/src/stores/notifications.ts`](../client/src/stores/notifications.ts) | Инбокс, `unreadCount`, polling 10 с, `markRead` / `markAllRead`. Drawer в шапке. |
@@ -102,7 +102,7 @@ Query на `/my-tasks`: `done=1` (готовые колонки), `teamId`, `pro
 | Invite | Имя команды, роль, срок; если нет сессии — OAuth с `next=/invite/:token` |
 | Teams | Свои команды, счётчики участников и доступных проектов |
 | Мои задачи | Назначенные карточки по проектам, группы по сроку |
-| Team | Состав, инвайты (owner/admin), проекты, лента действий, настройки/удаление |
+| Team | Состав, инвайты (owner/admin), проекты (создание, Trello, файл Taskmaster), лента действий, настройки/удаление |
 | Project (канбан) | Колонки, карточки, фон, DnD, модалка карточки |
 | Модалка карточки | Исполнитель, срок, оценка, описание, чеклисты, релиз, списания, метки, комментарии |
 | Releases | Список релизов проекта |

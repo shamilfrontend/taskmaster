@@ -16,6 +16,7 @@ import { TeamMemberModel } from '../models/team-member.js';
 import { UserModel } from '../models/user.js';
 import { deleteTeamCascade, unassignUserInTeam } from '../services/cascade.js';
 import { createDefaultBoard } from '../services/project-setup.js';
+import { importProjectSnapshot } from '../services/project-import.js';
 import { importTrelloBoard } from '../services/trello-import.js';
 import {
   createInviteToken,
@@ -176,6 +177,31 @@ teamsRouter.post(
       teamId: asObjectId(teamId),
       name,
       board,
+      ownerId: asObjectId(req.userId),
+    });
+
+    res.status(201).json(project);
+  }),
+);
+
+teamsRouter.post(
+  '/:teamId/projects/from-taskmaster',
+  asyncHandler(async (req: Request, res: Response) => {
+    const teamId = req.params.teamId as string;
+    const membership = await requireMembership(teamId, req.userId);
+    assertRole(membership.role, ['owner', 'admin']);
+
+    const name = readString(req.body, 'name');
+
+    if (typeof req.body !== 'object' || req.body === null) {
+      throw new AppError(400, 'Некорректное тело запроса');
+    }
+
+    const { payload } = (req.body as Record<string, unknown>);
+    const project = await importProjectSnapshot({
+      teamId: asObjectId(teamId),
+      name,
+      payload,
       ownerId: asObjectId(req.userId),
     });
 
