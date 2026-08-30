@@ -10,6 +10,18 @@ import { signToken } from '../utils/crypto.js';
 
 export const authRouter = Router();
 
+function redirectPath(raw: unknown): string {
+  if (typeof raw !== 'string' || !raw.startsWith('/') || raw.startsWith('//')) {
+    return '/';
+  }
+
+  if (raw === '/api' || raw.startsWith('/api/')) {
+    return '/';
+  }
+
+  return raw;
+}
+
 function cookieOptions(): CookieOptions {
   return {
     httpOnly: true,
@@ -33,9 +45,7 @@ interface YandexProfile {
 }
 
 authRouter.get('/yandex', (req: Request, res: Response) => {
-  const next = typeof req.query.next === 'string' && req.query.next.startsWith('/')
-    ? req.query.next
-    : '/';
+  const next = redirectPath(req.query.next);
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: config.yandexClientId,
@@ -105,9 +115,7 @@ authRouter.get(
 
     res.cookie(config.cookieName, signToken(user._id.toString()), cookieOptions());
 
-    const next = typeof req.query.state === 'string' && req.query.state.startsWith('/')
-      ? req.query.state
-      : '/';
+    const next = redirectPath(req.query.state);
 
     res.redirect(`${config.frontendUrl}${next}`);
   }),

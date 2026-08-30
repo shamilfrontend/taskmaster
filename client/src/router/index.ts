@@ -5,7 +5,7 @@ import {
   type RouteLocationNormalized,
 } from 'vue-router';
 import { http } from '../api/http.ts';
-import { useAuthStore } from '../stores/auth.ts';
+import { safeAuthNext, useAuthStore } from '../stores/auth.ts';
 
 declare global {
   interface Window {
@@ -206,8 +206,7 @@ router.beforeEach(async (to) => {
 
   if (to.meta.public) {
     if (to.name === 'landing' && auth.user) {
-      const next = typeof to.query.next === 'string' ? to.query.next : '/';
-      return next;
+      return safeAuthNext(to.query.next);
     }
 
     return true;
@@ -218,9 +217,15 @@ router.beforeEach(async (to) => {
       return { name: 'landing' };
     }
 
+    const next = safeAuthNext(to.fullPath);
+
+    if (next === '/') {
+      return { name: 'landing' };
+    }
+
     return {
       name: 'landing',
-      query: { next: to.fullPath },
+      query: { next },
     };
   }
 

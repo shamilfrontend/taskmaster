@@ -4,6 +4,18 @@ import { ref } from 'vue';
 import { http, errorMessage, setDemoMode } from '../api/http.ts';
 import type { AuthUser } from '../types/index.ts';
 
+export function safeAuthNext(raw: unknown): string {
+  if (typeof raw !== 'string' || !raw.startsWith('/') || raw.startsWith('//')) {
+    return '/';
+  }
+
+  if (raw === '/api' || raw.startsWith('/api/')) {
+    return '/';
+  }
+
+  return raw;
+}
+
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<AuthUser | null>(null);
   const isLoading = ref(false);
@@ -34,7 +46,8 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function login(next = '/'): void {
-    window.location.assign(`/api/auth/yandex?next=${encodeURIComponent(next)}`);
+    const path = safeAuthNext(next);
+    window.location.assign(`/api/auth/yandex?next=${encodeURIComponent(path)}`);
   }
 
   async function loginDemo(): Promise<boolean> {

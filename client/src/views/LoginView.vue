@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { useAuthStore } from '../stores/auth.ts';
+import { safeAuthNext, useAuthStore } from '../stores/auth.ts';
 
 interface LandingCard {
   title: string;
@@ -12,7 +12,7 @@ const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 
-const next = computed(() => (typeof route.query.next === 'string' ? route.query.next : '/'));
+const next = computed(() => safeAuthNext(route.query.next));
 
 const pains: LandingCard[] = [
   {
