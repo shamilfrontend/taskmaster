@@ -79,7 +79,7 @@ onUnmounted(() => {
         src="/logo/kanban.svg"
         alt=""
       >
-      Taskmaster
+      TaskMaster
     </button>
     <nav
       v-if="crumbs.length > 0"
@@ -243,10 +243,10 @@ onUnmounted(() => {
   }
 
   img {
-    width: 22px;
-    height: 22px;
+    width: 34px;
+    height: 34px;
     border-radius: 6px;
-    background: #fff;
+    background: none;
   }
 }
 

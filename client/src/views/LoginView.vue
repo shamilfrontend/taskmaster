@@ -66,7 +66,7 @@ async function loginDemo(): Promise<void> {
             src="/logo/kanban.svg"
             alt=""
           >
-          <span class="brand__name">Taskmaster</span>
+          <span class="brand__name">TaskMaster</span>
         </div>
         <div class="landing-actions">
           <button
@@ -250,8 +250,8 @@ async function loginDemo(): Promise<void> {
 
   img {
     flex-shrink: 0;
-    width: 22px;
-    height: 22px;
+    width: 34px;
+    height: 34px;
     border-radius: 6px;
   }
 }
