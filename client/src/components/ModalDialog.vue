@@ -36,6 +36,8 @@ const emit = defineEmits<{
 </template>
 
 <style lang="scss" scoped>
+@use '../assets/breakpoints' as *;
+
 .modal-overlay {
   display: none;
   position: fixed;
@@ -43,6 +45,8 @@ const emit = defineEmits<{
   z-index: 46;
   place-items: center;
   padding: 24px;
+  padding: max(16px, env(safe-area-inset-top, 0px))
+    16px max(16px, env(safe-area-inset-bottom, 0px));
   background: rgb(9 30 66 / 40%);
 
   &.is-open {
@@ -53,6 +57,7 @@ const emit = defineEmits<{
 .modal {
   width: min(440px, 100%);
   max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
   overflow: auto;
   padding: 20px;
   background: var(--surface);
@@ -72,6 +77,21 @@ const emit = defineEmits<{
     margin: 0;
     font-size: 16px;
     font-weight: 600;
+  }
+}
+
+@media (max-width: $bp-narrow) {
+  .modal-overlay {
+    padding: 12px;
+    padding: max(8px, env(safe-area-inset-top, 0px))
+      8px max(8px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .modal {
+    width: 100%;
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+    padding: 16px;
   }
 }
 </style>

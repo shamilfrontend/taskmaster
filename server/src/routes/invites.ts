@@ -4,6 +4,8 @@ import { AppError } from '../errors/app-error.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import { InviteModel } from '../models/invite.js';
+import { ProjectModel } from '../models/project.js';
+import { ProjectMemberModel } from '../models/project-member.js';
 import { TeamModel } from '../models/team.js';
 import { TeamMemberModel } from '../models/team-member.js';
 import { hashToken } from '../utils/crypto.js';
@@ -28,11 +30,17 @@ invitesRouter.get(
     }
 
     const team = await TeamModel.findById(invite.teamId).lean();
+    const project = invite.projectId
+      ? await ProjectModel.findById(invite.projectId).lean()
+      : null;
 
     res.json({
       teamName: team?.name ?? '',
       role: invite.role,
       expiresAt: invite.expiresAt,
+      ...(invite.projectId
+        ? { projectName: project?.name ?? '' }
+        : {}),
     });
   }),
 );
@@ -63,23 +71,41 @@ invitesRouter.post(
     invite.acceptedAt = new Date();
     await invite.save();
 
-    if (existing) {
-      res.json({
-        teamId: invite.teamId.toString(),
-        alreadyMember: true,
+    if (!existing) {
+      let teamRole = invite.role;
+
+      if (invite.projectId) {
+        teamRole = invite.role === 'viewer' ? 'viewer' : 'member';
+      }
+
+      await TeamMemberModel.create({
+        teamId: invite.teamId,
+        userId: req.userId,
+        role: teamRole,
       });
-      return;
     }
 
-    await TeamMemberModel.create({
-      teamId: invite.teamId,
-      userId: req.userId,
-      role: invite.role,
-    });
+    if (invite.projectId) {
+      const existingProjectMember = await ProjectMemberModel.findOne({
+        projectId: invite.projectId,
+        userId: req.userId,
+      }).lean();
+
+      if (!existingProjectMember) {
+        await ProjectMemberModel.create({
+          projectId: invite.projectId,
+          userId: req.userId,
+          role: invite.role,
+        });
+      }
+    }
 
     res.json({
       teamId: invite.teamId.toString(),
-      alreadyMember: false,
+      alreadyMember: Boolean(existing),
+      ...(invite.projectId
+        ? { projectId: invite.projectId.toString() }
+        : {}),
     });
   }),
 );

@@ -1,29 +1,34 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import type { TeamRole } from '../constants.js';
 import { AppError } from '../errors/app-error.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import {
-  requireMembership,
-  teamIdFromProject,
+  canManageProjectMember,
+  canManageProjectMembers,
+  requireProjectAccess,
 } from '../middleware/access.js';
-import { BoardModel } from '../models/board.js';
 import { CardModel } from '../models/card.js';
+import { InviteModel } from '../models/invite.js';
 import { ProjectModel } from '../models/project.js';
-import { ProjectMemberRateModel } from '../models/project-member-rate.js';
+import { ProjectMemberModel } from '../models/project-member.js';
 import { ReleaseModel } from '../models/release.js';
 import { TeamMemberModel } from '../models/team-member.js';
-import { TimeEntryModel } from '../models/time-entry.js';
 import { UserModel } from '../models/user.js';
-import { deleteProjectCascade } from '../services/cascade.js';
-import { recalcAssigneePlans, recalcRolePlans } from '../services/plan.js';
+import {
+  deleteProjectCascade,
+  unassignUserInProject,
+} from '../services/cascade.js';
+import { exportProject } from '../services/project-export.js';
 import {
   createDefaultBoard,
   resolveProjectBoard,
 } from '../services/project-setup.js';
-import { normalizeName } from '../utils/crypto.js';
-import { resolveRate } from '../utils/rates.js';
+import {
+  createInviteToken,
+  hashToken,
+  normalizeName,
+} from '../utils/crypto.js';
 import {
   asObjectId,
   assertFeatureOn,
@@ -31,37 +36,21 @@ import {
   isFeatureOn,
   readBoolean,
   readBoardBackground,
-  readBudget,
-  readNumber,
+  readInviteRole,
+  readNonOwnerRole,
   readOptionalDate,
-  readOptionalNumber,
   readString,
 } from '../utils/validate.js';
 
 export const projectsRouter = Router();
 projectsRouter.use(requireAuth);
 
-async function projectFact(projectId: string): Promise<number> {
-  const boards = await BoardModel.find({
-    projectId: asObjectId(projectId),
-  }).lean();
-  const cards = await CardModel.find({
-    boardId: { $in: boards.map((board) => board._id) },
-  }).lean();
-  const entries = await TimeEntryModel.find({
-    cardId: { $in: cards.map((card) => card._id) },
-  }).lean();
-
-  return entries.reduce((sum, entry) => sum + entry.amount, 0);
-}
-
 projectsRouter.post(
   '/:projectId/releases',
   asyncHandler(async (req: Request, res: Response) => {
     const projectId = req.params.projectId as string;
-    const teamId = await teamIdFromProject(projectId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin']);
+    const access = await requireProjectAccess(projectId, req.userId);
+    assertRole(access.role, ['owner', 'admin']);
 
     const project = await ProjectModel.findById(asObjectId(projectId)).lean();
 
@@ -104,8 +93,7 @@ projectsRouter.get(
   '/:projectId',
   asyncHandler(async (req: Request, res: Response) => {
     const projectId = req.params.projectId as string;
-    const teamId = await teamIdFromProject(projectId);
-    const membership = await requireMembership(teamId, req.userId);
+    const access = await requireProjectAccess(projectId, req.userId);
     const project = await ProjectModel.findById(asObjectId(projectId)).lean();
 
     if (!project) {
@@ -115,60 +103,36 @@ projectsRouter.get(
     const board = await resolveProjectBoard(project._id);
     const cards = await CardModel.find({ boardId: board._id }).lean();
     const releases = await ReleaseModel.find({ projectId: project._id }).lean();
-    const members = await TeamMemberModel.find({ teamId: project.teamId }).lean();
+    const members = await ProjectMemberModel.find({
+      projectId: project._id,
+    }).lean();
     const users = await UserModel.find({
       _id: { $in: members.map((item) => item.userId) },
     }).lean();
-    const personalRates = await ProjectMemberRateModel.find({
-      projectId: project._id,
-    }).lean();
-    const fact = await projectFact(projectId);
-    const remainder = project.budgetLimit - fact;
     const releasesEnabled = isFeatureOn(project.releasesEnabled);
-    const budgetEnabled = isFeatureOn(project.budgetEnabled);
-
-    const canSeeBudget = budgetEnabled
-      && (membership.role === 'owner' || membership.role === 'admin');
-    const canSeeRates = membership.role === 'owner' || membership.role === 'admin';
-    const canSeeRemainder = budgetEnabled
-      && (canSeeBudget || membership.role === 'member');
-
-    const rates = members.map((member) => {
-      const personal = personalRates.find(
-        (item) => item.userId.toString() === member.userId.toString(),
-      );
+    const analyticsEnabled = isFeatureOn(project.analyticsEnabled);
+    const people = members.map((member) => {
       const user = users.find(
         (item) => item._id.toString() === member.userId.toString(),
       );
-      const amount = resolveRate({
-        roleRates: project.roleRates,
-        personalAmount: personal ? personal.amount : null,
-        role: member.role,
-      });
-      const source = personal ? 'personal' : 'role';
 
       return {
         userId: member.userId.toString(),
         displayName: user?.displayName ?? '',
         role: member.role,
-        source,
-        amount: canSeeRates ? amount : undefined,
       };
     });
 
     res.json({
       id: project._id.toString(),
-      teamId,
+      teamId: access.teamId,
       name: project.name,
-      role: membership.role,
+      role: access.role,
+      teamRole: access.teamRole,
       releasesEnabled,
-      budgetEnabled,
+      analyticsEnabled,
       boardBackground: project.boardBackground ?? 'default',
-      budgetLimit: canSeeBudget ? project.budgetLimit : undefined,
-      fact: canSeeBudget ? fact : undefined,
-      remainder: canSeeRemainder ? remainder : undefined,
-      roleRates: canSeeRates ? project.roleRates : undefined,
-      rates: canSeeRates ? rates : rates.map(({ amount: _a, source: _s, ...rest }) => rest),
+      people,
       board: { id: board._id.toString() },
       releases: releasesEnabled
         ? releases.map((release) => ({
@@ -185,43 +149,46 @@ projectsRouter.get(
   }),
 );
 
+projectsRouter.get(
+  '/:projectId/export',
+  asyncHandler(async (req: Request, res: Response) => {
+    const projectId = req.params.projectId as string;
+    const access = await requireProjectAccess(projectId, req.userId);
+    assertRole(access.role, ['owner', 'admin']);
+
+    const payload = await exportProject(asObjectId(projectId));
+    res.json(payload);
+  }),
+);
+
 projectsRouter.patch(
   '/:projectId',
   asyncHandler(async (req: Request, res: Response) => {
     const projectId = req.params.projectId as string;
-    const teamId = await teamIdFromProject(projectId);
-    const membership = await requireMembership(teamId, req.userId);
+    const access = await requireProjectAccess(projectId, req.userId);
     const project = await ProjectModel.findById(asObjectId(projectId));
 
     if (!project) {
       throw new AppError(404, 'Проект не найден');
     }
 
-    const name = typeof req.body?.name === 'string' ? req.body.name.trim() : undefined;
-
-    if (name) {
-      assertRole(membership.role, ['owner', 'admin']);
-      project.name = name;
+    if (req.body?.name !== undefined) {
+      assertRole(access.role, ['owner', 'admin']);
+      project.name = readString(req.body, 'name');
     }
 
     if (req.body?.releasesEnabled !== undefined) {
-      assertRole(membership.role, ['owner', 'admin']);
+      assertRole(access.role, ['owner', 'admin']);
       project.releasesEnabled = readBoolean(req.body, 'releasesEnabled');
     }
 
-    if (req.body?.budgetEnabled !== undefined) {
-      assertRole(membership.role, ['owner', 'admin']);
-      project.budgetEnabled = readBoolean(req.body, 'budgetEnabled');
-    }
-
-    if (req.body?.budgetLimit !== undefined) {
-      assertRole(membership.role, ['owner'], 'Бюджет меняет только Owner');
-      assertFeatureOn(project.budgetEnabled, 'Бюджет выключен в проекте');
-      project.budgetLimit = readBudget(req.body, 'budgetLimit');
+    if (req.body?.analyticsEnabled !== undefined) {
+      assertRole(access.role, ['owner', 'admin']);
+      project.analyticsEnabled = readBoolean(req.body, 'analyticsEnabled');
     }
 
     if (req.body?.boardBackground !== undefined) {
-      assertRole(membership.role, ['owner', 'admin']);
+      assertRole(access.role, ['owner', 'admin']);
       project.boardBackground = readBoardBackground(req.body, 'boardBackground');
     }
 
@@ -229,9 +196,8 @@ projectsRouter.patch(
     res.json({
       id: project._id.toString(),
       name: project.name,
-      budgetLimit: project.budgetLimit,
       releasesEnabled: project.releasesEnabled,
-      budgetEnabled: project.budgetEnabled,
+      analyticsEnabled: project.analyticsEnabled,
       boardBackground: project.boardBackground,
     });
   }),
@@ -241,9 +207,8 @@ projectsRouter.post(
   '/:projectId/duplicate',
   asyncHandler(async (req: Request, res: Response) => {
     const projectId = req.params.projectId as string;
-    const teamId = await teamIdFromProject(projectId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin']);
+    const access = await requireProjectAccess(projectId, req.userId);
+    assertRole(access.role, ['owner', 'admin']);
 
     const source = await ProjectModel.findById(asObjectId(projectId)).lean();
 
@@ -254,25 +219,23 @@ projectsRouter.post(
     const project = await ProjectModel.create({
       teamId: source.teamId,
       name: `${source.name} (копия)`,
-      budgetLimit: source.budgetLimit,
-      budgetEnabled: source.budgetEnabled,
       releasesEnabled: source.releasesEnabled,
-      roleRates: { ...source.roleRates },
+      analyticsEnabled: source.analyticsEnabled,
       boardBackground: source.boardBackground,
     });
 
     await createDefaultBoard(project._id);
 
-    const memberRates = await ProjectMemberRateModel.find({
+    const sourceMembers = await ProjectMemberModel.find({
       projectId: source._id,
     }).lean();
 
-    if (memberRates.length > 0) {
-      await ProjectMemberRateModel.insertMany(
-        memberRates.map((rate) => ({
+    if (sourceMembers.length > 0) {
+      await ProjectMemberModel.insertMany(
+        sourceMembers.map((member) => ({
           projectId: project._id,
-          userId: rate.userId,
-          amount: rate.amount,
+          userId: member.userId,
+          role: member.role,
         })),
       );
     }
@@ -285,9 +248,8 @@ projectsRouter.delete(
   '/:projectId',
   asyncHandler(async (req: Request, res: Response) => {
     const projectId = req.params.projectId as string;
-    const teamId = await teamIdFromProject(projectId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin']);
+    const access = await requireProjectAccess(projectId, req.userId);
+    assertRole(access.role, ['owner', 'admin']);
 
     const project = await ProjectModel.findById(asObjectId(projectId)).lean();
 
@@ -300,73 +262,248 @@ projectsRouter.delete(
   }),
 );
 
-projectsRouter.put(
-  '/:projectId/role-rates',
+projectsRouter.get(
+  '/:projectId/members',
   asyncHandler(async (req: Request, res: Response) => {
     const projectId = req.params.projectId as string;
-    const teamId = await teamIdFromProject(projectId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin']);
-
-    const project = await ProjectModel.findById(asObjectId(projectId));
+    const access = await requireProjectAccess(projectId, req.userId);
+    const project = await ProjectModel.findById(asObjectId(projectId)).lean();
 
     if (!project) {
       throw new AppError(404, 'Проект не найден');
     }
 
-    const roles: TeamRole[] = ['owner', 'admin', 'member', 'viewer'];
+    const members = await ProjectMemberModel.find({
+      projectId: project._id,
+    }).lean();
+    const teamMembers = await TeamMemberModel.find({
+      teamId: project.teamId,
+    }).lean();
+    const users = await UserModel.find({
+      _id: { $in: teamMembers.map((item) => item.userId) },
+    }).lean();
+    const userMap = new Map(users.map((user) => [user._id.toString(), user]));
+    const memberIds = new Set(members.map((item) => item.userId.toString()));
+    const invites = canManageProjectMembers(access)
+      ? await InviteModel.find({
+        projectId: project._id,
+        acceptedAt: null,
+        revokedAt: null,
+        expiresAt: { $gt: new Date() },
+      }).lean()
+      : [];
 
-    for (const role of roles) {
-      const value = readNumber(req.body, role);
+    res.json({
+      role: access.role,
+      teamRole: access.teamRole,
+      members: members.map((item) => {
+        const user = userMap.get(item.userId.toString());
 
-      if (value < 0) {
-        throw new AppError(400, 'Ставка не может быть отрицательной');
-      }
+        return {
+          userId: item.userId.toString(),
+          role: item.role,
+          displayName: user?.displayName ?? '',
+          email: user?.email ?? '',
+          avatarUrl: user?.avatarUrl ?? '',
+        };
+      }),
+      candidates: teamMembers
+        .filter((item) => !memberIds.has(item.userId.toString()))
+        .map((item) => {
+          const user = userMap.get(item.userId.toString());
 
-      project.roleRates[role] = value;
-    }
-
-    await project.save();
-
-    await Promise.all(
-      roles.map((role) => recalcRolePlans(project._id, role)),
-    );
-
-    res.json({ roleRates: project.roleRates });
+          return {
+            userId: item.userId.toString(),
+            displayName: user?.displayName ?? '',
+            email: user?.email ?? '',
+            avatarUrl: user?.avatarUrl ?? '',
+          };
+        }),
+      invites: invites.map((invite) => ({
+        id: invite._id.toString(),
+        role: invite.role,
+        expiresAt: invite.expiresAt,
+      })),
+    });
   }),
 );
 
-projectsRouter.put(
-  '/:projectId/member-rates',
+projectsRouter.post(
+  '/:projectId/members',
   asyncHandler(async (req: Request, res: Response) => {
     const projectId = req.params.projectId as string;
-    const teamId = await teamIdFromProject(projectId);
-    const membership = await requireMembership(teamId, req.userId);
-    assertRole(membership.role, ['owner', 'admin']);
+    const access = await requireProjectAccess(projectId, req.userId);
 
-    const userId = readString(req.body, 'userId');
-    const amount = readOptionalNumber(req.body, 'amount');
-    const projectOid = asObjectId(projectId);
-    const userOid = asObjectId(userId, 'userId');
-
-    if (amount === undefined) {
-      await ProjectMemberRateModel.deleteOne({
-        projectId: projectOid,
-        userId: userOid,
-      });
-    } else {
-      if (amount < 0) {
-        throw new AppError(400, 'Ставка не может быть отрицательной');
-      }
-
-      await ProjectMemberRateModel.findOneAndUpdate(
-        { projectId: projectOid, userId: userOid },
-        { $set: { amount } },
-        { upsert: true },
-      );
+    if (!canManageProjectMembers(access)) {
+      throw new AppError(403, 'Недостаточно прав');
     }
 
-    await recalcAssigneePlans(projectOid, userOid);
+    const userId = readString(req.body, 'userId');
+    const role = readNonOwnerRole(req.body, 'role');
+    const projectOid = asObjectId(projectId);
+    const userOid = asObjectId(userId, 'userId');
+    const project = await ProjectModel.findById(projectOid).lean();
+
+    if (!project) {
+      throw new AppError(404, 'Проект не найден');
+    }
+
+    const teamMember = await TeamMemberModel.findOne({
+      teamId: project.teamId,
+      userId: userOid,
+    }).lean();
+
+    if (!teamMember) {
+      throw new AppError(400, 'Пользователь не в команде');
+    }
+
+    if (!canManageProjectMember(access, role)) {
+      throw new AppError(403, 'Недостаточно прав');
+    }
+
+    const existing = await ProjectMemberModel.findOne({
+      projectId: projectOid,
+      userId: userOid,
+    }).lean();
+
+    if (existing) {
+      throw new AppError(409, 'Участник уже в проекте');
+    }
+
+    await ProjectMemberModel.create({
+      projectId: projectOid,
+      userId: userOid,
+      role,
+    });
+
+    res.status(201).json({ ok: true, role });
+  }),
+);
+
+projectsRouter.patch(
+  '/:projectId/members/:userId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const projectId = req.params.projectId as string;
+    const targetUserId = req.params.userId as string;
+    const access = await requireProjectAccess(projectId, req.userId);
+    const nextRole = readNonOwnerRole(req.body, 'role');
+    const target = await ProjectMemberModel.findOne({
+      projectId: asObjectId(projectId),
+      userId: asObjectId(targetUserId, 'userId'),
+    });
+
+    if (!target) {
+      throw new AppError(404, 'Участник не найден');
+    }
+
+    if (!canManageProjectMember(access, target.role)
+      || !canManageProjectMember(access, nextRole)) {
+      throw new AppError(403, 'Недостаточно прав');
+    }
+
+    target.role = nextRole;
+    await target.save();
+
+    res.json({ ok: true, role: nextRole });
+  }),
+);
+
+projectsRouter.delete(
+  '/:projectId/members/:userId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const projectId = req.params.projectId as string;
+    const targetUserId = req.params.userId as string;
+    const access = await requireProjectAccess(projectId, req.userId);
+    const isSelf = targetUserId === req.userId;
+    const target = await ProjectMemberModel.findOne({
+      projectId: asObjectId(projectId),
+      userId: asObjectId(targetUserId, 'userId'),
+    });
+
+    if (!target) {
+      throw new AppError(404, 'Участник не найден');
+    }
+
+    if (isSelf) {
+      if (target.role === 'owner') {
+        throw new AppError(400, 'Owner не может выйти из проекта');
+      }
+    } else if (!canManageProjectMember(access, target.role)) {
+      throw new AppError(403, 'Недостаточно прав');
+    }
+
+    await unassignUserInProject(target.projectId, target.userId);
+    await target.deleteOne();
+    res.json({ ok: true });
+  }),
+);
+
+projectsRouter.post(
+  '/:projectId/invites',
+  asyncHandler(async (req: Request, res: Response) => {
+    const projectId = req.params.projectId as string;
+    const access = await requireProjectAccess(projectId, req.userId);
+
+    if (!canManageProjectMembers(access)) {
+      throw new AppError(403, 'Недостаточно прав');
+    }
+
+    const role = readInviteRole(req.body, 'role');
+
+    if (!canManageProjectMember(access, role)) {
+      throw new AppError(403, 'Недостаточно прав');
+    }
+
+    const project = await ProjectModel.findById(asObjectId(projectId)).lean();
+
+    if (!project) {
+      throw new AppError(404, 'Проект не найден');
+    }
+
+    const raw = createInviteToken();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    const invite = await InviteModel.create({
+      teamId: project.teamId,
+      projectId: project._id,
+      tokenHash: hashToken(raw),
+      role,
+      createdBy: asObjectId(req.userId),
+      expiresAt,
+    });
+
+    res.status(201).json({
+      id: invite._id.toString(),
+      token: raw,
+      role: invite.role,
+      expiresAt: invite.expiresAt,
+    });
+  }),
+);
+
+projectsRouter.delete(
+  '/:projectId/invites/:inviteId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const projectId = req.params.projectId as string;
+    const inviteId = req.params.inviteId as string;
+    const access = await requireProjectAccess(projectId, req.userId);
+
+    if (!canManageProjectMembers(access)) {
+      throw new AppError(403, 'Недостаточно прав');
+    }
+
+    const invite = await InviteModel.findOne({
+      _id: asObjectId(inviteId, 'inviteId'),
+      projectId: asObjectId(projectId),
+    });
+
+    if (!invite || invite.acceptedAt || invite.revokedAt) {
+      throw new AppError(404, 'Инвайт не найден');
+    }
+
+    invite.revokedAt = new Date();
+    await invite.save();
     res.json({ ok: true });
   }),
 );

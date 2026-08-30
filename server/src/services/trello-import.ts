@@ -4,10 +4,10 @@ import { BoardModel } from '../models/board.js';
 import { CardModel } from '../models/card.js';
 import { ColumnModel } from '../models/column.js';
 import { LabelModel } from '../models/label.js';
+import { ProjectMemberModel } from '../models/project-member.js';
 import { ProjectModel } from '../models/project.js';
 import {
   DEFAULT_BOARD_NAME,
-  DEFAULT_ROLE_RATES,
   type LabelColor,
 } from '../constants.js';
 import { deleteProjectCascade } from './cascade.js';
@@ -253,6 +253,7 @@ export async function importTrelloBoard(params: {
   teamId: mongoose.Types.ObjectId;
   name: string;
   board: unknown;
+  ownerId: mongoose.Types.ObjectId;
 }): Promise<{ id: string; name: string }> {
   const parsed = parseBoard(params.board);
   const lists = parsed.lists
@@ -288,13 +289,17 @@ export async function importTrelloBoard(params: {
     const project = await ProjectModel.create({
       teamId: params.teamId,
       name: params.name,
-      budgetLimit: 0,
-      roleRates: DEFAULT_ROLE_RATES,
       releasesEnabled: false,
-      budgetEnabled: false,
+      analyticsEnabled: false,
     });
 
     projectId = project._id;
+
+    await ProjectMemberModel.create({
+      projectId: project._id,
+      userId: params.ownerId,
+      role: 'owner',
+    });
 
     const board = await BoardModel.create({
       projectId: project._id,
@@ -373,7 +378,6 @@ export async function importTrelloBoard(params: {
             .filter((id): id is mongoose.Types.ObjectId => Boolean(id)),
           checklists,
           position,
-          planAmount: 0,
         },
       ];
     });

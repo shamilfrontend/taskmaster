@@ -6,6 +6,8 @@ export function useProjectTabs(
   projectId: ComputedRef<string>,
   role: ComputedRef<TeamRole | undefined>,
   releasesEnabled: ComputedRef<boolean>,
+  analyticsEnabled: ComputedRef<boolean>,
+  teamRole: ComputedRef<TeamRole | undefined>,
 ): ComputedRef<PageTab[]> {
   return computed(() => {
     const items: PageTab[] = [
@@ -14,6 +16,14 @@ export function useProjectTabs(
         label: 'Доска',
         to: { name: 'project', params: { projectId: projectId.value } },
       },
+      {
+        id: 'members',
+        label: 'Участники',
+        to: {
+          name: 'project-members',
+          params: { projectId: projectId.value },
+        },
+      },
     ];
 
     if (releasesEnabled.value) {
@@ -21,27 +31,31 @@ export function useProjectTabs(
         id: 'releases',
         label: 'Релизы',
         to: {
-          name: 'project',
+          name: 'project-releases',
           params: { projectId: projectId.value },
-          query: { tab: 'releases' },
         },
       });
     }
 
-    items.push({
-      id: 'analytics',
-      label: 'Аналитика',
-      to: { name: 'analytics', params: { projectId: projectId.value } },
-    });
+    if (analyticsEnabled.value) {
+      items.push({
+        id: 'analytics',
+        label: 'Аналитика',
+        to: { name: 'analytics', params: { projectId: projectId.value } },
+      });
+    }
 
-    if (role.value === 'owner' || role.value === 'admin') {
+    if (
+      role.value === 'owner'
+      || role.value === 'admin'
+      || teamRole.value === 'owner'
+    ) {
       items.push({
         id: 'settings',
         label: 'Настройки',
         to: {
-          name: 'project',
+          name: 'project-settings',
           params: { projectId: projectId.value },
-          query: { tab: 'settings' },
         },
       });
     }

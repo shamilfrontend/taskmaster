@@ -7,12 +7,21 @@ import { asyncHandler } from './async-handler.js';
 
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const WRITE_ALLOW = new Set(['/api/auth/logout', '/api/auth/demo']);
+const NOTIFICATION_READ_PATH = /^\/api\/notifications\/[a-fA-F0-9]{24}\/read$/;
+
+function isDemoWriteAllowed(path: string): boolean {
+  if (WRITE_ALLOW.has(path) || path === '/api/notifications/read-all') {
+    return true;
+  }
+
+  return NOTIFICATION_READ_PATH.test(path);
+}
 
 export const DEMO_BLOCKED_MESSAGE = 'Действия в демо-доступе отключены';
 
 export const blockDemoWrites = asyncHandler(
   async (req: Request, _res: Response, next: NextFunction) => {
-    if (!WRITE_METHODS.has(req.method) || WRITE_ALLOW.has(req.path)) {
+    if (!WRITE_METHODS.has(req.method) || isDemoWriteAllowed(req.path)) {
       next();
       return;
     }

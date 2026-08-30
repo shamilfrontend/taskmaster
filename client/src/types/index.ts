@@ -78,8 +78,9 @@ export interface TeamMember {
 export interface TeamProject {
   id: string;
   name: string;
-  budgetEnabled: boolean;
-  budgetLimit?: number;
+  role: TeamRole;
+  boardBackground: BoardBackgroundId;
+  cardCount: number;
 }
 
 export interface TeamInvite {
@@ -117,8 +118,63 @@ export interface TeamActivityPage {
   hasMore: boolean;
 }
 
+export type NotificationKind =
+  | 'card_assigned'
+  | 'comment_added'
+  | 'comment_reply'
+  | 'card_overdue'
+  | 'card_due_soon';
+
+export interface NotificationItem {
+  id: string;
+  kind: NotificationKind;
+  readAt: string | null;
+  actorId: string;
+  actorName: string;
+  actorAvatarUrl: string;
+  cardId: string;
+  cardTitle: string;
+  projectId: string;
+  projectName: string;
+  teamId: string;
+  teamName: string;
+  detail: string;
+  createdAt: string;
+}
+
+export interface NotificationPage {
+  items: NotificationItem[];
+  hasMore: boolean;
+  unreadCount: number;
+}
+
+export interface MyTaskItem {
+  id: string;
+  title: string;
+  dueDate: string | null;
+  estimateHours: number;
+  teamId: string;
+  teamName: string;
+  projectId: string;
+  projectName: string;
+  columnId: string;
+  columnName: string;
+  isDone: boolean;
+  releaseId: string | null;
+  releaseName: string | null;
+  checklistDone: number;
+  checklistTotal: number;
+}
+
+export interface MyTasksPayload {
+  items: MyTaskItem[];
+  teams: { id: string; name: string }[];
+  projects: { id: string; name: string; teamId: string }[];
+}
+
 export interface InvitePreview {
   teamName: string;
+  projectName?: string;
   role: InviteRole;
   expiresAt: string;
 }
@@ -131,12 +187,39 @@ export interface ProjectRelease {
   cardCount: number;
 }
 
-export interface ProjectRateRow {
+export interface ProjectPerson {
   userId: string;
   displayName: string;
   role: TeamRole;
-  source?: string;
-  amount?: number;
+}
+
+export interface ProjectMember {
+  userId: string;
+  role: TeamRole;
+  displayName: string;
+  email: string;
+  avatarUrl: string;
+}
+
+export interface ProjectMemberCandidate {
+  userId: string;
+  displayName: string;
+  email: string;
+  avatarUrl: string;
+}
+
+export interface ProjectInvite {
+  id: string;
+  role: InviteRole;
+  expiresAt: string;
+}
+
+export interface ProjectMembersPayload {
+  role: TeamRole;
+  teamRole: TeamRole;
+  members: ProjectMember[];
+  candidates: ProjectMemberCandidate[];
+  invites: ProjectInvite[];
 }
 
 export interface ProjectDetails {
@@ -144,16 +227,21 @@ export interface ProjectDetails {
   teamId: string;
   name: string;
   role: TeamRole;
+  teamRole: TeamRole;
   releasesEnabled: boolean;
-  budgetEnabled: boolean;
+  analyticsEnabled: boolean;
   boardBackground: BoardBackgroundId;
-  budgetLimit?: number;
-  fact?: number;
-  remainder?: number;
-  roleRates?: Record<TeamRole, number>;
-  rates: ProjectRateRow[];
+  people: ProjectPerson[];
   board: { id: string };
   releases: ProjectRelease[];
+}
+
+export interface ProjectImportResult {
+  id: string;
+  name: string;
+  skippedComments: number;
+  skippedTimeEntries: number;
+  skippedAssignees: number;
 }
 
 export interface BoardColumn {
@@ -175,11 +263,10 @@ export interface BoardCard {
   title: string;
   assigneeId: string | null;
   assigneeName: string | null;
+  assigneeAvatarUrl: string | null;
   dueDate: string | null;
   estimateHours: number;
   factHours: number;
-  planAmount?: number;
-  factAmount?: number;
   releaseId: string | null;
   releaseName: string | null;
   labelIds: string[];
@@ -205,8 +292,6 @@ export interface TimeEntry {
   userId: string;
   displayName: string;
   hours: number;
-  rateSnapshot?: number;
-  amount?: number;
   workedAt: string;
 }
 
@@ -214,8 +299,11 @@ export interface CardComment {
   id: string;
   userId: string;
   displayName: string;
+  avatarUrl: string;
+  parentId: string | null;
   body: string;
   createdAt?: string;
+  editedAt?: string | null;
 }
 
 export interface ChecklistItem {
@@ -244,7 +332,6 @@ export interface CardDetails {
   releaseId: string | null;
   labelIds: string[];
   checklists: CardChecklist[];
-  planAmount?: number;
   timeEntries: TimeEntry[];
   comments: CardComment[];
 }
@@ -271,32 +358,22 @@ export interface AnalyticsPayload {
   to: string;
   role: TeamRole;
   releasesEnabled: boolean;
-  budgetEnabled: boolean;
   summary: {
     cards: number;
     overdue: number;
     noAssignee: number;
     noEstimate: number;
     noRelease?: number;
-    factAmount?: number;
   };
   byStatus: { columnId: string; name: string; count: number }[];
   planVsFact: {
     planHours: number;
     factHours: number;
-    planAmount?: number;
-    factAmount?: number;
-  };
-  burn?: {
-    limit?: number;
-    totalFact?: number;
-    remainder: number;
   };
   workload: {
     userId: string;
     displayName: string;
     hours: number;
-    amount?: number;
   }[];
   releases: {
     id: string | null;
@@ -307,7 +384,7 @@ export interface AnalyticsPayload {
     planHours: number;
     factHours: number;
   }[];
-  weeks: { from: string; to: string; hours: number; amount?: number }[];
+  weeks: { from: string; to: string; hours: number }[];
   risks: {
     cardId: string;
     title: string;

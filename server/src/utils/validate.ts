@@ -78,29 +78,6 @@ export function readNumber(body: unknown, field: string): number {
   return num;
 }
 
-export function readOptionalNumber(
-  body: unknown,
-  field: string,
-): number | undefined {
-  if (typeof body !== 'object' || body === null) {
-    throw new AppError(400, 'Некорректное тело запроса');
-  }
-
-  const value = (body as Record<string, unknown>)[field];
-
-  if (value === undefined || value === null || value === '') {
-    return undefined;
-  }
-
-  const num = typeof value === 'number' ? value : Number(value);
-
-  if (!Number.isFinite(num)) {
-    throw new AppError(400, `Поле ${field} должно быть числом`);
-  }
-
-  return num;
-}
-
 function isHalfStep(value: number): boolean {
   return Math.abs(value * 2 - Math.round(value * 2)) < 1e-9;
 }
@@ -125,16 +102,6 @@ export function readEstimate(body: unknown, field: string): number {
   return value;
 }
 
-export function readBudget(body: unknown, field: string): number {
-  const value = readNumber(body, field);
-
-  if (!Number.isInteger(value) || value < 0) {
-    throw new AppError(400, `${field}: целое число ≥ 0`);
-  }
-
-  return value;
-}
-
 export function readTeamRole(body: unknown, field: string): TeamRole {
   const value = readString(body, field);
 
@@ -150,6 +117,16 @@ export function readInviteRole(body: unknown, field: string): InviteRole {
 
   if (!INVITE_ROLES.includes(value as InviteRole)) {
     throw new AppError(400, 'Owner через инвайт не выдаётся');
+  }
+
+  return value as InviteRole;
+}
+
+export function readNonOwnerRole(body: unknown, field: string): InviteRole {
+  const value = readString(body, field);
+
+  if (!INVITE_ROLES.includes(value as InviteRole)) {
+    throw new AppError(400, 'Роль Owner так не назначается');
   }
 
   return value as InviteRole;

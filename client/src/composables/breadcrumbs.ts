@@ -9,6 +9,15 @@ export interface Crumb {
   to?: RouteLocationRaw;
 }
 
+const PROJECT_ROUTE_NAMES = new Set([
+  'project',
+  'project-releases',
+  'project-settings',
+  'project-members',
+  'analytics',
+  'release',
+]);
+
 export function useBreadcrumbs(): { crumbs: ComputedRef<Crumb[]> } {
   const route = useRoute();
   const teams = useTeamsStore();
@@ -23,20 +32,19 @@ export function useBreadcrumbs(): { crumbs: ComputedRef<Crumb[]> } {
       return;
     }
 
-    if (name === 'project' || name === 'analytics') {
+    if (name === 'my-tasks') {
+      return;
+    }
+
+    if (typeof name === 'string' && PROJECT_ROUTE_NAMES.has(name)) {
       const projectId = String(route.params.projectId);
-
-      if (project.current?.id !== projectId) {
-        await project.fetchOne(projectId);
-      }
-
-      const teamId = project.current?.teamId;
+      const teamId = project.current?.id === projectId
+        ? project.current.teamId
+        : undefined;
 
       if (teamId && teams.current?.id !== teamId) {
         await teams.fetchOne(teamId);
       }
-
-      return;
     }
 
     if (name === 'release') {
@@ -45,23 +53,11 @@ export function useBreadcrumbs(): { crumbs: ComputedRef<Crumb[]> } {
       if (board.release?.id !== releaseId) {
         await board.fetchRelease(releaseId);
       }
-
-      const projectId = board.release?.projectId;
-
-      if (projectId && project.current?.id !== projectId) {
-        await project.fetchOne(projectId);
-      }
-
-      const teamId = project.current?.teamId;
-
-      if (teamId && teams.current?.id !== teamId) {
-        await teams.fetchOne(teamId);
-      }
     }
   }
 
   watch(
-    () => route.fullPath,
+    () => [route.fullPath, project.current?.teamId] as const,
     () => {
       void loadParents();
     },
@@ -80,46 +76,65 @@ export function useBreadcrumbs(): { crumbs: ComputedRef<Crumb[]> } {
     const projectCrumb: Crumb | null = projectId && projectName
       ? { label: projectName, to: { name: 'project', params: { projectId } } }
       : null;
+    const releasesCrumb: Crumb | null = projectId
+      ? {
+        label: 'Релизы',
+        to: { name: 'project-releases', params: { projectId } },
+      }
+      : null;
 
     if (name === 'team' && teamName && teamId === String(route.params.teamId)) {
       return [{ label: teamName }];
     }
 
-    if (
-      name === 'project'
-      && teamCrumb
+    if (name === 'my-tasks') {
+      return [{ label: 'Мои задачи' }];
+    }
+
+    const projectMatches = Boolean(
+      teamCrumb
       && projectCrumb
       && projectName
       && projectId === String(route.params.projectId)
-      && project.current?.teamId === teamId
-    ) {
-      if (route.query.tab === 'releases' && project.current?.releasesEnabled) {
-        return [teamCrumb, projectCrumb, { label: 'Релизы' }];
-      }
+      && project.current?.teamId === teamId,
+    );
 
+    if (name === 'project' && projectMatches && teamCrumb && projectName) {
       return [teamCrumb, { label: projectName }];
     }
 
-    if (
-      name === 'analytics'
-      && teamCrumb
-      && projectCrumb
-      && projectId === String(route.params.projectId)
-      && project.current?.teamId === teamId
-    ) {
+    if (name === 'project-releases' && projectMatches && teamCrumb && projectCrumb) {
+      return [teamCrumb, projectCrumb, { label: 'Релизы' }];
+    }
+
+    if (name === 'project-members' && projectMatches && teamCrumb && projectCrumb) {
+      return [teamCrumb, projectCrumb, { label: 'Участники' }];
+    }
+
+    if (name === 'project-settings' && projectMatches && teamCrumb && projectCrumb) {
+      return [teamCrumb, projectCrumb, { label: 'Настройки' }];
+    }
+
+    if (name === 'analytics' && projectMatches && teamCrumb && projectCrumb) {
       return [teamCrumb, projectCrumb, { label: 'Аналитика' }];
     }
 
     if (
       name === 'release'
+      && projectMatches
       && teamCrumb
       && projectCrumb
+      && releasesCrumb
       && board.release
       && board.release.id === String(route.params.releaseId)
       && board.release.projectId === projectId
-      && project.current?.teamId === teamId
     ) {
-      return [teamCrumb, projectCrumb, { label: board.release.name }];
+      return [
+        teamCrumb,
+        projectCrumb,
+        releasesCrumb,
+        { label: board.release.name },
+      ];
     }
 
     return [];

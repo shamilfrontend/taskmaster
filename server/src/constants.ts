@@ -36,12 +36,7 @@ export const DEFAULT_COLUMNS: { name: string; isDone: boolean }[] = [
 
 export const DEFAULT_BOARD_NAME = 'Основная';
 
-export const DEFAULT_ROLE_RATES: Record<TeamRole, number> = {
-  owner: 0,
-  admin: 0,
-  member: 0,
-  viewer: 0,
-};
+export const COMMENT_BODY_MAX = 2000;
 
 export const BOARD_BACKGROUNDS = [
   'default',

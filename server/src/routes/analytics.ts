@@ -4,21 +4,25 @@ import { AppError } from '../errors/app-error.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
 import {
-  requireMembership,
-  teamIdFromProject,
+  requireProjectAccess,
 } from '../middleware/access.js';
 import { BoardModel } from '../models/board.js';
 import { CardModel } from '../models/card.js';
 import { ColumnModel } from '../models/column.js';
 import { ProjectModel } from '../models/project.js';
 import { ReleaseModel } from '../models/release.js';
-import { TeamMemberModel } from '../models/team-member.js';
+import { ProjectMemberModel } from '../models/project-member.js';
 import { TimeEntryModel } from '../models/time-entry.js';
 import { UserModel } from '../models/user.js';
 import {
   addDays, periodRange, queryDateRange, startOfDay, weekStart,
 } from '../utils/dates.js';
-import { asObjectId, isFeatureOn, readPeriod } from '../utils/validate.js';
+import {
+  asObjectId,
+  assertFeatureOn,
+  isFeatureOn,
+  readPeriod,
+} from '../utils/validate.js';
 
 export const analyticsRouter = Router();
 analyticsRouter.use(requireAuth);
@@ -27,8 +31,7 @@ analyticsRouter.get(
   '/:projectId/analytics',
   asyncHandler(async (req: Request, res: Response) => {
     const projectId = req.params.projectId as string;
-    const teamId = await teamIdFromProject(projectId);
-    const membership = await requireMembership(teamId, req.userId);
+    const access = await requireProjectAccess(projectId, req.userId);
     const custom = queryDateRange(req.query.from, req.query.to);
     let period: ReturnType<typeof readPeriod> | 'custom';
     let from: Date;
@@ -48,6 +51,8 @@ analyticsRouter.get(
       throw new AppError(404, 'Проект не найден');
     }
 
+    assertFeatureOn(project.analyticsEnabled, 'Аналитика выключена в проекте');
+
     const boards = await BoardModel.find({ projectId: project._id }).lean();
     const boardIds = boards.map((board) => board._id);
     const columns = await ColumnModel.find({
@@ -63,8 +68,8 @@ analyticsRouter.get(
     const periodEntries = allEntries.filter(
       (entry) => entry.workedAt >= from && entry.workedAt <= to,
     );
-    const members = await TeamMemberModel.find({
-      teamId: project.teamId,
+    const members = await ProjectMemberModel.find({
+      projectId: project._id,
     }).lean();
     const users = await UserModel.find({
       _id: { $in: members.map((item) => item.userId) },
@@ -91,10 +96,7 @@ analyticsRouter.get(
     }));
 
     const planHours = cards.reduce((sum, card) => sum + card.estimateHours, 0);
-    const planAmount = cards.reduce((sum, card) => sum + card.planAmount, 0);
     const factHours = periodEntries.reduce((sum, entry) => sum + entry.hours, 0);
-    const factAmount = periodEntries.reduce((sum, entry) => sum + entry.amount, 0);
-    const totalFact = allEntries.reduce((sum, entry) => sum + entry.amount, 0);
 
     const workload = members.map((member) => {
       const userEntries = periodEntries.filter(
@@ -104,16 +106,11 @@ analyticsRouter.get(
         (item) => item._id.toString() === member.userId.toString(),
       );
       const hours = userEntries.reduce((sum, entry) => sum + entry.hours, 0);
-      const amount = userEntries.reduce((sum, entry) => sum + entry.amount, 0);
-      const showMoney = membership.role === 'owner'
-        || membership.role === 'admin'
-        || member.userId.toString() === req.userId;
 
       return {
         userId: member.userId.toString(),
         displayName: user?.displayName ?? '',
         hours,
-        amount: membership.role !== 'viewer' && showMoney ? amount : undefined,
       };
     });
 
@@ -164,7 +161,6 @@ analyticsRouter.get(
       from: Date;
       to: Date;
       hours: number;
-      amount: number;
     }[] = [];
     let cursor = weekStart(from);
 
@@ -175,28 +171,15 @@ analyticsRouter.get(
         (entry) => entry.workedAt >= weekFrom && entry.workedAt < end,
       );
       const hours = weekEntries.reduce((sum, entry) => sum + entry.hours, 0);
-      const amount = weekEntries.reduce((sum, entry) => sum + entry.amount, 0);
       weeks.push({
         from: new Date(weekFrom),
         to: addDays(end, -1),
         hours,
-        amount,
       });
       cursor = end;
     }
 
-    const hideMoney = membership.role === 'viewer';
-    const memberMoney = membership.role === 'member';
     const releasesEnabled = isFeatureOn(project.releasesEnabled);
-    const budgetEnabled = isFeatureOn(project.budgetEnabled);
-
-    const visibleMoney = (value: number): number | undefined => {
-      if (hideMoney || memberMoney) {
-        return undefined;
-      }
-
-      return value;
-    };
 
     type RiskKind = 'overdue' | 'dueSoon' | 'gaps';
     const risks = cards.flatMap((card) => {
@@ -258,9 +241,8 @@ analyticsRouter.get(
       period,
       from,
       to,
-      role: membership.role,
+      role: access.role,
       releasesEnabled,
-      budgetEnabled,
       summary: {
         cards: cards.length,
         overdue: cards.filter(isOverdue).length,
@@ -269,30 +251,18 @@ analyticsRouter.get(
         noRelease: releasesEnabled
           ? cards.filter((card) => !card.releaseId).length
           : undefined,
-        factAmount: visibleMoney(factAmount),
       },
       byStatus,
       planVsFact: {
         planHours,
         factHours,
-        planAmount: visibleMoney(planAmount),
-        factAmount: visibleMoney(factAmount),
       },
-      burn:
-        hideMoney || !budgetEnabled
-          ? undefined
-          : {
-            limit: membership.role === 'member' ? undefined : project.budgetLimit,
-            totalFact: membership.role === 'member' ? undefined : totalFact,
-            remainder: project.budgetLimit - totalFact,
-          },
       workload,
       releases: releasesEnabled ? releaseRows : [],
       weeks: weeks.map((week) => ({
         from: week.from,
         to: week.to,
         hours: week.hours,
-        amount: visibleMoney(week.amount),
       })),
       risks,
     });

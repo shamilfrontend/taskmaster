@@ -2,9 +2,9 @@ import axios, { isAxiosError } from 'axios';
 import { notify } from '@kyvg/vue3-notification';
 import type { ApiErrorBody } from '../types/index.ts';
 
-export const DEMO_BLOCKED_MESSAGE = 'Действия в демо-доступе отключены';
+const DEMO_BLOCKED_MESSAGE = 'Действия в демо-доступе отключены';
 
-export class DemoBlockedError extends Error {
+class DemoBlockedError extends Error {
   constructor() {
     super(DEMO_BLOCKED_MESSAGE);
     this.name = 'DemoBlockedError';
@@ -23,7 +23,12 @@ export function setDemoMode(value: boolean): void {
 }
 
 function isWriteAllowed(url: string): boolean {
-  return url.includes('/auth/logout') || url.includes('/auth/demo');
+  const path = (url.split('?')[0] ?? '');
+
+  return path.includes('/auth/logout')
+    || path.includes('/auth/demo')
+    || path.endsWith('/notifications/read-all')
+    || /\/notifications\/[a-fA-F0-9]{24}\/read$/.test(path);
 }
 
 function isMutating(method: string | undefined): boolean {

@@ -3,9 +3,11 @@ import { ref } from 'vue';
 import {
   http, errorMessage, toastError, toastSuccess,
 } from '../api/http.ts';
+import { pluralRu } from '../composables/format.ts';
 import type {
   ActivityItem,
   InviteRole,
+  ProjectImportResult,
   TeamActivityPage,
   TeamDetails,
   TeamListItem,
@@ -294,6 +296,69 @@ export const useTeamsStore = defineStore('teams', () => {
     }
   }
 
+  function importToast(result: ProjectImportResult): string {
+    const skipped: string[] = [];
+
+    if (result.skippedComments > 0) {
+      skipped.push(pluralRu(
+        result.skippedComments,
+        'комментарий',
+        'комментария',
+        'комментариев',
+      ));
+    }
+
+    if (result.skippedTimeEntries > 0) {
+      skipped.push(pluralRu(
+        result.skippedTimeEntries,
+        'списание',
+        'списания',
+        'списаний',
+      ));
+    }
+
+    if (result.skippedAssignees > 0) {
+      skipped.push(pluralRu(
+        result.skippedAssignees,
+        'исполнитель',
+        'исполнителя',
+        'исполнителей',
+      ));
+    }
+
+    if (skipped.length === 0) {
+      return 'Проект импортирован';
+    }
+
+    return `Проект импортирован. Пропущено: ${skipped.join(', ')} — нет в команде`;
+  }
+
+  async function createProjectFromTaskmaster(
+    teamId: string,
+    name: string,
+    payload: unknown,
+  ): Promise<string | null> {
+    isLoading.value = true;
+    error.value = null;
+
+    try {
+      const { data } = await http.post<ProjectImportResult>(
+        `/teams/${teamId}/projects/from-taskmaster`,
+        { name, payload },
+        { timeout: 60000 },
+      );
+      await fetchOne(teamId);
+      toastSuccess(importToast(data));
+      return data.id;
+    } catch (err: unknown) {
+      error.value = errorMessage(err);
+      toastError('Ошибка при импорте проекта', err);
+      return null;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
   return {
     list,
     current,
@@ -314,6 +379,7 @@ export const useTeamsStore = defineStore('teams', () => {
     removeMember,
     createProject,
     createProjectFromTrello,
+    createProjectFromTaskmaster,
   };
 });
 

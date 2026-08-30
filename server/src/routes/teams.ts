@@ -3,36 +3,33 @@ import type { Request, Response } from 'express';
 import { AppError } from '../errors/app-error.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { requireAuth } from '../middleware/auth.js';
-import { requireMembership } from '../middleware/access.js';
+import { requireMembership, listAccessibleProjectIds } from '../middleware/access.js';
 import { ActivityEventModel } from '../models/activity-event.js';
 import { BoardModel } from '../models/board.js';
 import { CardModel } from '../models/card.js';
 import { CommentModel } from '../models/comment.js';
 import { InviteModel } from '../models/invite.js';
 import { ProjectModel } from '../models/project.js';
+import { ProjectMemberModel } from '../models/project-member.js';
 import { TeamModel } from '../models/team.js';
 import { TeamMemberModel } from '../models/team-member.js';
 import { UserModel } from '../models/user.js';
 import { deleteTeamCascade, unassignUserInTeam } from '../services/cascade.js';
-import { recalcAssigneePlans } from '../services/plan.js';
 import { createDefaultBoard } from '../services/project-setup.js';
+import { importProjectSnapshot } from '../services/project-import.js';
 import { importTrelloBoard } from '../services/trello-import.js';
-import { DEFAULT_ROLE_RATES } from '../constants.js';
 import {
   createInviteToken,
   hashToken,
 } from '../utils/crypto.js';
+import { canManageMember } from '../utils/roles.js';
 import {
   asObjectId,
   assertRole,
-  isFeatureOn,
-  readBudget,
   readInviteRole,
-  readOptionalNumber,
   readString,
   readTeamRole,
 } from '../utils/validate.js';
-import type { TeamRole } from '../constants.js';
 
 export const teamsRouter = Router();
 teamsRouter.use(requireAuth);
@@ -66,18 +63,6 @@ function readActivityBefore(query: Request['query']): Date | undefined {
   return date;
 }
 
-function canManageMember(actor: TeamRole, target: TeamRole): boolean {
-  if (actor === 'owner') {
-    return target !== 'owner';
-  }
-
-  if (actor === 'admin') {
-    return target === 'member' || target === 'viewer';
-  }
-
-  return false;
-}
-
 teamsRouter.get(
   '/',
   asyncHandler(async (req: Request, res: Response) => {
@@ -92,12 +77,28 @@ teamsRouter.get(
     const allMembers = await TeamMemberModel.find({
       teamId: { $in: teamIds },
     }).lean();
+    const projectMemberships = await ProjectMemberModel.find({
+      userId: asObjectId(req.userId),
+      projectId: { $in: projects.map((project) => project._id) },
+    })
+      .select('projectId')
+      .lean();
+    const memberProjectIds = new Set(
+      projectMemberships.map((item) => item.projectId.toString()),
+    );
 
     res.json(
       teams.map((team) => {
         const membership = memberships.find(
           (item) => item.teamId.toString() === team._id.toString(),
         );
+        const teamProjects = projects.filter(
+          (item) => item.teamId.toString() === team._id.toString(),
+        );
+        const accessibleCount = membership?.role === 'owner'
+          ? teamProjects.length
+          : teamProjects.filter((item) => memberProjectIds.has(item._id.toString()))
+            .length;
 
         return {
           id: team._id.toString(),
@@ -106,9 +107,7 @@ teamsRouter.get(
           memberCount: allMembers.filter(
             (item) => item.teamId.toString() === team._id.toString(),
           ).length,
-          projectCount: projects.filter(
-            (item) => item.teamId.toString() === team._id.toString(),
-          ).length,
+          projectCount: accessibleCount,
         };
       }),
     );
@@ -139,28 +138,24 @@ teamsRouter.post(
     assertRole(membership.role, ['owner', 'admin']);
 
     const name = readString(req.body, 'name');
-    let budgetLimit = 0;
-
-    if (membership.role === 'owner') {
-      const raw = readOptionalNumber(req.body, 'budgetLimit');
-      budgetLimit = raw === undefined ? 0 : readBudget(req.body, 'budgetLimit');
-    }
 
     const project = await ProjectModel.create({
       teamId: asObjectId(teamId),
       name,
-      budgetLimit,
-      roleRates: DEFAULT_ROLE_RATES,
       releasesEnabled: false,
-      budgetEnabled: false,
+      analyticsEnabled: false,
     });
 
     await createDefaultBoard(project._id);
+    await ProjectMemberModel.create({
+      projectId: project._id,
+      userId: asObjectId(req.userId),
+      role: 'owner',
+    });
 
     res.status(201).json({
       id: project._id.toString(),
       name: project.name,
-      budgetLimit: project.budgetLimit,
     });
   }),
 );
@@ -183,6 +178,32 @@ teamsRouter.post(
       teamId: asObjectId(teamId),
       name,
       board,
+      ownerId: asObjectId(req.userId),
+    });
+
+    res.status(201).json(project);
+  }),
+);
+
+teamsRouter.post(
+  '/:teamId/projects/from-taskmaster',
+  asyncHandler(async (req: Request, res: Response) => {
+    const teamId = req.params.teamId as string;
+    const membership = await requireMembership(teamId, req.userId);
+    assertRole(membership.role, ['owner', 'admin']);
+
+    const name = readString(req.body, 'name');
+
+    if (typeof req.body !== 'object' || req.body === null) {
+      throw new AppError(400, 'Некорректное тело запроса');
+    }
+
+    const { payload } = (req.body as Record<string, unknown>);
+    const project = await importProjectSnapshot({
+      teamId: asObjectId(teamId),
+      name,
+      payload,
+      ownerId: asObjectId(req.userId),
     });
 
     res.status(201).json(project);
@@ -193,16 +214,18 @@ teamsRouter.get(
   '/:teamId/activity',
   asyncHandler(async (req: Request, res: Response) => {
     const teamId = req.params.teamId as string;
-    await requireMembership(teamId, req.userId);
+    const membership = await requireMembership(teamId, req.userId);
     const teamObjectId = asObjectId(teamId);
     const before = readActivityBefore(req.query);
     const fetchLimit = ACTIVITY_LIMIT + 1;
+    const accessibleIds = await listAccessibleProjectIds(
+      teamId,
+      req.userId,
+      membership.role,
+    );
 
-    const projects = await ProjectModel.find({ teamId: teamObjectId })
-      .select({ _id: 1 })
-      .lean();
     const boards = await BoardModel.find({
-      projectId: { $in: projects.map((project) => project._id) },
+      projectId: { $in: accessibleIds },
     }).lean();
     const boardIds = boards.map((board) => board._id);
     const boardProjectMap = new Map(
@@ -214,6 +237,7 @@ teamsRouter.get(
 
     const events = await ActivityEventModel.find({
       teamId: teamObjectId,
+      projectId: { $in: accessibleIds },
       kind: { $ne: 'comment_added' },
       ...(before ? { createdAt: { $lt: before } } : {}),
     })
@@ -322,14 +346,53 @@ teamsRouter.get(
     const userMap = new Map(users.map((user) => [user._id.toString(), user]));
 
     const projects = await ProjectModel.find({ teamId: team._id }).lean();
+    const projectMembers = await ProjectMemberModel.find({
+      userId: asObjectId(req.userId),
+      projectId: { $in: projects.map((project) => project._id) },
+    }).lean();
+    const projectRoleById = new Map(
+      projectMembers.map((item) => [item.projectId.toString(), item.role]),
+    );
+    const visibleProjects = membership.role === 'owner'
+      ? projects
+      : projects.filter((project) => projectRoleById.has(project._id.toString()));
+    const visibleIds = visibleProjects.map((project) => project._id);
+    const boards = visibleIds.length > 0
+      ? await BoardModel.find({ projectId: { $in: visibleIds } })
+        .select({ _id: 1, projectId: 1 })
+        .lean()
+      : [];
+    const boardIds = boards.map((board) => board._id);
+    const cardCountByBoard = new Map<string, number>();
+
+    if (boardIds.length > 0) {
+      const grouped = await CardModel.aggregate([
+        { $match: { boardId: { $in: boardIds } } },
+        { $group: { _id: '$boardId', count: { $sum: 1 } } },
+      ]);
+
+      for (const item of grouped) {
+        cardCountByBoard.set(String(item._id), item.count);
+      }
+    }
+
+    const cardCountByProject = new Map<string, number>();
+
+    for (const board of boards) {
+      const projectId = board.projectId.toString();
+      const next = (cardCountByProject.get(projectId) ?? 0)
+        + (cardCountByBoard.get(board._id.toString()) ?? 0);
+
+      cardCountByProject.set(projectId, next);
+    }
+
     const invites = await InviteModel.find({
       teamId: team._id,
+      projectId: null,
       acceptedAt: null,
       revokedAt: null,
       expiresAt: { $gt: new Date() },
     }).lean();
-
-    const canSeeBudget = membership.role === 'owner' || membership.role === 'admin';
 
     res.json({
       id: team._id.toString(),
@@ -346,14 +409,13 @@ teamsRouter.get(
           avatarUrl: user?.avatarUrl ?? '',
         };
       }),
-      projects: projects.map((project) => ({
+      projects: visibleProjects.map((project) => ({
         id: project._id.toString(),
         name: project.name,
-        budgetEnabled: isFeatureOn(project.budgetEnabled),
-        budgetLimit:
-          canSeeBudget && isFeatureOn(project.budgetEnabled)
-            ? project.budgetLimit
-            : undefined,
+        role: projectRoleById.get(project._id.toString())
+          ?? (membership.role === 'owner' ? 'owner' : 'viewer'),
+        boardBackground: project.boardBackground ?? 'default',
+        cardCount: cardCountByProject.get(project._id.toString()) ?? 0,
       })),
       invites:
         membership.role === 'owner' || membership.role === 'admin'
@@ -431,18 +493,8 @@ teamsRouter.patch(
       throw new AppError(403, 'Недостаточно прав');
     }
 
-    const roleChanged = target.role !== nextRole;
     target.role = nextRole;
     await target.save();
-
-    if (roleChanged) {
-      const projects = await ProjectModel.find({ teamId: target.teamId })
-        .select('_id')
-        .lean();
-      await Promise.all(
-        projects.map((project) => recalcAssigneePlans(project._id, target.userId)),
-      );
-    }
 
     res.json({ ok: true, role: nextRole });
   }),

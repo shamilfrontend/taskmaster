@@ -8,16 +8,17 @@ import { useBoardStore } from '../stores/board.ts';
 import { useProjectStore } from '../stores/project.ts';
 import {
   formatDate,
-  initials,
   isOverdue,
   labelClass,
   linkifyText,
 } from '../composables/format.ts';
 import ModalDialog from '../components/ModalDialog.vue';
+import UserAvatar from '../components/UserAvatar.vue';
 import type {
   BoardCard,
   BoardColumn,
   CardChecklist,
+  CardComment,
   LabelColor,
   TimeEntry,
 } from '../types/index.ts';
@@ -51,10 +52,15 @@ const descDraft = ref('');
 const descExpanded = ref(false);
 const descNeedsToggle = ref(false);
 const descBodyRef = ref<HTMLElement | null>(null);
+const descInputRef = ref<HTMLTextAreaElement | null>(null);
+const titleInputRef = ref<HTMLInputElement | null>(null);
 const checklistDrafts = ref<Record<string, string>>({});
 const itemDrafts = ref<Record<string, string>>({});
 const newItemText = ref<Record<string, string>>({});
 const comment = ref('');
+const replyTo = ref<{ id: string; displayName: string } | null>(null);
+const editingCommentId = ref<string | null>(null);
+const editingBody = ref('');
 const labelName = ref('');
 const labelColor = ref<LabelColor>('blue');
 const labelDrafts = ref<Record<string, string>>({});
@@ -63,10 +69,16 @@ interface MenuPosition {
   right: string;
 }
 
+interface CommentThread {
+  root: CardComment;
+  items: CardComment[];
+}
+
 const renamingId = ref<string | null>(null);
 const renameValue = ref('');
 const menuColumnId = ref<string | null>(null);
 const menuCardId = ref<string | null>(null);
+const menuCommentId = ref<string | null>(null);
 const menuPosition = ref<MenuPosition | null>(null);
 const addingCardColumnId = ref<string | null>(null);
 const newCardTitle = ref('');
@@ -85,15 +97,21 @@ const filterEstimate = ref('');
 const filterColumnId = ref('');
 
 onMounted(() => {
-  document.addEventListener('click', closeMenus);
+  document.addEventListener('click', onDocumentClick);
   window.addEventListener('scroll', closeMenus, true);
   window.addEventListener('resize', closeMenus);
 });
 
 onUnmounted(() => {
-  document.removeEventListener('click', closeMenus);
+  document.removeEventListener('click', onDocumentClick);
   window.removeEventListener('scroll', closeMenus, true);
   window.removeEventListener('resize', closeMenus);
+});
+
+watch(cardOpen, (open) => {
+  if (!open) {
+    closeMenus();
+  }
 });
 
 watch(boardId, async (id) => {
@@ -170,8 +188,6 @@ const canAdmin = computed(() => {
   return role === 'owner' || role === 'admin';
 });
 
-const showMoney = computed(() => project.current?.budgetEnabled === true);
-
 const showReleases = computed(() => project.current?.releasesEnabled === true);
 
 const canLogHours = computed(() => {
@@ -197,19 +213,6 @@ const factHours = computed(() => (
   board.card?.timeEntries ?? []
 ).reduce((sum, entry) => sum + entry.hours, 0));
 
-const factAmount = computed(() => {
-  if (!showMoney.value || !board.card) {
-    return null;
-  }
-
-  const total = board.card.timeEntries.reduce(
-    (sum, entry) => sum + (entry.amount ?? 0),
-    0,
-  );
-
-  return total;
-});
-
 const cardColumnName = computed(() => {
   const columnId = board.card?.columnId;
 
@@ -219,9 +222,6 @@ const cardColumnName = computed(() => {
 
   return board.current.columns.find((item) => item.id === columnId)?.name ?? '';
 });
-
-const assigneeSelectRef = ref<HTMLSelectElement | null>(null);
-const dueDateInputRef = ref<HTMLInputElement | null>(null);
 
 const menuColumn = computed(() => {
   if (!menuColumnId.value) {
@@ -238,6 +238,15 @@ const menuCard = computed(() => {
   }
 
   return board.current?.cards.find((item) => item.id === menuCardId.value)
+    ?? null;
+});
+
+const menuComment = computed(() => {
+  if (!menuCommentId.value) {
+    return null;
+  }
+
+  return board.card?.comments.find((item) => item.id === menuCommentId.value)
     ?? null;
 });
 
@@ -262,7 +271,14 @@ const filtersActive = computed(() => (
 function closeMenus(): void {
   menuColumnId.value = null;
   menuCardId.value = null;
+  menuCommentId.value = null;
   menuPosition.value = null;
+}
+
+function onDocumentClick(): void {
+  closeMenus();
+  cancelCardComposer();
+  cancelColumnComposer();
 }
 
 function canDeleteBoardCard(card: BoardCard): boolean {
@@ -336,14 +352,9 @@ function syncFiltersToQuery(): void {
 
   const query: Record<string, string> = { ...next };
   const card = queryParam('card');
-  const tab = queryParam('tab');
 
   if (card) {
     query.card = card;
-  }
-
-  if (tab) {
-    query.tab = tab;
   }
 
   void router.replace({ query });
@@ -465,6 +476,10 @@ async function openCard(id: string): Promise<void> {
   descEditing.value = false;
   descDraft.value = board.card?.description ?? '';
   descExpanded.value = false;
+  comment.value = '';
+  replyTo.value = null;
+  editingCommentId.value = null;
+  editingBody.value = '';
   cardOpen.value = true;
   await measureDescription();
 }
@@ -522,18 +537,6 @@ function toggleDescription(): void {
   descExpanded.value = !descExpanded.value;
 }
 
-async function focusAssigneeField(): Promise<void> {
-  await nextTick();
-  assigneeSelectRef.value?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  assigneeSelectRef.value?.focus();
-}
-
-async function focusDueDateField(): Promise<void> {
-  await nextTick();
-  dueDateInputRef.value?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  dueDateInputRef.value?.focus();
-}
-
 function placeMenu(event: MouseEvent): MenuPosition | null {
   const button = event.currentTarget;
 
@@ -562,6 +565,7 @@ function toggleMenu(event: MouseEvent, columnId: string): void {
   }
 
   menuCardId.value = null;
+  menuCommentId.value = null;
   menuColumnId.value = columnId;
   menuPosition.value = position;
 }
@@ -579,8 +583,38 @@ function toggleCardMenu(event: MouseEvent, cardId: string): void {
   }
 
   menuColumnId.value = null;
+  menuCommentId.value = null;
   menuCardId.value = cardId;
   menuPosition.value = position;
+}
+
+function toggleCommentMenu(event: MouseEvent, commentId: string): void {
+  if (menuCommentId.value === commentId) {
+    closeMenus();
+    return;
+  }
+
+  const position = placeMenu(event);
+
+  if (!position) {
+    return;
+  }
+
+  menuColumnId.value = null;
+  menuCardId.value = null;
+  menuCommentId.value = commentId;
+  menuPosition.value = position;
+}
+
+function hasCommentActions(item: CardComment): boolean {
+  return canEdit.value
+    || canEditComment(item.userId)
+    || canDeleteComment(item.userId);
+}
+
+async function focusTitleField(): Promise<void> {
+  await nextTick();
+  titleInputRef.value?.focus();
 }
 
 function openCardDelete(card: BoardCard): void {
@@ -1007,13 +1041,18 @@ async function saveRelease(event: Event): Promise<void> {
   await board.patchCard(board.card.id, { releaseId: next });
 }
 
-function startEditDescription(): void {
+async function startEditDescription(): Promise<void> {
   if (!canEdit.value) {
     return;
   }
 
   descDraft.value = board.card?.description ?? '';
   descEditing.value = true;
+  await nextTick();
+  const input = descInputRef.value;
+  input?.focus();
+  const length = input?.value.length ?? 0;
+  input?.setSelectionRange(length, length);
 }
 
 function onDescriptionClick(event: MouseEvent): void {
@@ -1194,6 +1233,101 @@ function canDeleteComment(userId: string): boolean {
   return userId === auth.user?.id;
 }
 
+const commentThreads = computed((): CommentThread[] => {
+  const comments = board.card?.comments ?? [];
+  const roots = comments.filter((item) => !item.parentId);
+  const repliesByParent = new Map<string, CardComment[]>();
+
+  for (const item of comments) {
+    if (item.parentId) {
+      const list = repliesByParent.get(item.parentId) ?? [];
+      list.push(item);
+      repliesByParent.set(item.parentId, list);
+    }
+  }
+
+  return roots.map((root) => {
+    const replies = repliesByParent.get(root.id) ?? [];
+
+    return {
+      root,
+      items: [root, ...replies],
+    };
+  });
+});
+
+const commentPlaceholder = computed(() => (
+  replyTo.value
+    ? `Ответ для ${replyTo.value.displayName}…`
+    : 'Напишите комментарий…'
+));
+
+function startReply(item: CardComment): void {
+  cancelEditComment();
+  replyTo.value = { id: item.id, displayName: item.displayName };
+  void nextTick(() => {
+    document.querySelector<HTMLInputElement>('.card-comment-input')?.focus();
+  });
+}
+
+function replyFromMenu(): void {
+  if (!menuComment.value) {
+    return;
+  }
+
+  startReply(menuComment.value);
+  closeMenus();
+}
+
+function editFromMenu(): void {
+  if (!menuComment.value) {
+    return;
+  }
+
+  startEditComment(menuComment.value);
+  closeMenus();
+}
+
+async function deleteFromMenu(): Promise<void> {
+  if (!menuComment.value) {
+    return;
+  }
+
+  await removeComment(menuComment.value.id);
+  closeMenus();
+}
+
+function cancelReply(): void {
+  replyTo.value = null;
+}
+
+function canEditComment(userId: string): boolean {
+  return userId === auth.user?.id;
+}
+
+function startEditComment(item: CardComment): void {
+  cancelReply();
+  editingCommentId.value = item.id;
+  editingBody.value = item.body;
+}
+
+function cancelEditComment(): void {
+  editingCommentId.value = null;
+  editingBody.value = '';
+}
+
+async function saveEditComment(): Promise<void> {
+  const id = editingCommentId.value;
+  const body = editingBody.value.trim();
+
+  if (!id || !body) {
+    return;
+  }
+
+  await board.editComment(id, body);
+  cancelEditComment();
+}
+
 function openHoursModal(): void {
   hours.value = 2;
   hoursWorkedAt.value = toDateInput(new Date());
@@ -1256,8 +1390,9 @@ async function sendComment(): Promise<void> {
     return;
   }
 
-  await board.addComment(board.card.id, comment.value);
+  await board.addComment(board.card.id, comment.value, replyTo.value?.id);
   comment.value = '';
+  replyTo.value = null;
 }
 
 async function saveLabels(): Promise<void> {
@@ -1291,7 +1426,7 @@ async function saveLabelName(labelId: string): Promise<void> {
 </script>
 
 <template>
-  <div>
+  <div class="board-body">
     <p
       v-if="board.error"
       class="warn"
@@ -1324,7 +1459,7 @@ async function saveLabelName(labelId: string): Promise<void> {
               Без исполнителя
             </option>
             <option
-              v-for="row in project.current?.rates ?? []"
+              v-for="row in project.current?.people ?? []"
               :key="row.userId"
               :value="row.userId"
             >
@@ -1505,12 +1640,12 @@ async function saveLabelName(labelId: string): Promise<void> {
                 >{{ card.releaseName }}</span>
                 <div class="task-foot">
                   <div class="task-meta">
-                    <span
+                    <UserAvatar
                       v-if="card.assigneeName"
-                      class="avatar sm"
-                    >
-                      {{ initials(card.assigneeName) }}
-                    </span>
+                      class="sm"
+                      :name="card.assigneeName"
+                      :src="card.assigneeAvatarUrl ?? ''"
+                    />
                     <span :class="{ 'is-overdue': isOverdue(card.dueDate, column.isDone) }">
                       {{ formatDate(card.dueDate) }}
                     </span>
@@ -1573,6 +1708,7 @@ async function saveLabelName(labelId: string): Promise<void> {
           <div
             v-if="canEdit"
             class="composer"
+            @click.stop
           >
             <template v-if="addingCardColumnId === column.id">
               <textarea
@@ -1611,6 +1747,7 @@ async function saveLabelName(labelId: string): Promise<void> {
         <div
           v-if="canAdmin"
           class="add-list"
+          @click.stop
         >
           <div
             v-if="addingColumn"
@@ -1694,6 +1831,35 @@ async function saveLabelName(labelId: string): Promise<void> {
             Удалить
           </button>
         </div>
+        <div
+          v-else-if="menuComment && menuPosition"
+          class="column-menu"
+          :style="menuPosition"
+          @click.stop
+        >
+          <button
+            v-if="canEdit"
+            type="button"
+            @click="replyFromMenu"
+          >
+            Ответить
+          </button>
+          <button
+            v-if="canEditComment(menuComment.userId)"
+            type="button"
+            @click="editFromMenu"
+          >
+            Изменить
+          </button>
+          <button
+            v-if="canDeleteComment(menuComment.userId)"
+            type="button"
+            class="is-danger"
+            @click="deleteFromMenu"
+          >
+            Удалить
+          </button>
+        </div>
       </Teleport>
 
       <div
@@ -1751,6 +1917,7 @@ async function saveLabelName(labelId: string): Promise<void> {
               <div class="card-modal-title-wrap">
                 <input
                   v-if="canEdit"
+                  ref="titleInputRef"
                   v-model="cardTitle"
                   class="input card-modal-title"
                   type="text"
@@ -1764,23 +1931,12 @@ async function saveLabelName(labelId: string): Promise<void> {
                 >
                   {{ board.card.title }}
                 </h2>
-              </div>
-
-              <div
-                v-if="canEdit"
-                class="card-actions"
-              >
                 <button
+                  v-if="canEdit"
                   type="button"
-                  class="card-action-btn"
-                  @click="focusDueDateField"
-                >
-                  Даты
-                </button>
-                <button
-                  type="button"
-                  class="card-action-btn"
-                  @click="addChecklist"
+                  class="edit-hint"
+                  aria-label="Изменить название"
+                  @mousedown.prevent="focusTitleField"
                 >
                   <svg
                     viewBox="0 0 16 16"
@@ -1790,36 +1946,9 @@ async function saveLabelName(labelId: string): Promise<void> {
                   >
                     <path
                       fill="currentColor"
-                      d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"
+                      d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.453l-3.583 1.12a.75.75 0 0 1-.95-.95l1.12-3.583c.09-.286.242-.547.453-.756l8.61-8.61zm1.414 1.06a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354zM11.189 6.25 9.75 4.81l-6.286 6.287a.25.25 0 0 0-.064.108l-.558 1.766 1.767-.558a.25.25 0 0 0 .108-.064z"
                     />
                   </svg>
-                  Чек-лист
-                </button>
-                <button
-                  v-if="canLogHours"
-                  type="button"
-                  class="card-action-btn"
-                  @click="openHoursModal"
-                >
-                  <svg
-                    viewBox="0 0 16 16"
-                    width="14"
-                    height="14"
-                    aria-hidden="true"
-                  >
-                    <path
-                      fill="currentColor"
-                      d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"
-                    />
-                  </svg>
-                  Затраты
-                </button>
-                <button
-                  type="button"
-                  class="card-action-btn"
-                  @click="focusAssigneeField"
-                >
-                  Участники
                 </button>
               </div>
 
@@ -1855,7 +1984,6 @@ async function saveLabelName(labelId: string): Promise<void> {
                 <div class="field">
                   <label>Исполнитель</label>
                   <select
-                    ref="assigneeSelectRef"
                     class="select"
                     :value="board.card.assigneeId ?? ''"
                     :disabled="!canEdit"
@@ -1867,7 +1995,7 @@ async function saveLabelName(labelId: string): Promise<void> {
                       Без исполнителя
                     </option>
                     <option
-                      v-for="row in project.current?.rates ?? []"
+                      v-for="row in project.current?.people ?? []"
                       :key="row.userId"
                       :value="row.userId"
                     >
@@ -1878,7 +2006,6 @@ async function saveLabelName(labelId: string): Promise<void> {
                 <div class="field">
                   <label>Срок</label>
                   <input
-                    ref="dueDateInputRef"
                     class="input"
                     type="date"
                     :value="toDateInput(board.card.dueDate)"
@@ -1922,19 +2049,6 @@ async function saveLabelName(labelId: string): Promise<void> {
               </div>
 
               <div
-                v-if="showMoney"
-                class="field"
-              >
-                <label>План / факт, ₽</label>
-                <div class="fake-input">
-                  {{ board.card.planAmount ?? '—' }} ₽
-                  <template v-if="factAmount !== null">
-                    · факт {{ factAmount }} ₽
-                  </template>
-                </div>
-              </div>
-
-              <div
                 v-if="showReleases"
                 class="field"
               >
@@ -1964,14 +2078,26 @@ async function saveLabelName(labelId: string): Promise<void> {
                   <button
                     v-if="canEdit && !descEditing"
                     type="button"
-                    class="btn btn-ghost"
+                    class="edit-hint"
+                    aria-label="Изменить описание"
                     @click="startEditDescription"
                   >
-                    Изменить
+                    <svg
+                      viewBox="0 0 16 16"
+                      width="14"
+                      height="14"
+                      aria-hidden="true"
+                    >
+                      <path
+                        fill="currentColor"
+                        d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.453l-3.583 1.12a.75.75 0 0 1-.95-.95l1.12-3.583c.09-.286.242-.547.453-.756l8.61-8.61zm1.414 1.06a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354zM11.189 6.25 9.75 4.81l-6.286 6.287a.25.25 0 0 0-.064.108l-.558 1.766 1.767-.558a.25.25 0 0 0 .108-.064z"
+                      />
+                    </svg>
                   </button>
                 </div>
                 <template v-if="canEdit && descEditing">
                   <textarea
+                    ref="descInputRef"
                     v-model="descDraft"
                     class="input desc-input"
                     rows="5"
@@ -2187,36 +2313,105 @@ async function saveLabelName(labelId: string): Promise<void> {
               <div class="card-section-head">
                 <label>Комментарии</label>
               </div>
+              <div
+                v-if="replyTo"
+                class="comment-reply-chip"
+              >
+                <span>Ответ для {{ replyTo.displayName }}</span>
+                <button
+                  type="button"
+                  class="btn btn-ghost"
+                  @click="cancelReply"
+                >
+                  Отмена
+                </button>
+              </div>
               <input
                 v-if="canEdit"
                 v-model="comment"
                 class="input card-comment-input"
-                placeholder="Напишите комментарий…"
+                :placeholder="commentPlaceholder"
                 @keydown.enter="sendComment"
               >
               <div class="card-comments">
-                <div
-                  v-for="item in board.card.comments"
-                  :key="item.id"
-                  class="comment"
+                <template
+                  v-for="thread in commentThreads"
+                  :key="thread.root.id"
                 >
-                  <div class="comment-head">
-                    <div class="who">
-                      {{ item.displayName }}
+                  <div
+                    v-for="item in thread.items"
+                    :key="item.id"
+                    class="comment"
+                    :class="{ 'comment--reply': Boolean(item.parentId) }"
+                  >
+                    <div class="comment-head">
+                      <div class="who">
+                        <UserAvatar
+                          class="sm"
+                          :name="item.displayName"
+                          :src="item.avatarUrl"
+                        />
+                        {{ item.displayName }}
+                        <span
+                          v-if="item.editedAt"
+                          class="comment-edited"
+                        >изменён</span>
+                      </div>
+                      <div
+                        v-if="editingCommentId !== item.id && hasCommentActions(item)"
+                        class="comment-actions"
+                      >
+                        <button
+                          type="button"
+                          class="column-menu-btn"
+                          aria-label="Действия комментария"
+                          @click.stop="toggleCommentMenu($event, item.id)"
+                        >
+                          ⋯
+                        </button>
+                      </div>
                     </div>
-                    <button
-                      v-if="canDeleteComment(item.userId)"
-                      type="button"
-                      class="btn btn-ghost"
-                      @click="removeComment(item.id)"
+                    <div
+                      v-if="item.parentId"
+                      class="comment-reply-to"
                     >
-                      Удалить
-                    </button>
+                      в ответ {{ thread.root.displayName }}
+                    </div>
+                    <div
+                      v-if="editingCommentId === item.id"
+                      class="comment-edit"
+                    >
+                      <textarea
+                        v-model="editingBody"
+                        class="input comment-edit-input"
+                        rows="3"
+                        @keydown.escape.prevent="cancelEditComment"
+                      />
+                      <div class="comment-edit-actions">
+                        <button
+                          type="button"
+                          class="btn btn-ghost"
+                          @click="cancelEditComment"
+                        >
+                          Отмена
+                        </button>
+                        <button
+                          type="button"
+                          class="btn"
+                          :disabled="!editingBody.trim()"
+                          @click="saveEditComment"
+                        >
+                          Сохранить
+                        </button>
+                      </div>
+                    </div>
+                    <div v-else>
+                      {{ item.body }}
+                    </div>
                   </div>
-                  <div>{{ item.body }}</div>
-                </div>
+                </template>
                 <p
-                  v-if="board.card.comments.length === 0"
+                  v-if="commentThreads.length === 0"
                   class="muted"
                 >
                   Комментариев пока нет
@@ -2416,6 +2611,15 @@ async function saveLabelName(labelId: string): Promise<void> {
 </template>
 
 <style lang="scss" scoped>
+@use '../assets/breakpoints' as *;
+
+.board-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 .board-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -2450,16 +2654,23 @@ async function saveLabelName(labelId: string): Promise<void> {
 
 .columns {
   display: flex;
+  flex: 1;
   gap: 12px;
+  min-width: 0;
+  min-height: 0;
   overflow-x: auto;
-  align-items: flex-start;
+  align-items: stretch;
   padding-bottom: 8px;
 }
 
 .column {
   flex: 0 0 272px;
+  flex-shrink: 0;
   width: 272px;
-  max-height: calc(100vh - var(--header-h) - 200px);
+  min-width: 272px;
+  max-width: 272px;
+  height: 100%;
+  max-height: 100%;
   min-height: 120px;
   display: flex;
   flex-direction: column;
@@ -2594,7 +2805,11 @@ async function saveLabelName(labelId: string): Promise<void> {
 
 .add-list {
   flex: 0 0 272px;
+  flex-shrink: 0;
+  align-self: flex-start;
   width: 272px;
+  min-width: 272px;
+  max-width: 272px;
   padding: 8px;
   background: rgb(255 255 255 / 20%);
   border-radius: var(--radius-lg);
@@ -2825,6 +3040,8 @@ async function saveLabelName(labelId: string): Promise<void> {
   z-index: 40;
   place-items: center;
   padding: 24px 16px;
+  padding: max(16px, env(safe-area-inset-top, 0px))
+    16px max(16px, env(safe-area-inset-bottom, 0px));
   background: rgb(0 0 0 / 64%);
   overflow: auto;
 
@@ -2857,6 +3074,7 @@ async function saveLabelName(labelId: string): Promise<void> {
   flex-direction: column;
   width: min(920px, 100%);
   max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
   overflow: hidden;
   color: var(--text);
   background: var(--surface);
@@ -2898,6 +3116,15 @@ async function saveLabelName(labelId: string): Promise<void> {
   }
 
   .icon-btn {
+    color: var(--muted);
+
+    &:hover {
+      background: var(--hover);
+      color: var(--text);
+    }
+  }
+
+  .column-menu-btn {
     color: var(--muted);
 
     &:hover {
@@ -2954,11 +3181,44 @@ async function saveLabelName(labelId: string): Promise<void> {
 }
 
 .card-modal-title-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
   margin-bottom: 12px;
 }
 
+.edit-hint {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  opacity: 0.4;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 1;
+    background: transparent;
+    color: var(--muted);
+  }
+}
+
+.card-modal-title-wrap:hover .edit-hint,
+.card-section-head:hover .edit-hint {
+  opacity: 0.75;
+}
+
 .card-modal-title {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
+  width: auto;
   height: auto;
   margin: 0;
   padding: 4px 8px;
@@ -2971,32 +3231,6 @@ async function saveLabelName(labelId: string): Promise<void> {
 
 h2.card-modal-title {
   padding-left: 0;
-}
-
-.card-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 20px;
-}
-
-.card-action-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: var(--column);
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-
-  &:hover {
-    background: #a6c5e229;
-  }
 }
 
 .card-section-head {
@@ -3015,10 +3249,33 @@ h2.card-modal-title {
     padding: 2px 8px;
     font-size: 12px;
   }
+
+  .edit-hint {
+    margin-top: 0;
+  }
 }
 
 .card-comment-input {
   margin-bottom: 12px;
+}
+
+.comment-reply-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--hover);
+  color: var(--muted);
+  font-size: 12px;
+
+  .btn {
+    height: auto;
+    padding: 2px 8px;
+    font-size: 12px;
+  }
 }
 
 .card-comments {
@@ -3067,9 +3324,47 @@ h2.card-modal-title {
   }
 
   .who {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-weight: 600;
     font-size: 13px;
   }
+}
+
+.comment--reply {
+  margin-left: 16px;
+  padding-left: 12px;
+  border-left: 2px solid var(--border);
+}
+
+.comment-reply-to {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.comment-edited {
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.comment-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.comment-edit-input {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.comment-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .comment-head {
@@ -3083,6 +3378,13 @@ h2.card-modal-title {
     padding: 2px 8px;
     font-size: 12px;
   }
+}
+
+.comment-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .label-picks {
@@ -3350,25 +3652,108 @@ h2.card-modal-title {
   padding: 0;
 }
 
-@media (max-width: 800px) {
+@media (max-width: $bp-phone) {
+  .board-toolbar {
+    margin-bottom: 12px;
+  }
+
+  .board-filters {
+    width: 100%;
+  }
+
+  .board-filter-search,
+  .board-filter-select {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .board-filter-labels {
+    width: 100%;
+    flex-wrap: wrap;
+
+    .board-filter-select {
+      flex: 1;
+    }
+  }
+
+  .overlay {
+    padding: 8px;
+    padding: max(8px, env(safe-area-inset-top, 0px))
+      8px max(8px, env(safe-area-inset-bottom, 0px));
+  }
+
   .card-modal {
-    max-height: calc(100vh - 32px);
-    overflow: auto;
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+    overflow: hidden;
+    border-radius: var(--radius);
   }
 
   .card-modal-grid {
-    grid-template-columns: 1fr;
-    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
   }
 
   .card-modal-main,
   .card-modal-side {
+    flex: none;
+    min-height: min-content;
     overflow: visible;
+    padding: 12px 16px 20px;
   }
 
   .card-modal-side {
     border-left: 0;
     border-top: 1px solid var(--border);
+  }
+
+  .costs-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+
+    > :nth-child(1) {
+      grid-column: 1;
+    }
+
+    > :nth-child(2) {
+      grid-column: 1;
+    }
+
+    > :nth-child(3) {
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    > :nth-child(4) {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .costs-row--head {
+    display: none;
+  }
+
+  .costs-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: $bp-narrow) {
+  .overlay {
+    padding: 0;
+  }
+
+  .card-modal {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+    overflow: hidden;
+    border-radius: 0;
   }
 }
 </style>

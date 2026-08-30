@@ -6,19 +6,21 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.ts';
 import { useProjectStore } from '../stores/project.ts';
 import { useTeamsStore } from '../stores/teams.ts';
+import { findBoardBackground } from '../composables/board-backgrounds.ts';
 import {
   avatarClass,
   formatDate,
-  formatMoney,
-  initials,
+  pluralRu,
   roleClass,
   roleLabel,
 } from '../composables/format.ts';
 import ModalDialog from '../components/ModalDialog.vue';
 import PageTabs, { type PageTab } from '../components/PageTabs.vue';
+import UserAvatar from '../components/UserAvatar.vue';
 import type {
   ActivityItem,
   ActivityKind,
+  BoardBackgroundId,
   InviteRole,
   TeamInvite,
   TeamMember,
@@ -30,7 +32,7 @@ interface MenuPosition {
   right: string;
 }
 
-type ProjectSource = 'blank' | 'trello';
+type ProjectSource = 'blank' | 'trello' | 'taskmaster';
 
 const route = useRoute();
 const router = useRouter();
@@ -49,9 +51,15 @@ const projectSource = ref<ProjectSource>('blank');
 const trelloBoard = ref<unknown>(null);
 const trelloError = ref('');
 const trelloInputKey = ref(0);
+const taskmasterPayload = ref<unknown>(null);
+const taskmasterError = ref('');
+const taskmasterInputKey = ref(0);
 const deleteOpen = ref(false);
 const projectDeleteOpen = ref(false);
 const projectToDelete = ref<{ id: string; name: string } | null>(null);
+const projectRenameOpen = ref(false);
+const projectToRename = ref<{ id: string; name: string } | null>(null);
+const projectRenameDraft = ref('');
 const menuProjectId = ref<string | null>(null);
 const menuPosition = ref<MenuPosition | null>(null);
 const memberActionOpen = ref(false);
@@ -96,11 +104,28 @@ const canManage = computed(() => {
   return role === 'owner' || role === 'admin';
 });
 
+function canManageProject(role: TeamRole): boolean {
+  return role === 'owner' || role === 'admin';
+}
+
+function projectThumbStyle(
+  id: BoardBackgroundId,
+): Record<string, string> {
+  const { thumb } = findBoardBackground(id);
+
+  return thumb ? { backgroundImage: `url("${thumb}")` } : {};
+}
+
 const isOwner = computed(() => teams.current?.role === 'owner');
 
 const canSaveName = computed(() => {
   const draft = teamNameDraft.value.trim();
   return Boolean(draft) && draft !== teams.current?.name;
+});
+
+const canSaveProjectRename = computed(() => {
+  const draft = projectRenameDraft.value.trim();
+  return Boolean(draft) && draft !== projectToRename.value?.name;
 });
 
 const menuProject = computed(() => {
@@ -238,6 +263,46 @@ async function duplicateProject(): Promise<void> {
   }
 }
 
+async function exportProject(): Promise<void> {
+  if (!menuProject.value) {
+    return;
+  }
+
+  const { id, name } = menuProject.value;
+  closeMenus();
+  await projects.exportProject(id, name);
+}
+
+function openProjectRename(): void {
+  if (!menuProject.value) {
+    return;
+  }
+
+  projectToRename.value = {
+    id: menuProject.value.id,
+    name: menuProject.value.name,
+  };
+  projectRenameDraft.value = menuProject.value.name;
+  projectRenameOpen.value = true;
+  closeMenus();
+}
+
+async function saveProjectRename(): Promise<void> {
+  if (!projectToRename.value || !canSaveProjectRename.value) {
+    return;
+  }
+
+  const ok = await projects.renameProject(
+    projectToRename.value.id,
+    projectRenameDraft.value.trim(),
+  );
+
+  if (ok) {
+    projectRenameOpen.value = false;
+    projectToRename.value = null;
+  }
+}
+
 function openProjectDelete(): void {
   if (!menuProject.value) {
     return;
@@ -308,16 +373,37 @@ function isTrelloBoard(value: unknown): value is { name: string } {
   );
 }
 
+function isTaskmasterSnapshot(value: unknown): value is {
+  project?: { name?: string };
+} {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  return (value as Record<string, unknown>).format === 'taskmaster-project';
+}
+
 function resetTrelloFile(): void {
   trelloBoard.value = null;
   trelloError.value = '';
   trelloInputKey.value += 1;
 }
 
+function resetTaskmasterFile(): void {
+  taskmasterPayload.value = null;
+  taskmasterError.value = '';
+  taskmasterInputKey.value += 1;
+}
+
+function resetImportFiles(): void {
+  resetTrelloFile();
+  resetTaskmasterFile();
+}
+
 function openProjectModal(): void {
   projectName.value = '';
   projectSource.value = 'blank';
-  resetTrelloFile();
+  resetImportFiles();
   projectOpen.value = true;
 }
 
@@ -325,12 +411,16 @@ function closeProjectModal(): void {
   projectOpen.value = false;
   projectName.value = '';
   projectSource.value = 'blank';
-  resetTrelloFile();
+  resetImportFiles();
 }
 
 watch(projectSource, (source) => {
-  if (source === 'blank') {
+  if (source !== 'trello') {
     resetTrelloFile();
+  }
+
+  if (source !== 'taskmaster') {
+    resetTaskmasterFile();
   }
 });
 
@@ -361,19 +451,65 @@ function onTrelloFile(event: Event): void {
   });
 }
 
+function onTaskmasterFile(event: Event): void {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  taskmasterError.value = '';
+  taskmasterPayload.value = null;
+
+  if (!file) {
+    return;
+  }
+
+  void file.text().then((text) => {
+    try {
+      const parsed: unknown = JSON.parse(text);
+
+      if (!isTaskmasterSnapshot(parsed)) {
+        taskmasterError.value = 'Это не экспорт проекта Taskmaster';
+        return;
+      }
+
+      taskmasterPayload.value = parsed;
+      const importedName = parsed.project?.name?.trim();
+
+      if (importedName) {
+        projectName.value = importedName;
+      }
+    } catch {
+      taskmasterError.value = 'Не удалось прочитать JSON';
+    }
+  });
+}
+
 async function createProject(): Promise<void> {
   if (projectSource.value === 'trello' && !trelloBoard.value) {
     trelloError.value = 'Выберите JSON-файл Trello';
     return;
   }
 
-  const id = projectSource.value === 'trello' && trelloBoard.value
-    ? await teams.createProjectFromTrello(
+  if (projectSource.value === 'taskmaster' && !taskmasterPayload.value) {
+    taskmasterError.value = 'Выберите файл проекта Taskmaster';
+    return;
+  }
+
+  let id: string | null = null;
+
+  if (projectSource.value === 'trello' && trelloBoard.value) {
+    id = await teams.createProjectFromTrello(
       teamId.value,
       projectName.value,
       trelloBoard.value,
-    )
-    : await teams.createProject(teamId.value, projectName.value);
+    );
+  } else if (projectSource.value === 'taskmaster' && taskmasterPayload.value) {
+    id = await teams.createProjectFromTaskmaster(
+      teamId.value,
+      projectName.value,
+      taskmasterPayload.value,
+    );
+  } else {
+    id = await teams.createProject(teamId.value, projectName.value);
+  }
 
   if (id) {
     closeProjectModal();
@@ -560,8 +696,31 @@ async function confirmRevoke(): Promise<void> {
       <template v-else>
         <div class="page-head">
           <div>
-            <h1>{{ teams.current.name }}</h1>
-            <p>Участники и проекты команды</p>
+            <h1>
+              {{ teams.current.name }}
+              <span :class="roleClass(teams.current.role)">{{
+                roleLabel(teams.current.role)
+              }}</span>
+            </h1>
+            <p>
+              {{
+                pluralRu(
+                  teams.current.members.length,
+                  'участник',
+                  'участника',
+                  'участников'
+                )
+              }}
+              ·
+              {{
+                pluralRu(
+                  teams.current.projects.length,
+                  'проект',
+                  'проекта',
+                  'проектов'
+                )
+              }}
+            </p>
           </div>
         </div>
         <PageTabs :tabs="tabs" />
@@ -597,18 +756,28 @@ async function confirmRevoke(): Promise<void> {
                 @click="openProject(project.id)"
                 @keydown.enter.prevent="openProject(project.id)"
               >
-                <span class="avatar">{{ initials(project.name) }}</span>
-                <div class="grow">
-                  {{ project.name }}
-                </div>
                 <span
-                  v-if="project.budgetEnabled && project.budgetLimit !== undefined"
-                  class="muted"
-                >
-                  {{ formatMoney(project.budgetLimit) }}
-                </span>
+                  class="list-thumb"
+                  :style="projectThumbStyle(project.boardBackground)"
+                />
+                <div class="grow">
+                  <div>{{ project.name }}</div>
+                  <div class="muted">
+                    {{
+                      pluralRu(
+                        project.cardCount,
+                        'карточка',
+                        'карточки',
+                        'карточек'
+                      )
+                    }}
+                  </div>
+                </div>
+                <span :class="roleClass(project.role)">{{
+                  roleLabel(project.role)
+                }}</span>
                 <button
-                  v-if="canManage"
+                  v-if="canManageProject(project.role)"
                   type="button"
                   class="column-menu-btn"
                   aria-label="Действия с проектом"
@@ -618,12 +787,23 @@ async function confirmRevoke(): Promise<void> {
                 </button>
               </div>
             </template>
-            <p
+            <div
               v-else
-              class="muted"
+              class="empty-panel"
             >
-              Нет проектов
-            </p>
+              <h2>Пока нет проектов</h2>
+              <p class="muted">
+                Создайте проект, чтобы начать работу с доской.
+              </p>
+              <button
+                v-if="canManage"
+                type="button"
+                class="btn"
+                @click="openProjectModal"
+              >
+                Создать проект
+              </button>
+            </div>
           </div>
         </div>
         <div
@@ -647,7 +827,11 @@ async function confirmRevoke(): Promise<void> {
               :key="member.userId"
               class="list-row"
             >
-              <span :class="avatarClass(member.role)">{{ initials(member.displayName) }}</span>
+              <UserAvatar
+                :class="avatarClass(member.role)"
+                :name="member.displayName"
+                :src="member.avatarUrl"
+              />
               <div class="grow">
                 <div>{{ member.displayName }}</div>
                 <div class="muted">
@@ -916,6 +1100,14 @@ async function confirmRevoke(): Promise<void> {
           >
           <span><strong>Из Trello</strong></span>
         </label>
+        <label class="choice">
+          <input
+            v-model="projectSource"
+            type="radio"
+            value="taskmaster"
+          >
+          <span><strong>Из файла</strong></span>
+        </label>
       </div>
       <div class="field">
         <label>Название</label>
@@ -943,11 +1135,27 @@ async function confirmRevoke(): Promise<void> {
           @change="onTrelloFile"
         >
       </div>
+      <div
+        v-if="projectSource === 'taskmaster'"
+        class="field"
+      >
+        <p class="muted mb-16">
+          Файл, скачанный из настроек проекта или меню команды.
+        </p>
+        <label>Файл проекта</label>
+        <input
+          :key="taskmasterInputKey"
+          class="input"
+          type="file"
+          accept=".json,.taskmaster.json,application/json"
+          @change="onTaskmasterFile"
+        >
+      </div>
       <p
-        v-if="trelloError || teams.error"
+        v-if="trelloError || taskmasterError || teams.error"
         class="warn"
       >
-        {{ trelloError || teams.error }}
+        {{ trelloError || taskmasterError || teams.error }}
       </p>
       <div class="modal-foot">
         <button
@@ -1034,9 +1242,21 @@ async function confirmRevoke(): Promise<void> {
       >
         <button
           type="button"
+          @click="openProjectRename"
+        >
+          Переименовать
+        </button>
+        <button
+          type="button"
           @click="duplicateProject"
         >
           Дублировать
+        </button>
+        <button
+          type="button"
+          @click="exportProject"
+        >
+          Экспортировать
         </button>
         <button
           type="button"
@@ -1047,6 +1267,40 @@ async function confirmRevoke(): Promise<void> {
         </button>
       </div>
     </Teleport>
+
+    <ModalDialog
+      :open="projectRenameOpen"
+      title="Переименовать проект"
+      @close="projectRenameOpen = false"
+    >
+      <div class="field">
+        <label>Название</label>
+        <input
+          v-model="projectRenameDraft"
+          class="input"
+          type="text"
+          placeholder="Название проекта…"
+          @keydown.enter.prevent="saveProjectRename"
+        >
+      </div>
+      <div class="modal-foot">
+        <button
+          type="button"
+          class="btn btn-ghost"
+          @click="projectRenameOpen = false"
+        >
+          Отмена
+        </button>
+        <button
+          type="button"
+          class="btn"
+          :disabled="!canSaveProjectRename || projects.isLoading"
+          @click="saveProjectRename"
+        >
+          Сохранить
+        </button>
+      </div>
+    </ModalDialog>
 
     <ModalDialog
       :open="projectDeleteOpen"

@@ -39,8 +39,8 @@ const outcomes: LandingCard[] = [
     text: 'Добавляйте участников, раздавайте роли.',
   },
   {
-    title: 'Аналитика и учёт рядом',
-    text: 'Если понадобится: статусы, загрузка, релизы и учёт расходов. Не мешают, пока ведёте обычные задачи.',
+    title: 'Аналитика рядом',
+    text: 'Если понадобится — включите в настройках: статусы, загрузка и релизы. Не мешают, пока ведёте обычные задачи.',
   },
 ];
 
@@ -66,24 +66,16 @@ async function loginDemo(): Promise<void> {
             src="/logo/kanban.svg"
             alt=""
           >
-          Taskmaster
+          <span class="brand__name">TaskMaster</span>
         </div>
         <div class="landing-actions">
-          <button
-            type="button"
-            class="btn btn-demo"
-            :disabled="auth.isLoading"
-            @click="loginDemo"
-          >
-            {{ auth.isLoading ? 'Открываем…' : 'Демо-доступ' }}
-          </button>
           <button
             type="button"
             class="btn btn-yandex"
             @click="login"
           >
             <span class="ya-mark">Я</span>
-            Войти через Яндекс ID
+            Войти<span class="label-tail"> через Яндекс ID</span>
           </button>
         </div>
       </div>
@@ -102,7 +94,7 @@ async function loginDemo(): Promise<void> {
           <h1>Управляйте проектами и задачами без лишнего</h1>
           <p class="hero__lead">
             Команды, проекты, задачи. <br>
-            Аналитику и учёт расходов. <br>
+            Аналитика по статусам и загрузке. <br>
             Есть импорт проекта из Trello.
           </p>
           <div class="hero__actions">
@@ -174,7 +166,7 @@ async function loginDemo(): Promise<void> {
         <h2>Откройте доску, которая работает из России</h2>
         <p>
           Войдите через Яндекс ID и начните с задач.
-          В настройках проектов можно включить аналитику и учёт расходов.
+          В настройках проектов можно включить релизы и аналитику.
         </p>
         <div class="cta__actions">
           <button
@@ -202,6 +194,7 @@ async function loginDemo(): Promise<void> {
 <style lang="scss" scoped>
 .landing {
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg);
 }
 
@@ -250,15 +243,23 @@ async function loginDemo(): Promise<void> {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
   font-weight: 600;
   font-size: 14px;
   color: var(--text);
 
   img {
-    width: 22px;
-    height: 22px;
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
     border-radius: 6px;
   }
+}
+
+.brand__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .btn-yandex,
@@ -267,10 +268,11 @@ async function loginDemo(): Promise<void> {
   padding: 0 16px;
 }
 
-.landing-bar .btn-yandex,
-.landing-bar .btn-demo {
-  height: 36px;
+.landing-bar .btn-yandex {
+  flex-shrink: 0;
+  height: 40px;
   padding: 0 14px;
+  white-space: nowrap;
 }
 
 .btn-demo {
@@ -415,6 +417,17 @@ async function loginDemo(): Promise<void> {
   }
 }
 
+@media (max-width: 1024px) {
+  .hero__inner {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 24px;
+  }
+
+  .hero__copy h1 {
+    font-size: 32px;
+  }
+}
+
 @media (max-width: 800px) {
   .landing-bar {
     padding: 10px 16px;
@@ -435,7 +448,81 @@ async function loginDemo(): Promise<void> {
   }
 
   .cards {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .landing-error {
+    width: min(1120px, calc(100% - 32px));
+  }
+
+  .landing-bar .btn-yandex {
+    padding: 0 12px;
+  }
+
+  .brand {
+    font-size: 13px;
+  }
+
+  .hero {
+    padding: 28px 16px;
+  }
+
+  .hero__copy h1 {
+    font-size: 26px;
+  }
+
+  .hero__lead {
+    font-size: 15px;
+
+    br {
+      display: none;
+    }
+  }
+
+  .hero__shot {
+    margin: 0 -16px;
+
+    img {
+      border-radius: 0;
+      box-shadow: none;
+    }
+  }
+
+  .hero__actions,
+  .cta__actions {
+    flex-direction: column;
+    align-items: stretch;
+
+    .btn {
+      width: 100%;
+    }
+  }
+
+  .block {
+    padding-top: 32px;
+  }
+
+  .section-head h2,
+  .cta h2 {
+    font-size: 20px;
+  }
+
+  .cards {
     grid-template-columns: 1fr;
+  }
+
+  .cta {
+    margin-top: 32px;
+    padding: 40px 0 48px;
+  }
+}
+
+/* На самых узких экранах полная подпись кнопки вытесняет логотип. */
+@media (max-width: 380px) {
+  .label-tail {
+    display: none;
   }
 }
 </style>

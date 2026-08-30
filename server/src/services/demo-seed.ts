@@ -1,7 +1,6 @@
 /* eslint-disable no-await-in-loop -- sequential Mongo writes for demo data */
 import mongoose from 'mongoose';
 import {
-  DEFAULT_ROLE_RATES,
   type BoardBackground,
   type LabelColor,
   type ReleaseStatus,
@@ -14,14 +13,19 @@ import { CardModel } from '../models/card.js';
 import { ColumnModel } from '../models/column.js';
 import { CommentModel } from '../models/comment.js';
 import { LabelModel } from '../models/label.js';
+import {
+  NotificationModel,
+  type NotificationKind,
+} from '../models/notification.js';
+import { ProjectMemberModel } from '../models/project-member.js';
 import { ProjectModel } from '../models/project.js';
 import { ReleaseModel } from '../models/release.js';
 import { TeamModel } from '../models/team.js';
 import { TeamMemberModel } from '../models/team-member.js';
 import { TimeEntryModel } from '../models/time-entry.js';
 import { UserModel } from '../models/user.js';
-import { calcAmount, calcPlan } from '../utils/rates.js';
 import { normalizeName } from '../utils/crypto.js';
+import { addDays, startOfDay, weekStart } from '../utils/dates.js';
 import { deleteTeamCascade } from './cascade.js';
 import { createDefaultBoard } from './project-setup.js';
 
@@ -50,6 +54,7 @@ interface DemoCommentSeed {
   author: UserKey;
   body: string;
   daysAgo?: number;
+  parentIndex?: number;
 }
 
 interface DemoTimeEntrySeed {
@@ -97,9 +102,7 @@ interface DemoReleaseSeed {
 interface DemoProjectSeed {
   name: string;
   releasesEnabled?: boolean;
-  budgetEnabled?: boolean;
-  budgetLimit?: number;
-  roleRates?: Record<TeamRole, number>;
+  analyticsEnabled?: boolean;
   boardBackground?: BoardBackground;
   labels?: DemoLabelSeed[];
   releases?: DemoReleaseSeed[];
@@ -124,13 +127,6 @@ const COLLEAGUES: Record<Exclude<UserKey, 'demo'>, DemoUserSeed> = {
   pavel: { yandexId: 'demo-pavel', displayName: 'Павел Орлов' },
 };
 
-const AGENCY_RATES: Record<TeamRole, number> = {
-  owner: 3500,
-  admin: 2800,
-  member: 2200,
-  viewer: 0,
-};
-
 const TEAMS: DemoTeamSeed[] = [
   {
     name: 'Наша команда',
@@ -145,9 +141,7 @@ const TEAMS: DemoTeamSeed[] = [
       {
         name: 'CRM-система',
         releasesEnabled: true,
-        budgetEnabled: true,
-        budgetLimit: 2200000,
-        roleRates: AGENCY_RATES,
+        analyticsEnabled: true,
         boardBackground: 'bg-20',
         labels: [
           { key: 'backend', name: 'Бэкенд', color: 'blue' },
@@ -264,6 +258,12 @@ const TEAMS: DemoTeamSeed[] = [
                 body: 'Нужен столбец «Ждём клиента», как в старой CRM.',
                 daysAgo: 1,
               },
+              {
+                author: 'maria',
+                body: 'Добавлю после текущих статусов, не ломая выгрузку.',
+                daysAgo: 1,
+                parentIndex: 0,
+              },
             ],
             activity: [
               { kind: 'card_created', actor: 'demo', daysAgo: 12 },
@@ -373,6 +373,18 @@ const TEAMS: DemoTeamSeed[] = [
                 author: 'pavel',
                 body: 'Цвета тегов как в Excel-выгрузке.',
                 daysAgo: 2,
+              },
+              {
+                author: 'anna',
+                body: 'Возьму палитру из макета, вечером сверю.',
+                daysAgo: 1,
+                parentIndex: 0,
+              },
+              {
+                author: 'pavel',
+                body: 'Ок, только без кислотно-зелёного.',
+                daysAgo: 1,
+                parentIndex: 1,
               },
             ],
           },
@@ -951,16 +963,31 @@ async function seedProject(
   roleByUser: Record<UserKey, TeamRole | undefined>,
   projectSeed: DemoProjectSeed,
 ): Promise<void> {
-  const roleRates = projectSeed.roleRates ?? DEFAULT_ROLE_RATES;
   const project = await ProjectModel.create({
     teamId,
     name: projectSeed.name,
-    budgetLimit: projectSeed.budgetLimit ?? 0,
-    roleRates,
     releasesEnabled: projectSeed.releasesEnabled ?? false,
-    budgetEnabled: projectSeed.budgetEnabled ?? false,
+    analyticsEnabled: projectSeed.analyticsEnabled ?? false,
     boardBackground: projectSeed.boardBackground ?? 'default',
   });
+
+  const memberDocs = USER_KEYS.flatMap((key) => {
+    const role = roleByUser[key];
+
+    if (!role) {
+      return [];
+    }
+
+    return [{
+      projectId: project._id,
+      userId: users[key],
+      role,
+    }];
+  });
+
+  if (memberDocs.length > 0) {
+    await ProjectMemberModel.insertMany(memberDocs);
+  }
 
   const board = await createDefaultBoard(project._id);
   const columns = await ColumnModel.find({ boardId: board._id })
@@ -1034,12 +1061,6 @@ async function seedProject(
       ? users[cardSeed.assignee]
       : null;
     const estimateHours = cardSeed.estimateHours ?? 0;
-    let planAmount = 0;
-
-    if (assigneeId && cardSeed.assignee && estimateHours > 0) {
-      const role = roleByUser[cardSeed.assignee] ?? 'member';
-      planAmount = calcPlan(estimateHours, roleRates[role]);
-    }
 
     const createdAt = cardSeed.createdDaysAgo === undefined
       ? undefined
@@ -1072,7 +1093,6 @@ async function seedProject(
         })),
       })),
       position,
-      planAmount,
     });
 
     if (createdAt) {
@@ -1084,27 +1104,43 @@ async function seedProject(
     }
 
     if (cardSeed.comments) {
+      const created: Array<{
+        id: mongoose.Types.ObjectId;
+        parentId: mongoose.Types.ObjectId | null;
+      }> = [];
+
       for (const comment of cardSeed.comments) {
-        await CommentModel.create({
+        let parentId: mongoose.Types.ObjectId | null = null;
+
+        if (comment.parentIndex !== undefined) {
+          const parent = created[comment.parentIndex];
+
+          if (parent) {
+            parentId = parent.parentId ?? parent.id;
+          }
+        }
+
+        const createdComment = await CommentModel.create({
           cardId: card._id,
           userId: users[comment.author],
+          parentId,
           body: comment.body,
           createdAt: daysAgo(comment.daysAgo ?? 0),
+        });
+
+        created.push({
+          id: createdComment._id,
+          parentId: createdComment.parentId ?? null,
         });
       }
     }
 
     if (cardSeed.timeEntries) {
       for (const entry of cardSeed.timeEntries) {
-        const role = roleByUser[entry.user] ?? 'member';
-        const rate = roleRates[role];
-
         await TimeEntryModel.create({
           cardId: card._id,
           userId: users[entry.user],
           hours: entry.hours,
-          rateSnapshot: rate,
-          amount: calcAmount(entry.hours, rate),
           workedAt: daysAgo(entry.daysAgo),
         });
       }
@@ -1239,5 +1275,178 @@ export async function ensureDemoData(
     }
 
     throw err;
+  }
+}
+
+function minutesAgo(minutes: number): Date {
+  return new Date(Date.now() - minutes * 60 * 1000);
+}
+
+/**
+ * Пересоздаёт непрочитанные уведомления демо-пользователя на каждый вход.
+ */
+export async function refreshDemoNotifications(
+  ownerId: mongoose.Types.ObjectId,
+): Promise<void> {
+  await NotificationModel.deleteMany({ recipientId: ownerId });
+
+  const teamIds = await demoTeamIds(ownerId);
+
+  if (teamIds.length === 0) {
+    return;
+  }
+
+  const [anna, pavel, maria, projects] = await Promise.all([
+    UserModel.findOne({ yandexId: 'demo-anna' }).lean(),
+    UserModel.findOne({ yandexId: 'demo-pavel' }).lean(),
+    UserModel.findOne({ yandexId: 'demo-maria' }).lean(),
+    ProjectModel.find({ teamId: { $in: teamIds } }).lean(),
+  ]);
+
+  if (!anna || !pavel || !maria || projects.length === 0) {
+    return;
+  }
+
+  const boards = await BoardModel.find({
+    projectId: { $in: projects.map((project) => project._id) },
+  }).lean();
+  const assigned = await CardModel.find({
+    boardId: { $in: boards.map((board) => board._id) },
+    assigneeId: ownerId,
+  })
+    .sort({ createdAt: -1 })
+    .limit(3)
+    .lean();
+
+  if (assigned.length === 0) {
+    return;
+  }
+
+  const firstCard = assigned[0];
+
+  if (!firstCard) {
+    return;
+  }
+
+  const boardById = new Map(
+    boards.map((board) => [board._id.toString(), board]),
+  );
+  const projectById = new Map(
+    projects.map((project) => [project._id.toString(), project]),
+  );
+
+  const dueAssigned = await CardModel.find({
+    boardId: { $in: boards.map((board) => board._id) },
+    assigneeId: ownerId,
+    dueDate: { $ne: null },
+  }).lean();
+
+  const seeds: Array<{
+    actorId: mongoose.Types.ObjectId | null;
+    kind: NotificationKind;
+    card: {
+      _id: mongoose.Types.ObjectId;
+      boardId: mongoose.Types.ObjectId;
+      title: string;
+      dueDate?: Date | null;
+    };
+    detail: string;
+    createdAt: Date;
+  }> = [
+    {
+      actorId: anna._id,
+      kind: 'card_assigned',
+      card: firstCard,
+      detail: '',
+      createdAt: minutesAgo(4),
+    },
+  ];
+
+  if (assigned[1]) {
+    seeds.push({
+      actorId: pavel._id,
+      kind: 'comment_added',
+      card: assigned[1],
+      detail: 'Можно взять в работу на этой неделе?',
+      createdAt: minutesAgo(18),
+    });
+  }
+
+  seeds.push({
+    actorId: maria._id,
+    kind: 'comment_reply',
+    card: assigned[assigned.length - 1] ?? firstCard,
+    detail: 'Согласен, давай так и сделаем.',
+    createdAt: minutesAgo(42),
+  });
+
+  const today = startOfDay(new Date());
+  const weekEnd = addDays(weekStart(today), 7);
+  const overdueCard = dueAssigned.find((card) => (
+    card.dueDate && startOfDay(card.dueDate).getTime() < today.getTime()
+  )) ?? dueAssigned[0];
+  const dueSoonCard = dueAssigned.find((card) => (
+    card.dueDate
+    && startOfDay(card.dueDate).getTime() >= today.getTime()
+    && startOfDay(card.dueDate).getTime() < weekEnd.getTime()
+  )) ?? dueAssigned.find((card) => (
+    card._id.toString() !== overdueCard?._id.toString()
+  )) ?? overdueCard;
+
+  if (overdueCard?.dueDate) {
+    seeds.push({
+      actorId: null,
+      kind: 'card_overdue',
+      card: overdueCard,
+      detail: overdueCard.dueDate.toLocaleDateString('ru-RU', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      }),
+      createdAt: minutesAgo(8),
+    });
+  }
+
+  if (dueSoonCard?.dueDate) {
+    seeds.push({
+      actorId: null,
+      kind: 'card_due_soon',
+      card: dueSoonCard,
+      detail: dueSoonCard.dueDate.toLocaleDateString('ru-RU', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      }),
+      createdAt: minutesAgo(12),
+    });
+  }
+
+  const docs = seeds.flatMap((seed) => {
+    const board = boardById.get(seed.card.boardId.toString());
+    const project = board
+      ? projectById.get(board.projectId.toString())
+      : undefined;
+
+    if (!board || !project) {
+      return [];
+    }
+
+    return [{
+      recipientId: ownerId,
+      actorId: seed.actorId,
+      kind: seed.kind,
+      teamId: project.teamId,
+      projectId: board.projectId,
+      boardId: board._id,
+      cardId: seed.card._id,
+      cardTitle: seed.card.title,
+      detail: seed.detail,
+      readAt: null,
+      createdAt: seed.createdAt,
+    }];
+  });
+
+  if (docs.length > 0) {
+    await NotificationModel.insertMany(docs);
   }
 }
