@@ -52,6 +52,8 @@ const descDraft = ref('');
 const descExpanded = ref(false);
 const descNeedsToggle = ref(false);
 const descBodyRef = ref<HTMLElement | null>(null);
+const descInputRef = ref<HTMLTextAreaElement | null>(null);
+const titleInputRef = ref<HTMLInputElement | null>(null);
 const checklistDrafts = ref<Record<string, string>>({});
 const itemDrafts = ref<Record<string, string>>({});
 const newItemText = ref<Record<string, string>>({});
@@ -76,6 +78,7 @@ const renamingId = ref<string | null>(null);
 const renameValue = ref('');
 const menuColumnId = ref<string | null>(null);
 const menuCardId = ref<string | null>(null);
+const menuCommentId = ref<string | null>(null);
 const menuPosition = ref<MenuPosition | null>(null);
 const addingCardColumnId = ref<string | null>(null);
 const newCardTitle = ref('');
@@ -103,6 +106,12 @@ onUnmounted(() => {
   document.removeEventListener('click', onDocumentClick);
   window.removeEventListener('scroll', closeMenus, true);
   window.removeEventListener('resize', closeMenus);
+});
+
+watch(cardOpen, (open) => {
+  if (!open) {
+    closeMenus();
+  }
 });
 
 watch(boardId, async (id) => {
@@ -214,9 +223,6 @@ const cardColumnName = computed(() => {
   return board.current.columns.find((item) => item.id === columnId)?.name ?? '';
 });
 
-const assigneeSelectRef = ref<HTMLSelectElement | null>(null);
-const dueDateInputRef = ref<HTMLInputElement | null>(null);
-
 const menuColumn = computed(() => {
   if (!menuColumnId.value) {
     return null;
@@ -232,6 +238,15 @@ const menuCard = computed(() => {
   }
 
   return board.current?.cards.find((item) => item.id === menuCardId.value)
+    ?? null;
+});
+
+const menuComment = computed(() => {
+  if (!menuCommentId.value) {
+    return null;
+  }
+
+  return board.card?.comments.find((item) => item.id === menuCommentId.value)
     ?? null;
 });
 
@@ -256,6 +271,7 @@ const filtersActive = computed(() => (
 function closeMenus(): void {
   menuColumnId.value = null;
   menuCardId.value = null;
+  menuCommentId.value = null;
   menuPosition.value = null;
 }
 
@@ -521,18 +537,6 @@ function toggleDescription(): void {
   descExpanded.value = !descExpanded.value;
 }
 
-async function focusAssigneeField(): Promise<void> {
-  await nextTick();
-  assigneeSelectRef.value?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  assigneeSelectRef.value?.focus();
-}
-
-async function focusDueDateField(): Promise<void> {
-  await nextTick();
-  dueDateInputRef.value?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  dueDateInputRef.value?.focus();
-}
-
 function placeMenu(event: MouseEvent): MenuPosition | null {
   const button = event.currentTarget;
 
@@ -561,6 +565,7 @@ function toggleMenu(event: MouseEvent, columnId: string): void {
   }
 
   menuCardId.value = null;
+  menuCommentId.value = null;
   menuColumnId.value = columnId;
   menuPosition.value = position;
 }
@@ -578,8 +583,38 @@ function toggleCardMenu(event: MouseEvent, cardId: string): void {
   }
 
   menuColumnId.value = null;
+  menuCommentId.value = null;
   menuCardId.value = cardId;
   menuPosition.value = position;
+}
+
+function toggleCommentMenu(event: MouseEvent, commentId: string): void {
+  if (menuCommentId.value === commentId) {
+    closeMenus();
+    return;
+  }
+
+  const position = placeMenu(event);
+
+  if (!position) {
+    return;
+  }
+
+  menuColumnId.value = null;
+  menuCardId.value = null;
+  menuCommentId.value = commentId;
+  menuPosition.value = position;
+}
+
+function hasCommentActions(item: CardComment): boolean {
+  return canEdit.value
+    || canEditComment(item.userId)
+    || canDeleteComment(item.userId);
+}
+
+async function focusTitleField(): Promise<void> {
+  await nextTick();
+  titleInputRef.value?.focus();
 }
 
 function openCardDelete(card: BoardCard): void {
@@ -1006,13 +1041,18 @@ async function saveRelease(event: Event): Promise<void> {
   await board.patchCard(board.card.id, { releaseId: next });
 }
 
-function startEditDescription(): void {
+async function startEditDescription(): Promise<void> {
   if (!canEdit.value) {
     return;
   }
 
   descDraft.value = board.card?.description ?? '';
   descEditing.value = true;
+  await nextTick();
+  const input = descInputRef.value;
+  input?.focus();
+  const length = input?.value.length ?? 0;
+  input?.setSelectionRange(length, length);
 }
 
 function onDescriptionClick(event: MouseEvent): void {
@@ -1228,6 +1268,33 @@ function startReply(item: CardComment): void {
   void nextTick(() => {
     document.querySelector<HTMLInputElement>('.card-comment-input')?.focus();
   });
+}
+
+function replyFromMenu(): void {
+  if (!menuComment.value) {
+    return;
+  }
+
+  startReply(menuComment.value);
+  closeMenus();
+}
+
+function editFromMenu(): void {
+  if (!menuComment.value) {
+    return;
+  }
+
+  startEditComment(menuComment.value);
+  closeMenus();
+}
+
+async function deleteFromMenu(): Promise<void> {
+  if (!menuComment.value) {
+    return;
+  }
+
+  await removeComment(menuComment.value.id);
+  closeMenus();
 }
 
 function cancelReply(): void {
@@ -1764,6 +1831,35 @@ async function saveLabelName(labelId: string): Promise<void> {
             Удалить
           </button>
         </div>
+        <div
+          v-else-if="menuComment && menuPosition"
+          class="column-menu"
+          :style="menuPosition"
+          @click.stop
+        >
+          <button
+            v-if="canEdit"
+            type="button"
+            @click="replyFromMenu"
+          >
+            Ответить
+          </button>
+          <button
+            v-if="canEditComment(menuComment.userId)"
+            type="button"
+            @click="editFromMenu"
+          >
+            Изменить
+          </button>
+          <button
+            v-if="canDeleteComment(menuComment.userId)"
+            type="button"
+            class="is-danger"
+            @click="deleteFromMenu"
+          >
+            Удалить
+          </button>
+        </div>
       </Teleport>
 
       <div
@@ -1821,6 +1917,7 @@ async function saveLabelName(labelId: string): Promise<void> {
               <div class="card-modal-title-wrap">
                 <input
                   v-if="canEdit"
+                  ref="titleInputRef"
                   v-model="cardTitle"
                   class="input card-modal-title"
                   type="text"
@@ -1834,23 +1931,12 @@ async function saveLabelName(labelId: string): Promise<void> {
                 >
                   {{ board.card.title }}
                 </h2>
-              </div>
-
-              <div
-                v-if="canEdit"
-                class="card-actions"
-              >
                 <button
+                  v-if="canEdit"
                   type="button"
-                  class="card-action-btn"
-                  @click="focusDueDateField"
-                >
-                  Даты
-                </button>
-                <button
-                  type="button"
-                  class="card-action-btn"
-                  @click="addChecklist"
+                  class="edit-hint"
+                  aria-label="Изменить название"
+                  @mousedown.prevent="focusTitleField"
                 >
                   <svg
                     viewBox="0 0 16 16"
@@ -1860,36 +1946,9 @@ async function saveLabelName(labelId: string): Promise<void> {
                   >
                     <path
                       fill="currentColor"
-                      d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"
+                      d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.453l-3.583 1.12a.75.75 0 0 1-.95-.95l1.12-3.583c.09-.286.242-.547.453-.756l8.61-8.61zm1.414 1.06a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354zM11.189 6.25 9.75 4.81l-6.286 6.287a.25.25 0 0 0-.064.108l-.558 1.766 1.767-.558a.25.25 0 0 0 .108-.064z"
                     />
                   </svg>
-                  Чек-лист
-                </button>
-                <button
-                  v-if="canLogHours"
-                  type="button"
-                  class="card-action-btn"
-                  @click="openHoursModal"
-                >
-                  <svg
-                    viewBox="0 0 16 16"
-                    width="14"
-                    height="14"
-                    aria-hidden="true"
-                  >
-                    <path
-                      fill="currentColor"
-                      d="M8 2a.75.75 0 0 1 .75.75v4.5h4.5a.75.75 0 0 1 0 1.5h-4.5v4.5a.75.75 0 0 1-1.5 0v-4.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-4.5A.75.75 0 0 1 8 2z"
-                    />
-                  </svg>
-                  Затраты
-                </button>
-                <button
-                  type="button"
-                  class="card-action-btn"
-                  @click="focusAssigneeField"
-                >
-                  Участники
                 </button>
               </div>
 
@@ -1925,7 +1984,6 @@ async function saveLabelName(labelId: string): Promise<void> {
                 <div class="field">
                   <label>Исполнитель</label>
                   <select
-                    ref="assigneeSelectRef"
                     class="select"
                     :value="board.card.assigneeId ?? ''"
                     :disabled="!canEdit"
@@ -1948,7 +2006,6 @@ async function saveLabelName(labelId: string): Promise<void> {
                 <div class="field">
                   <label>Срок</label>
                   <input
-                    ref="dueDateInputRef"
                     class="input"
                     type="date"
                     :value="toDateInput(board.card.dueDate)"
@@ -2021,14 +2078,26 @@ async function saveLabelName(labelId: string): Promise<void> {
                   <button
                     v-if="canEdit && !descEditing"
                     type="button"
-                    class="btn btn-ghost"
+                    class="edit-hint"
+                    aria-label="Изменить описание"
                     @click="startEditDescription"
                   >
-                    Изменить
+                    <svg
+                      viewBox="0 0 16 16"
+                      width="14"
+                      height="14"
+                      aria-hidden="true"
+                    >
+                      <path
+                        fill="currentColor"
+                        d="M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.453l-3.583 1.12a.75.75 0 0 1-.95-.95l1.12-3.583c.09-.286.242-.547.453-.756l8.61-8.61zm1.414 1.06a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354zM11.189 6.25 9.75 4.81l-6.286 6.287a.25.25 0 0 0-.064.108l-.558 1.766 1.767-.558a.25.25 0 0 0 .108-.064z"
+                      />
+                    </svg>
                   </button>
                 </div>
                 <template v-if="canEdit && descEditing">
                   <textarea
+                    ref="descInputRef"
                     v-model="descDraft"
                     class="input desc-input"
                     rows="5"
@@ -2289,32 +2358,16 @@ async function saveLabelName(labelId: string): Promise<void> {
                         >изменён</span>
                       </div>
                       <div
-                        v-if="editingCommentId !== item.id"
+                        v-if="editingCommentId !== item.id && hasCommentActions(item)"
                         class="comment-actions"
                       >
                         <button
-                          v-if="canEdit"
                           type="button"
-                          class="btn btn-ghost"
-                          @click="startReply(item)"
+                          class="column-menu-btn"
+                          aria-label="Действия комментария"
+                          @click.stop="toggleCommentMenu($event, item.id)"
                         >
-                          Ответить
-                        </button>
-                        <button
-                          v-if="canEditComment(item.userId)"
-                          type="button"
-                          class="btn btn-ghost"
-                          @click="startEditComment(item)"
-                        >
-                          Изменить
-                        </button>
-                        <button
-                          v-if="canDeleteComment(item.userId)"
-                          type="button"
-                          class="btn btn-ghost"
-                          @click="removeComment(item.id)"
-                        >
-                          Удалить
+                          ⋯
                         </button>
                       </div>
                     </div>
@@ -3047,6 +3100,15 @@ async function saveLabelName(labelId: string): Promise<void> {
       color: var(--text);
     }
   }
+
+  .column-menu-btn {
+    color: var(--muted);
+
+    &:hover {
+      background: var(--hover);
+      color: var(--text);
+    }
+  }
 }
 
 .card-modal-top {
@@ -3096,11 +3158,44 @@ async function saveLabelName(labelId: string): Promise<void> {
 }
 
 .card-modal-title-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
   margin-bottom: 12px;
 }
 
+.edit-hint {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-top: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  opacity: 0.4;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 1;
+    background: transparent;
+    color: var(--muted);
+  }
+}
+
+.card-modal-title-wrap:hover .edit-hint,
+.card-section-head:hover .edit-hint {
+  opacity: 0.75;
+}
+
 .card-modal-title {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
+  width: auto;
   height: auto;
   margin: 0;
   padding: 4px 8px;
@@ -3113,32 +3208,6 @@ async function saveLabelName(labelId: string): Promise<void> {
 
 h2.card-modal-title {
   padding-left: 0;
-}
-
-.card-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 20px;
-}
-
-.card-action-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: var(--column);
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-
-  &:hover {
-    background: #a6c5e229;
-  }
 }
 
 .card-section-head {
@@ -3156,6 +3225,10 @@ h2.card-modal-title {
     height: auto;
     padding: 2px 8px;
     font-size: 12px;
+  }
+
+  .edit-hint {
+    margin-top: 0;
   }
 }
 
