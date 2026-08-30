@@ -27,6 +27,7 @@ flowchart TB
   Login --> Landing
   Landing -->|OAuth или демо| Teams
   Invite -->|accept| Team
+  Invite -->|project invite| Layout
   Teams --> Team
   Teams --> MyTasks
   Team --> Layout
@@ -48,7 +49,7 @@ flowchart TB
 | --- | --- | --- | --- | --- |
 | `/landing` | `landing` | `LoginView` | `public`, `chrome: false` | Лендинг, Яндекс ID, демо |
 | `/login` | `login` | redirect | — | На `/landing`, `?next=` сохраняется |
-| `/invite/:token` | `invite` | `InviteView` | `public`, `chrome: false` | Превью и принятие инвайта |
+| `/invite/:token` | `invite` | `InviteView` | `public`, `chrome: false` | Превью и принятие инвайта в команду или проект |
 | `/` | `teams` | `TeamsView` | `chrome: true` | Список команд, создать команду |
 | `/my-tasks` | `my-tasks` | `MyTasksView` | `chrome: true` | Карточки, где вы исполнитель |
 | `/teams/:teamId` | `team` | `TeamView` | `chrome: true` | Участники, инвайты, проекты, действия |
@@ -86,7 +87,7 @@ Query на `/my-tasks`: `done=1` (готовые колонки), `teamId`, `pro
 | --- | --- | --- |
 | `auth` | [`client/src/stores/auth.ts`](../client/src/stores/auth.ts) | `user`, `fetchMe`, `login` → `/api/auth/yandex`, `loginDemo`, `logout`. Ставит `setDemoMode`. |
 | `teams` | [`client/src/stores/teams.ts`](../client/src/stores/teams.ts) | Список и текущая команда, activity, инвайты, участники, создание проекта, импорт Trello и файла Taskmaster. |
-| `project` | [`client/src/stores/project.ts`](../client/src/stores/project.ts) | Детали проекта, members, analytics, дублирование, экспорт, релизы create. |
+| `project` | [`client/src/stores/project.ts`](../client/src/stores/project.ts) | Детали проекта, members, инвайты проекта, analytics, дублирование, экспорт, релизы create. |
 | `board` | [`client/src/stores/board.ts`](../client/src/stores/board.ts) | Колонки, карточки, метки, списания, комментарии, чеклисты, релизы attach/detach. |
 | `my-tasks` | [`client/src/stores/my-tasks.ts`](../client/src/stores/my-tasks.ts) | Карточки текущего исполнителя: `GET /me/tasks`. |
 | `notifications` | [`client/src/stores/notifications.ts`](../client/src/stores/notifications.ts) | Инбокс, `unreadCount`, polling 10 с, `markRead` / `markAllRead`. Drawer в шапке. |
@@ -102,7 +103,7 @@ Query на `/my-tasks`: `done=1` (готовые колонки), `teamId`, `pro
 | Экран | Что показывает |
 | --- | --- |
 | Landing | Возможности, вход через Яндекс ID, демо-доступ |
-| Invite | Имя команды, роль, срок; если нет сессии — OAuth с `next=/invite/:token` |
+| Invite | Имя команды (и проекта, если инвайт проектный), роль, срок; accept ведёт в команду или на доску проекта; если нет сессии — OAuth с `next=/invite/:token` |
 | Teams | Свои команды, счётчики участников и доступных проектов |
 | Мои задачи | Назначенные карточки по проектам, группы по сроку |
 | Team | Состав, инвайты (owner/admin), проекты (создание, Trello, файл Taskmaster), лента действий, настройки/удаление |
@@ -111,6 +112,6 @@ Query на `/my-tasks`: `done=1` (готовые колонки), `teamId`, `pro
 | Releases | Список релизов проекта |
 | Release | Название, дата, статус, прикреплённые карточки |
 | Analytics | Период, сводка, статусы, план/факт по часам, загрузка, релизы, недели, риски |
-| Members | Состав проекта, роли, добавление из команды, исключение и выход |
+| Members | Состав проекта, роли, добавление из команды или по ссылке, ожидающие инвайты, исключение и выход |
 | Settings | Имя, флаги релизов и аналитики, фон, удаление |
 | Уведомления | Колокольчик слева от аватарки, drawer, подгрузка; назначение, комментарии, просрочка и срок на этой неделе; клик открывает карточку |

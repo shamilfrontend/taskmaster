@@ -388,6 +388,7 @@ teamsRouter.get(
 
     const invites = await InviteModel.find({
       teamId: team._id,
+      projectId: null,
       acceptedAt: null,
       revokedAt: null,
       expiresAt: { $gt: new Date() },

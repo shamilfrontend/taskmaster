@@ -12,6 +12,7 @@ const auth = useAuthStore();
 const preview = ref<InvitePreview | null>(null);
 const error = ref<string | null>(null);
 const token = computed(() => String(route.params.token ?? ''));
+const isProjectInvite = computed(() => Boolean(preview.value?.projectName));
 
 onMounted(async () => {
   try {
@@ -28,9 +29,21 @@ onMounted(async () => {
 
 async function accept(): Promise<void> {
   try {
-    const { data } = await http.post<{ teamId: string }>(
+    const { data } = await http.post<{
+      teamId: string;
+      projectId?: string;
+    }>(
       `/invites/${token.value}/accept`,
     );
+
+    if (data.projectId) {
+      await router.push({
+        name: 'project',
+        params: { projectId: data.projectId },
+      });
+      return;
+    }
+
     await router.push({ name: 'team', params: { teamId: data.teamId } });
   } catch (err: unknown) {
     error.value = errorMessage(err);
@@ -49,18 +62,32 @@ function login(): void {
         src="/logo/kanban.svg"
         alt="Taskmaster"
       >
-      <h1>Приглашение в команду</h1>
+      <h1>
+        {{ isProjectInvite ? 'Приглашение в проект' : 'Приглашение в команду' }}
+      </h1>
       <p v-if="error">
         {{ error }}
       </p>
       <template v-else-if="preview">
-        <p>
+        <p v-if="preview.projectName">
+          Вас пригласили в проект {{ preview.projectName }}
+          команды {{ preview.teamName }}.
+          Для вступления нужен вход через Яндекс ID.
+        </p>
+        <p v-else>
           Вас пригласили в {{ preview.teamName }}.
           Для вступления нужен вход через Яндекс ID.
         </p>
         <div class="invite-meta">
           <span>Команда</span>
           <strong>{{ preview.teamName }}</strong>
+        </div>
+        <div
+          v-if="preview.projectName"
+          class="invite-meta"
+        >
+          <span>Проект</span>
+          <strong>{{ preview.projectName }}</strong>
         </div>
         <div class="invite-meta">
           <span>Роль</span>

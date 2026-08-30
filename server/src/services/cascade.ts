@@ -41,6 +41,7 @@ export async function deleteProjectCascade(
 
   await ReleaseModel.deleteMany({ projectId });
   await ProjectMemberModel.deleteMany({ projectId });
+  await InviteModel.deleteMany({ projectId });
   await NotificationModel.deleteMany({ projectId });
   await ProjectModel.deleteOne({ _id: projectId });
 }

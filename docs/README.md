@@ -84,6 +84,7 @@ flowchart TB
   Team --> Invite
   Team --> Activity
   Team --> Project
+  Project --> Invite
   User --> ProjectMember
   User --> Notification
   Project --> ProjectMember

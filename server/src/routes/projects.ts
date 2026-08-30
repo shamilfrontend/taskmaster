@@ -9,6 +9,7 @@ import {
   requireProjectAccess,
 } from '../middleware/access.js';
 import { CardModel } from '../models/card.js';
+import { InviteModel } from '../models/invite.js';
 import { ProjectModel } from '../models/project.js';
 import { ProjectMemberModel } from '../models/project-member.js';
 import { ReleaseModel } from '../models/release.js';
@@ -23,7 +24,11 @@ import {
   createDefaultBoard,
   resolveProjectBoard,
 } from '../services/project-setup.js';
-import { normalizeName } from '../utils/crypto.js';
+import {
+  createInviteToken,
+  hashToken,
+  normalizeName,
+} from '../utils/crypto.js';
 import {
   asObjectId,
   assertFeatureOn,
@@ -31,6 +36,7 @@ import {
   isFeatureOn,
   readBoolean,
   readBoardBackground,
+  readInviteRole,
   readNonOwnerRole,
   readOptionalDate,
   readString,
@@ -278,6 +284,14 @@ projectsRouter.get(
     }).lean();
     const userMap = new Map(users.map((user) => [user._id.toString(), user]));
     const memberIds = new Set(members.map((item) => item.userId.toString()));
+    const invites = canManageProjectMembers(access)
+      ? await InviteModel.find({
+        projectId: project._id,
+        acceptedAt: null,
+        revokedAt: null,
+        expiresAt: { $gt: new Date() },
+      }).lean()
+      : [];
 
     res.json({
       role: access.role,
@@ -305,6 +319,11 @@ projectsRouter.get(
             avatarUrl: user?.avatarUrl ?? '',
           };
         }),
+      invites: invites.map((invite) => ({
+        id: invite._id.toString(),
+        role: invite.role,
+        expiresAt: invite.expiresAt,
+      })),
     });
   }),
 );
@@ -415,6 +434,76 @@ projectsRouter.delete(
 
     await unassignUserInProject(target.projectId, target.userId);
     await target.deleteOne();
+    res.json({ ok: true });
+  }),
+);
+
+projectsRouter.post(
+  '/:projectId/invites',
+  asyncHandler(async (req: Request, res: Response) => {
+    const projectId = req.params.projectId as string;
+    const access = await requireProjectAccess(projectId, req.userId);
+
+    if (!canManageProjectMembers(access)) {
+      throw new AppError(403, 'Недостаточно прав');
+    }
+
+    const role = readInviteRole(req.body, 'role');
+
+    if (!canManageProjectMember(access, role)) {
+      throw new AppError(403, 'Недостаточно прав');
+    }
+
+    const project = await ProjectModel.findById(asObjectId(projectId)).lean();
+
+    if (!project) {
+      throw new AppError(404, 'Проект не найден');
+    }
+
+    const raw = createInviteToken();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    const invite = await InviteModel.create({
+      teamId: project.teamId,
+      projectId: project._id,
+      tokenHash: hashToken(raw),
+      role,
+      createdBy: asObjectId(req.userId),
+      expiresAt,
+    });
+
+    res.status(201).json({
+      id: invite._id.toString(),
+      token: raw,
+      role: invite.role,
+      expiresAt: invite.expiresAt,
+    });
+  }),
+);
+
+projectsRouter.delete(
+  '/:projectId/invites/:inviteId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const projectId = req.params.projectId as string;
+    const inviteId = req.params.inviteId as string;
+    const access = await requireProjectAccess(projectId, req.userId);
+
+    if (!canManageProjectMembers(access)) {
+      throw new AppError(403, 'Недостаточно прав');
+    }
+
+    const invite = await InviteModel.findOne({
+      _id: asObjectId(inviteId, 'inviteId'),
+      projectId: asObjectId(projectId),
+    });
+
+    if (!invite || invite.acceptedAt || invite.revokedAt) {
+      throw new AppError(404, 'Инвайт не найден');
+    }
+
+    invite.revokedAt = new Date();
+    await invite.save();
     res.json({ ok: true });
   }),
 );

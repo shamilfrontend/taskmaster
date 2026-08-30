@@ -12,6 +12,7 @@ import ModalDialog from '../components/ModalDialog.vue';
 import UserAvatar from '../components/UserAvatar.vue';
 import type {
   InviteRole,
+  ProjectInvite,
   ProjectMember,
   TeamRole,
 } from '../types/index.ts';
@@ -23,12 +24,19 @@ const projects = useProjectStore();
 const projectId = computed(() => String(route.params.projectId));
 
 const addMemberOpen = ref(false);
+const addMode = ref<'member' | 'link'>('member');
 const addMemberUserId = ref('');
 const addMemberRole = ref<InviteRole>('member');
+const inviteRole = ref<InviteRole>('member');
+const inviteUrl = ref('');
+const inviteCopied = ref(false);
 const memberActionOpen = ref(false);
 const memberAction = ref<'remove' | 'leave'>('remove');
 const memberTargetId = ref('');
 const memberTargetName = ref('');
+const revokeOpen = ref(false);
+const revokeInviteId = ref('');
+const revokeInviteRole = ref<InviteRole>('member');
 const assignableRoles: InviteRole[] = ['admin', 'member', 'viewer'];
 
 watch(
@@ -44,6 +52,10 @@ const canManageMembers = computed(() => {
   const teamRole = projects.current?.teamRole;
   return role === 'owner' || role === 'admin' || teamRole === 'owner';
 });
+
+const hasCandidates = computed(
+  () => Boolean(projects.members?.candidates.length),
+);
 
 function canManageMember(targetRole: TeamRole): boolean {
   const actor = projects.current?.teamRole === 'owner'
@@ -75,7 +87,26 @@ const canLeave = computed(() => {
 function openAddMember(): void {
   addMemberUserId.value = projects.members?.candidates[0]?.userId ?? '';
   addMemberRole.value = 'member';
+  inviteRole.value = 'member';
+  inviteUrl.value = '';
+  inviteCopied.value = false;
+  addMode.value = hasCandidates.value ? 'member' : 'link';
   addMemberOpen.value = true;
+}
+
+function closeAddMember(): void {
+  addMemberOpen.value = false;
+  inviteUrl.value = '';
+  inviteCopied.value = false;
+}
+
+function cancelInviteStep(): void {
+  if (hasCandidates.value && addMode.value === 'link') {
+    addMode.value = 'member';
+    return;
+  }
+
+  closeAddMember();
 }
 
 async function submitAddMember(): Promise<void> {
@@ -90,7 +121,29 @@ async function submitAddMember(): Promise<void> {
   );
 
   if (ok) {
-    addMemberOpen.value = false;
+    closeAddMember();
+  }
+}
+
+async function createInvite(): Promise<void> {
+  const token = await projects.createInvite(projectId.value, inviteRole.value);
+
+  if (token) {
+    inviteUrl.value = `${window.location.origin}/invite/${token}`;
+    inviteCopied.value = false;
+  }
+}
+
+async function copyInviteUrl(): Promise<void> {
+  if (!inviteUrl.value) {
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(inviteUrl.value);
+    inviteCopied.value = true;
+  } catch {
+    inviteCopied.value = false;
   }
 }
 
@@ -117,6 +170,25 @@ function openLeave(): void {
   memberTargetId.value = auth.user?.id ?? '';
   memberTargetName.value = '';
   memberActionOpen.value = true;
+}
+
+function openRevoke(invite: ProjectInvite): void {
+  revokeInviteId.value = invite.id;
+  revokeInviteRole.value = invite.role;
+  revokeOpen.value = true;
+}
+
+async function confirmRevoke(): Promise<void> {
+  if (!revokeInviteId.value) {
+    return;
+  }
+
+  const ok = await projects.revokeInvite(projectId.value, revokeInviteId.value);
+
+  if (ok) {
+    revokeOpen.value = false;
+    revokeInviteId.value = '';
+  }
 }
 
 async function confirmMemberAction(): Promise<void> {
@@ -151,7 +223,6 @@ async function confirmMemberAction(): Promise<void> {
           v-if="canManageMembers"
           type="button"
           class="btn"
-          :disabled="!projects.members?.candidates.length"
           @click="openAddMember"
         >
           Добавить
@@ -209,8 +280,28 @@ async function confirmMemberAction(): Promise<void> {
           </button>
         </template>
       </div>
+      <div
+        v-for="invite in projects.members?.invites ?? []"
+        :key="invite.id"
+        class="list-row"
+      >
+        <div class="grow">
+          <div>Роль {{ roleLabel(invite.role) }}</div>
+        </div>
+        <span class="muted">
+          до {{ new Date(invite.expiresAt).toLocaleDateString('ru-RU') }}
+        </span>
+        <button
+          v-if="canManageMembers"
+          type="button"
+          class="btn btn-ghost"
+          @click="openRevoke(invite)"
+        >
+          Отозвать
+        </button>
+      </div>
       <p
-        v-if="!projects.members?.members.length"
+        v-if="!projects.members?.members.length && !projects.members?.invites.length"
         class="muted"
       >
         Нет участников
@@ -221,55 +312,137 @@ async function confirmMemberAction(): Promise<void> {
   <ModalDialog
     :open="addMemberOpen"
     title="Добавить участника"
-    @close="addMemberOpen = false"
+    @close="closeAddMember"
   >
-    <div class="field">
-      <label>Участник команды</label>
-      <select
-        v-model="addMemberUserId"
-        class="select"
-      >
-        <option
-          v-for="candidate in projects.members?.candidates ?? []"
-          :key="candidate.userId"
-          :value="candidate.userId"
+    <template v-if="!inviteUrl">
+      <template v-if="hasCandidates && addMode === 'member'">
+        <div class="field">
+          <label>Участник команды</label>
+          <select
+            v-model="addMemberUserId"
+            class="select"
+          >
+            <option
+              v-for="candidate in projects.members?.candidates ?? []"
+              :key="candidate.userId"
+              :value="candidate.userId"
+            >
+              {{ candidate.displayName }}
+            </option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Роль на проекте</label>
+          <select
+            v-model="addMemberRole"
+            class="select"
+          >
+            <option
+              v-for="role in assignableRoles"
+              :key="role"
+              :value="role"
+            >
+              {{ roleLabel(role) }}
+            </option>
+          </select>
+        </div>
+        <div class="modal-foot">
+          <button
+            type="button"
+            class="btn btn-ghost"
+            @click="closeAddMember"
+          >
+            Отмена
+          </button>
+          <button
+            type="button"
+            class="btn"
+            :disabled="!addMemberUserId"
+            @click="submitAddMember"
+          >
+            Добавить
+          </button>
+        </div>
+        <p class="muted mt-16 tight">
+          <button
+            type="button"
+            class="btn btn-ghost"
+            @click="addMode = 'link'"
+          >
+            Пригласить по ссылке
+          </button>
+        </p>
+      </template>
+      <template v-else>
+        <div class="choice-list">
+          <label class="choice">
+            <input
+              v-model="inviteRole"
+              type="radio"
+              value="admin"
+            >
+            <span><strong>{{ roleLabel('admin') }}</strong></span>
+          </label>
+          <label class="choice">
+            <input
+              v-model="inviteRole"
+              type="radio"
+              value="member"
+            >
+            <span><strong>{{ roleLabel('member') }}</strong></span>
+          </label>
+          <label class="choice">
+            <input
+              v-model="inviteRole"
+              type="radio"
+              value="viewer"
+            >
+            <span><strong>{{ roleLabel('viewer') }}</strong></span>
+          </label>
+        </div>
+        <div class="modal-foot">
+          <button
+            type="button"
+            class="btn btn-ghost"
+            @click="cancelInviteStep"
+          >
+            {{ hasCandidates && addMode === 'link' ? 'Назад' : 'Отмена' }}
+          </button>
+          <button
+            type="button"
+            class="btn"
+            @click="createInvite"
+          >
+            Создать ссылку
+          </button>
+        </div>
+      </template>
+    </template>
+    <template v-else>
+      <div class="link-box">
+        <input
+          class="input"
+          :value="inviteUrl"
+          readonly
         >
-          {{ candidate.displayName }}
-        </option>
-      </select>
-    </div>
-    <div class="field">
-      <label>Роль на проекте</label>
-      <select
-        v-model="addMemberRole"
-        class="select"
-      >
-        <option
-          v-for="role in assignableRoles"
-          :key="role"
-          :value="role"
+      </div>
+      <div class="modal-foot">
+        <button
+          type="button"
+          class="btn btn-ghost"
+          @click="copyInviteUrl"
         >
-          {{ roleLabel(role) }}
-        </option>
-      </select>
-    </div>
-    <div class="modal-foot">
-      <button
-        type="button"
-        class="btn btn-ghost"
-        @click="addMemberOpen = false"
-      >
-        Отмена
-      </button>
-      <button
-        type="button"
-        class="btn"
-        :disabled="!addMemberUserId"
-        @click="submitAddMember"
-      >
-        Добавить
-      </button>
-    </div>
+          {{ inviteCopied ? 'Скопировано' : 'Копировать' }}
+        </button>
+        <button
+          type="button"
+          class="btn"
+          @click="closeAddMember"
+        >
+          Готово
+        </button>
+      </div>
+    </template>
   </ModalDialog>
 
   <ModalDialog
@@ -302,4 +475,43 @@ async function confirmMemberAction(): Promise<void> {
       </button>
     </div>
   </ModalDialog>
+
+  <ModalDialog
+    :open="revokeOpen"
+    title="Отозвать приглашение"
+    @close="revokeOpen = false"
+  >
+    <p class="muted mb-16">
+      Ссылка с ролью {{ roleLabel(revokeInviteRole) }} перестанет работать.
+    </p>
+    <div class="modal-foot">
+      <button
+        type="button"
+        class="btn btn-ghost"
+        @click="revokeOpen = false"
+      >
+        Отмена
+      </button>
+      <button
+        type="button"
+        class="btn btn-danger"
+        @click="confirmRevoke"
+      >
+        Отозвать
+      </button>
+    </div>
+  </ModalDialog>
 </template>
+
+<style lang="scss" scoped>
+.link-box {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+
+  .input {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+  }
+}
+</style>

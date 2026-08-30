@@ -11,6 +11,7 @@ erDiagram
   User ||--o{ TeamMember : has
   Team ||--o{ TeamMember : has
   Team ||--o{ Invite : has
+  Project ||--o{ Invite : optional
   Team ||--o{ Project : has
   Team ||--o{ ActivityEvent : has
   User ||--o{ Invite : creates
@@ -63,6 +64,7 @@ erDiagram
   Invite {
     ObjectId _id
     ObjectId teamId
+    ObjectId projectId
     string tokenHash
     string role
     ObjectId createdBy
@@ -230,15 +232,16 @@ Owner один по смыслу продукта: роль Owner через с�
 | --- | --- | --- |
 | `_id` | ObjectId | PK |
 | `teamId` | ObjectId → Team | Куда приглашают |
+| `projectId` | ObjectId → Project \| null | Если задан — инвайт в этот проект (роль на проекте) |
 | `tokenHash` | string, unique | Хеш токена из URL |
-| `role` | InviteRole | Роль, которую получит вступивший |
+| `role` | InviteRole | Роль: в команде или на проекте, если есть `projectId` |
 | `createdBy` | ObjectId → User | Кто создал ссылку |
 | `expiresAt` | Date | Истечение (создание + 7 дней) |
 | `acceptedAt` | Date \| null | Когда приняли; после этого ссылка мертва |
 | `revokedAt` | Date \| null | Отзыв Owner/Admin до принятия |
 | `createdAt` / `updatedAt` | Date | Служебные |
 
-Уже состоящий в команде при accept не вступает повторно, ссылка всё равно сгорает.
+Командный инвайт: `projectId = null`. Проектный: при accept человек вступает в команду (если ещё не состоит: `member`, или `viewer` если роль на проекте viewer) и в проект с `role`. Уже состоящий в команде при accept не вступает повторно; если уже в проекте — повторно не добавляется. Ссылка всё равно сгорает.
 
 ## Project
 
@@ -268,7 +271,7 @@ Owner один по смыслу продукта: роль Owner через с�
 | `role` | `owner \| admin \| member \| viewer` | Права на проекте |
 | `createdAt` / `updatedAt` | Date | Служебные |
 
-Добавить можно только участника этой команды, роли Admin / Member / Viewer. Owner проекта нельзя исключить и нельзя выйти.
+Добавить можно участника этой команды или по ссылке (инвайт с `projectId`). Роли Admin / Member / Viewer. Owner проекта нельзя исключить и нельзя выйти.
 
 ## Board
 

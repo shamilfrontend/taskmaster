@@ -57,8 +57,8 @@
 
 | Метод | Путь | Auth | Ответ |
 | --- | --- | --- | --- |
-| GET | `/:token` | public | `{ teamName, role, expiresAt }` или 404 |
-| POST | `/:token/accept` | JWT | `{ teamId, alreadyMember }` — токен сгорает |
+| GET | `/:token` | public | `{ teamName, role, expiresAt, projectName? }` или 404 |
+| POST | `/:token/accept` | JWT | `{ teamId, alreadyMember, projectId? }` — токен сгорает; проектный инвайт добавляет в команду и в проект |
 
 ## Projects `/api/projects`
 
@@ -71,10 +71,12 @@ JWT + доступ к проекту (участник проекта или own
 | POST | `/:projectId/duplicate` | O/A | — | 201 `{ id }` копия с составом, пустая доска |
 | GET | `/:projectId/export` | O/A | — | JSON-снимок: доска, карточки, релизы, комментарии, списания; без состава |
 | DELETE | `/:projectId` | O/A | — | Каскад колонок, карточек, релизов |
-| GET | `/:projectId/members` | любой доступ | — | `{ role, teamRole, members, candidates }` |
+| GET | `/:projectId/members` | любой доступ | — | `{ role, teamRole, members, candidates, invites }` (invites — O/A проекта или owner команды) |
 | POST | `/:projectId/members` | O/A проекта или owner команды | `{ userId, role }` | 201; роль не owner; кандидат из команды |
 | PATCH | `/:projectId/members/:userId` | см. состав | `{ role }` | `{ ok, role }` |
 | DELETE | `/:projectId/members/:userId` | см. состав | — | Owner проекта не выходит и не исключается |
+| POST | `/:projectId/invites` | O/A проекта или owner команды | `{ role }` | 201 `{ id, token, role, expiresAt }` — сырой token один раз; роль на проекте |
+| DELETE | `/:projectId/invites/:inviteId` | O/A проекта или owner команды | — | Отзыв, `{ ok: true }` |
 | POST | `/:projectId/releases` | O/A | `{ name, date? }` | 201 `{ id, name, date, status: "planned" }`; нужен `releasesEnabled` |
 
 GET проекта отдаёт `people` — участники для фильтра и исполнителя на доске.

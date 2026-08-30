@@ -174,6 +174,7 @@ export interface MyTasksPayload {
 
 export interface InvitePreview {
   teamName: string;
+  projectName?: string;
   role: InviteRole;
   expiresAt: string;
 }
@@ -207,11 +208,18 @@ export interface ProjectMemberCandidate {
   avatarUrl: string;
 }
 
+export interface ProjectInvite {
+  id: string;
+  role: InviteRole;
+  expiresAt: string;
+}
+
 export interface ProjectMembersPayload {
   role: TeamRole;
   teamRole: TeamRole;
   members: ProjectMember[];
   candidates: ProjectMemberCandidate[];
+  invites: ProjectInvite[];
 }
 
 export interface ProjectDetails {

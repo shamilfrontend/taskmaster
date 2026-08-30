@@ -203,7 +203,10 @@ export const useProjectStore = defineStore('project', () => {
       const { data } = await http.get<ProjectMembersPayload>(
         `/projects/${projectId}/members`,
       );
-      members.value = data;
+      members.value = {
+        ...data,
+        invites: data.invites ?? [],
+      };
     } catch (err: unknown) {
       toastError('Ошибка при загрузке участников', err);
     }
@@ -256,6 +259,39 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
+  async function createInvite(
+    projectId: string,
+    role: InviteRole,
+  ): Promise<string | null> {
+    try {
+      const { data } = await http.post<{ token: string }>(
+        `/projects/${projectId}/invites`,
+        { role },
+      );
+      await fetchMembers(projectId);
+      toastSuccess('Приглашение создано');
+      return data.token;
+    } catch (err: unknown) {
+      toastError('Ошибка при создании приглашения', err);
+      return null;
+    }
+  }
+
+  async function revokeInvite(
+    projectId: string,
+    inviteId: string,
+  ): Promise<boolean> {
+    try {
+      await http.delete(`/projects/${projectId}/invites/${inviteId}`);
+      await fetchMembers(projectId);
+      toastSuccess('Приглашение отозвано');
+      return true;
+    } catch (err: unknown) {
+      toastError('Ошибка при отзыве приглашения', err);
+      return false;
+    }
+  }
+
   async function fetchAnalytics(
     projectId: string,
     period: AnalyticsPeriod,
@@ -291,6 +327,8 @@ export const useProjectStore = defineStore('project', () => {
     addMember,
     changeMemberRole,
     removeMember,
+    createInvite,
+    revokeInvite,
     renameProject,
     updateSettings,
     createRelease,
