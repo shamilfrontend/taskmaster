@@ -329,6 +329,36 @@ teamsRouter.get(
     const visibleProjects = membership.role === 'owner'
       ? projects
       : projects.filter((project) => projectRoleById.has(project._id.toString()));
+    const visibleIds = visibleProjects.map((project) => project._id);
+    const boards = visibleIds.length > 0
+      ? await BoardModel.find({ projectId: { $in: visibleIds } })
+        .select({ _id: 1, projectId: 1 })
+        .lean()
+      : [];
+    const boardIds = boards.map((board) => board._id);
+    const cardCountByBoard = new Map<string, number>();
+
+    if (boardIds.length > 0) {
+      const grouped = await CardModel.aggregate([
+        { $match: { boardId: { $in: boardIds } } },
+        { $group: { _id: '$boardId', count: { $sum: 1 } } },
+      ]);
+
+      for (const item of grouped) {
+        cardCountByBoard.set(String(item._id), item.count);
+      }
+    }
+
+    const cardCountByProject = new Map<string, number>();
+
+    for (const board of boards) {
+      const projectId = board.projectId.toString();
+      const next = (cardCountByProject.get(projectId) ?? 0)
+        + (cardCountByBoard.get(board._id.toString()) ?? 0);
+
+      cardCountByProject.set(projectId, next);
+    }
+
     const invites = await InviteModel.find({
       teamId: team._id,
       acceptedAt: null,
@@ -356,6 +386,8 @@ teamsRouter.get(
         name: project.name,
         role: projectRoleById.get(project._id.toString())
           ?? (membership.role === 'owner' ? 'owner' : 'viewer'),
+        boardBackground: project.boardBackground ?? 'default',
+        cardCount: cardCountByProject.get(project._id.toString()) ?? 0,
       })),
       invites:
         membership.role === 'owner' || membership.role === 'admin'

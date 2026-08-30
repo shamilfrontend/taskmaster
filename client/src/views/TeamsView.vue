@@ -2,7 +2,13 @@
 import { onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useTeamsStore } from '../stores/teams.ts';
-import { initials, pluralRu, roleLabel } from '../composables/format.ts';
+import {
+  avatarClass,
+  initials,
+  pluralRu,
+  roleClass,
+  roleLabel,
+} from '../composables/format.ts';
 import ModalDialog from '../components/ModalDialog.vue';
 
 const router = useRouter();
@@ -55,10 +61,11 @@ async function create(): Promise<void> {
       </p>
       <div
         v-else-if="!teams.isLoading && !teams.list.length"
-        class="panel"
+        class="panel empty-panel"
       >
-        <p class="muted mb-16">
-          Вы пока не состоите ни в одной команде.
+        <h2>Пока нет команд</h2>
+        <p class="muted">
+          Создайте рабочее пространство или дождитесь приглашения.
         </p>
         <button
           type="button"
@@ -79,22 +86,23 @@ async function create(): Promise<void> {
           class="list-row"
           @click="router.push({ name: 'team', params: { teamId: team.id } })"
         >
-          <span class="avatar">{{ initials(team.name) }}</span>
+          <span :class="avatarClass(team.role)">{{ initials(team.name) }}</span>
           <div class="grow">
-            {{ team.name }}
+            <div>{{ team.name }}</div>
+            <div class="muted">
+              {{
+                pluralRu(
+                  team.memberCount,
+                  'участник',
+                  'участника',
+                  'участников'
+                )
+              }}
+              ·
+              {{ pluralRu(team.projectCount, 'проект', 'проекта', 'проектов') }}
+            </div>
           </div>
-          <span class="muted">{{
-            pluralRu(
-              team.memberCount,
-              'участник',
-              'участника',
-              'участников'
-            )
-          }}</span>
-          <span class="muted">{{
-            pluralRu(team.projectCount, 'проект', 'проекта', 'проектов')
-          }}</span>
-          <span>{{ roleLabel(team.role) }}</span>
+          <span :class="roleClass(team.role)">{{ roleLabel(team.role) }}</span>
         </button>
       </div>
     </div>

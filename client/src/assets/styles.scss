@@ -131,6 +131,14 @@ h2 {
   font-weight: 600;
 }
 
+.list-thumb {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #6b778c center / cover no-repeat;
+}
+
 .avatar {
   display: inline-flex;
   align-items: center;
@@ -249,6 +257,29 @@ h2 {
   border-radius: var(--radius);
   padding: 20px;
   box-shadow: var(--shadow);
+}
+
+.empty-panel {
+  text-align: center;
+
+  h2 {
+    margin: 0 0 8px;
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  p {
+    margin: 0 auto;
+    max-width: 360px;
+  }
+
+  .btn {
+    margin: 20px auto 0;
+  }
+}
+
+.panel.empty-panel {
+  padding: 40px 24px;
 }
 
 .panel-head {

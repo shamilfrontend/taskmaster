@@ -79,6 +79,8 @@ export interface TeamProject {
   id: string;
   name: string;
   role: TeamRole;
+  boardBackground: BoardBackgroundId;
+  cardCount: number;
 }
 
 export interface TeamInvite {

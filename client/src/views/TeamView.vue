@@ -6,10 +6,11 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.ts';
 import { useProjectStore } from '../stores/project.ts';
 import { useTeamsStore } from '../stores/teams.ts';
+import { findBoardBackground } from '../composables/board-backgrounds.ts';
 import {
   avatarClass,
   formatDate,
-  initials,
+  pluralRu,
   roleClass,
   roleLabel,
 } from '../composables/format.ts';
@@ -19,6 +20,7 @@ import UserAvatar from '../components/UserAvatar.vue';
 import type {
   ActivityItem,
   ActivityKind,
+  BoardBackgroundId,
   InviteRole,
   TeamInvite,
   TeamMember,
@@ -101,6 +103,14 @@ const canManage = computed(() => {
 
 function canManageProject(role: TeamRole): boolean {
   return role === 'owner' || role === 'admin';
+}
+
+function projectThumbStyle(
+  id: BoardBackgroundId,
+): Record<string, string> {
+  const { thumb } = findBoardBackground(id);
+
+  return thumb ? { backgroundImage: `url("${thumb}")` } : {};
 }
 
 const isOwner = computed(() => teams.current?.role === 'owner');
@@ -602,8 +612,31 @@ async function confirmRevoke(): Promise<void> {
       <template v-else>
         <div class="page-head">
           <div>
-            <h1>{{ teams.current.name }}</h1>
-            <p>Участники и проекты команды</p>
+            <h1>
+              {{ teams.current.name }}
+              <span :class="roleClass(teams.current.role)">{{
+                roleLabel(teams.current.role)
+              }}</span>
+            </h1>
+            <p>
+              {{
+                pluralRu(
+                  teams.current.members.length,
+                  'участник',
+                  'участника',
+                  'участников'
+                )
+              }}
+              ·
+              {{
+                pluralRu(
+                  teams.current.projects.length,
+                  'проект',
+                  'проекта',
+                  'проектов'
+                )
+              }}
+            </p>
           </div>
         </div>
         <PageTabs :tabs="tabs" />
@@ -639,10 +672,26 @@ async function confirmRevoke(): Promise<void> {
                 @click="openProject(project.id)"
                 @keydown.enter.prevent="openProject(project.id)"
               >
-                <span class="avatar">{{ initials(project.name) }}</span>
+                <span
+                  class="list-thumb"
+                  :style="projectThumbStyle(project.boardBackground)"
+                />
                 <div class="grow">
-                  {{ project.name }}
+                  <div>{{ project.name }}</div>
+                  <div class="muted">
+                    {{
+                      pluralRu(
+                        project.cardCount,
+                        'карточка',
+                        'карточки',
+                        'карточек'
+                      )
+                    }}
+                  </div>
                 </div>
+                <span :class="roleClass(project.role)">{{
+                  roleLabel(project.role)
+                }}</span>
                 <button
                   v-if="canManageProject(project.role)"
                   type="button"
@@ -654,12 +703,23 @@ async function confirmRevoke(): Promise<void> {
                 </button>
               </div>
             </template>
-            <p
+            <div
               v-else
-              class="muted"
+              class="empty-panel"
             >
-              Нет проектов
-            </p>
+              <h2>Пока нет проектов</h2>
+              <p class="muted">
+                Создайте проект, чтобы начать работу с доской.
+              </p>
+              <button
+                v-if="canManage"
+                type="button"
+                class="btn"
+                @click="openProjectModal"
+              >
+                Создать проект
+              </button>
+            </div>
           </div>
         </div>
         <div

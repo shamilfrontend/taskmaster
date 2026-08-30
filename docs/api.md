@@ -39,7 +39,7 @@
 | --- | --- | --- | --- | --- |
 | GET | `/` | JWT | — | Список своих команд: `id, name, role, memberCount, projectCount` |
 | POST | `/` | JWT | `{ name }` | 201 `{ id, name, role: "owner" }` |
-| GET | `/:teamId` | участник | — | Команда: members, visible projects, invites (O/A) |
+| GET | `/:teamId` | участник | — | Команда: members, visible projects (`id, name, role, boardBackground, cardCount`), invites (O/A) |
 | PATCH | `/:teamId` | team O/A | `{ name }` | `{ id, name }` |
 | DELETE | `/:teamId` | team owner | — | Каскад, `{ ok: true }` |
 | GET | `/:teamId/activity` | участник | `?before=ISO` | `{ items, hasMore }`, страница 10 |
