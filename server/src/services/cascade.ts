@@ -9,7 +9,6 @@ import { LabelModel } from '../models/label.js';
 import { NotificationModel } from '../models/notification.js';
 import { ProjectModel } from '../models/project.js';
 import { ProjectMemberModel } from '../models/project-member.js';
-import { ProjectMemberRateModel } from '../models/project-member-rate.js';
 import { ReleaseModel } from '../models/release.js';
 import { TeamModel } from '../models/team.js';
 import { TeamMemberModel } from '../models/team-member.js';
@@ -41,7 +40,6 @@ export async function deleteProjectCascade(
   );
 
   await ReleaseModel.deleteMany({ projectId });
-  await ProjectMemberRateModel.deleteMany({ projectId });
   await ProjectMemberModel.deleteMany({ projectId });
   await NotificationModel.deleteMany({ projectId });
   await ProjectModel.deleteOne({ _id: projectId });
@@ -76,13 +74,9 @@ export async function unassignUserInTeam(
 
   await CardModel.updateMany(
     { boardId: { $in: boardIds }, assigneeId: userId },
-    { $set: { assigneeId: null, planAmount: 0 } },
+    { $set: { assigneeId: null } },
   );
 
-  await ProjectMemberRateModel.deleteMany({
-    projectId: { $in: projectIds },
-    userId,
-  });
   await ProjectMemberModel.deleteMany({
     projectId: { $in: projectIds },
     userId,
@@ -98,8 +92,6 @@ export async function unassignUserInProject(
 
   await CardModel.updateMany(
     { boardId: { $in: boardIds }, assigneeId: userId },
-    { $set: { assigneeId: null, planAmount: 0 } },
+    { $set: { assigneeId: null } },
   );
-
-  await ProjectMemberRateModel.deleteMany({ projectId, userId });
 }

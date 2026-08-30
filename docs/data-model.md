@@ -16,7 +16,6 @@ erDiagram
   User ||--o{ Invite : creates
   User ||--o{ ProjectMember : has
   Project ||--o{ ProjectMember : has
-  Project ||--o{ ProjectMemberRate : has
   Project ||--|| Board : has
   Project ||--o{ Release : has
   Board ||--o{ Column : has
@@ -76,10 +75,7 @@ erDiagram
     ObjectId _id
     ObjectId teamId
     string name
-    number budgetLimit
-    object roleRates
     boolean releasesEnabled
-    boolean budgetEnabled
     string boardBackground
   }
 
@@ -88,13 +84,6 @@ erDiagram
     ObjectId projectId
     ObjectId userId
     string role
-  }
-
-  ProjectMemberRate {
-    ObjectId _id
-    ObjectId projectId
-    ObjectId userId
-    number amount
   }
 
   Board {
@@ -140,7 +129,6 @@ erDiagram
     object labelIds
     object checklists
     number position
-    number planAmount
   }
 
   Notification {
@@ -162,8 +150,6 @@ erDiagram
     ObjectId cardId
     ObjectId userId
     number hours
-    number rateSnapshot
-    number amount
     date workedAt
   }
 
@@ -195,13 +181,8 @@ erDiagram
 
 | Величина | Формула |
 | --- | --- |
-| Ставка участника | персональная `ProjectMemberRate.amount` → иначе `Project.roleRates[роль]` → иначе 0 |
-| План карточки `planAmount` | `round(estimateHours × ставка исполнителя)`; без исполнителя = 0 |
-| Сумма списания `amount` | `round(hours × rateSnapshot)` |
-| Факт проекта | сумма `TimeEntry.amount` по карточкам доски |
-| Остаток | `budgetLimit − факт` |
-
-Смена исполнителя или оценки пересчитывает план. Смена ставки — план всех карточек этого исполнителя. Факт и старые списания не пересчитываются.
+| План карточки | `estimateHours` |
+| Факт карточки | сумма `TimeEntry.hours` по списаниям карточки |
 
 ## User
 
@@ -260,24 +241,18 @@ Owner один по смыслу продукта: роль Owner через с�
 
 ## Project
 
-Принадлежит команде. Одна доска создаётся сразу. Релизы и бюджет — опциональные флаги.
+Принадлежит команде. Одна доска создаётся сразу. Релизы — опциональный флаг.
 
 | Поле | Тип | Зачем |
 | --- | --- | --- |
 | `_id` | ObjectId | PK |
 | `teamId` | ObjectId → Team | Родительская команда |
 | `name` | string | Название проекта |
-| `budgetLimit` | number, default 0 | Лимит бюджета в рублях, целое ≥ 0 |
-| `roleRates.owner` | number, default 0 | Ставка руб/час для роли owner |
-| `roleRates.admin` | number, default 0 | Ставка роли admin |
-| `roleRates.member` | number, default 0 | Ставка роли member |
-| `roleRates.viewer` | number, default 0 | Ставка роли viewer |
 | `releasesEnabled` | boolean, default false | Вкладка релизов и поле релиза на карточке |
-| `budgetEnabled` | boolean, default false | Бюджет, ставки, деньги в UI и аналитике |
 | `boardBackground` | `default \| bg-01…bg-36` | Фон канбана |
 | `createdAt` / `updatedAt` | Date | Служебные |
 
-Индекс: `{ teamId: 1 }`. Admin создаёт проект с `budgetLimit = 0`; лимит меняет только Owner проекта.
+Индекс: `{ teamId: 1 }`.
 
 ## ProjectMember
 
@@ -292,20 +267,6 @@ Owner один по смыслу продукта: роль Owner через с�
 | `createdAt` / `updatedAt` | Date | Служебные |
 
 Добавить можно только участника этой команды, роли Admin / Member / Viewer. Owner проекта нельзя исключить и нельзя выйти.
-
-## ProjectMemberRate
-
-Персональная ставка. Unique `(projectId, userId)`. Если записи нет — берётся ставка роли.
-
-| Поле | Тип | Зачем |
-| --- | --- | --- |
-| `_id` | ObjectId | PK |
-| `projectId` | ObjectId → Project | Проект |
-| `userId` | ObjectId → User | Участник проекта |
-| `amount` | number ≥ 0 | Руб/час поверх `roleRates` |
-| `createdAt` / `updatedAt` | Date | Служебные |
-
-`PUT` с пустым `amount` удаляет персональную ставку.
 
 ## Board
 
@@ -383,7 +344,6 @@ Unique: `{ projectId: 1, nameNormalized: 1 }`. К `released` можно прик
 | `labelIds` | ObjectId[] → Label | Метки этой доски |
 | `checklists` | Checklist[] | Чеклисты (см. ниже) |
 | `position` | number | Порядок в колонке |
-| `planAmount` | number, default 0 | Кэш плана в рублях |
 | `createdAt` / `updatedAt` | Date | Служебные |
 
 Индексы: `{ boardId, columnId, position }`, `{ releaseId }`, `{ assigneeId }`.
@@ -410,7 +370,7 @@ Unique: `{ projectId: 1, nameNormalized: 1 }`. К `released` можно прик
 
 ## TimeEntry
 
-Списание часов. Списывает всегда текущий пользователь. Ставка фиксируется снимком.
+Списание часов. Списывает всегда текущий пользователь.
 
 | Поле | Тип | Зачем |
 | --- | --- | --- |
@@ -418,8 +378,6 @@ Unique: `{ projectId: 1, nameNormalized: 1 }`. К `released` можно прик
 | `cardId` | ObjectId → Card | Карточка |
 | `userId` | ObjectId → User | Кто списал (не обязательно исполнитель) |
 | `hours` | number | 0.5…24, шаг 0.5 |
-| `rateSnapshot` | number | Ставка на момент списания |
-| `amount` | number | `hours × rateSnapshot`, округление |
 | `workedAt` | Date | Дата работы; фильтр аналитики по периоду |
 | `createdAt` / `updatedAt` | Date | Служебные |
 
@@ -468,15 +426,15 @@ Unique: `{ projectId: 1, nameNormalized: 1 }`. К `released` можно прик
 | --- | --- | --- |
 | `_id` | ObjectId | PK |
 | `recipientId` | ObjectId → User | Кому |
-| `actorId` | ObjectId → User | Кто сделал |
-| `kind` | `card_assigned \| comment_added \| comment_reply` | Тип |
+| `actorId` | ObjectId → User \| null | Кто сделал; пусто у срока |
+| `kind` | `card_assigned \| comment_added \| comment_reply \| card_overdue \| card_due_soon` | Тип |
 | `teamId` | ObjectId → Team | Команда |
 | `projectId` | ObjectId → Project | Проект |
 | `boardId` | ObjectId → Board | Доска |
 | `cardId` | ObjectId → Card | Карточка |
 | `cardTitle` | string | Снимок названия |
-| `detail` | string | Превью комментария, max ~120 |
+| `detail` | string | Превью комментария или дата срока, max ~120 |
 | `readAt` | Date \| null | Когда прочитали |
 | `createdAt` / `updatedAt` | Date | Служебные |
 
-Индексы: `{ recipientId, createdAt: -1 }`, `{ recipientId, readAt }`, `{ cardId }`. Каскад при удалении карточки / доски / проекта / команды.
+Индексы: `{ recipientId, createdAt: -1 }`, `{ recipientId, readAt }`, `{ recipientId, kind, cardId, createdAt }`, `{ cardId }`. Каскад при удалении карточки / доски / проекта / команды.

@@ -20,13 +20,10 @@ import { TimeEntryModel } from '../models/time-entry.js';
 import { UserModel } from '../models/user.js';
 import { recordActivity } from '../services/activity.js';
 import { notifyUser } from '../services/notifications.js';
-import { rateForUser, recalcCardPlan } from '../services/plan.js';
-import { calcAmount } from '../utils/rates.js';
 import {
   asObjectId,
   assertFeatureOn,
   assertRole,
-  isFeatureOn,
   readBoolean,
   readEstimate,
   readHours,
@@ -200,7 +197,6 @@ cardsRouter.post(
       labelIds: [],
       checklists: [],
       position: (last?.position ?? -1) + 1,
-      planAmount: 0,
     });
 
     if (Array.isArray(req.body?.labelIds)) {
@@ -234,9 +230,6 @@ cardsRouter.post(
       }
     }
 
-    await recalcCardPlan(card._id);
-    const fresh = await CardModel.findById(card._id).lean();
-
     recordActivity({
       teamId: access.teamId,
       projectId: board.projectId,
@@ -264,7 +257,6 @@ cardsRouter.post(
     res.status(201).json({
       id: card._id.toString(),
       title: card.title,
-      planAmount: fresh?.planAmount ?? 0,
     });
   }),
 );
@@ -273,7 +265,7 @@ cardsRouter.get(
   '/:cardId',
   asyncHandler(async (req: Request, res: Response) => {
     const cardId = req.params.cardId as string;
-    const access = await requireProjectAccessFromCard(cardId, req.userId);
+    await requireProjectAccessFromCard(cardId, req.userId);
     const card = await CardModel.findById(asObjectId(cardId)).lean();
 
     if (!card) {
@@ -302,16 +294,6 @@ cardsRouter.get(
       userById(id)?.avatarUrl ?? ''
     );
 
-    const board = await BoardModel.findById(card.boardId).lean();
-    const project = board
-      ? await ProjectModel.findById(board.projectId).lean()
-      : null;
-    const budgetEnabled = isFeatureOn(project?.budgetEnabled);
-    const isOwn = card.assigneeId?.toString() === req.userId;
-    const showAllMoney = budgetEnabled
-      && (access.role === 'owner' || access.role === 'admin');
-    const showOwnMoney = budgetEnabled && access.role === 'member' && isOwn;
-
     res.json({
       id: card._id.toString(),
       boardId: card.boardId.toString(),
@@ -324,22 +306,13 @@ cardsRouter.get(
       releaseId: card.releaseId?.toString() ?? null,
       labelIds: card.labelIds.map((id) => id.toString()),
       checklists: mapChecklists(card.checklists),
-      planAmount: showAllMoney || showOwnMoney ? card.planAmount : undefined,
-      timeEntries: entries.map((entry) => {
-        const own = entry.userId.toString() === req.userId;
-        const showMoney = budgetEnabled
-          && (showAllMoney || (access.role === 'member' && own));
-
-        return {
-          id: entry._id.toString(),
-          userId: entry.userId.toString(),
-          displayName: userName(entry.userId),
-          hours: entry.hours,
-          rateSnapshot: showMoney ? entry.rateSnapshot : undefined,
-          amount: showMoney ? entry.amount : undefined,
-          workedAt: entry.workedAt,
-        };
-      }),
+      timeEntries: entries.map((entry) => ({
+        id: entry._id.toString(),
+        userId: entry.userId.toString(),
+        displayName: userName(entry.userId),
+        hours: entry.hours,
+        workedAt: entry.workedAt,
+      })),
       comments: comments.map((comment) => ({
         id: comment._id.toString(),
         userId: comment.userId.toString(),
@@ -469,7 +442,6 @@ cardsRouter.patch(
     }
 
     await card.save();
-    await recalcCardPlan(card._id);
 
     if (movedToColumnName) {
       recordActivity({
@@ -557,30 +529,19 @@ cardsRouter.post(
       throw new AppError(403, 'Можно списывать только на своих карточках');
     }
 
-    const board = await BoardModel.findById(card.boardId).lean();
-
-    if (!board) {
-      throw new AppError(404, 'Доска не найдена');
-    }
-
     const hours = readHours(req.body, 'hours');
-    const rate = await rateForUser(board.projectId, asObjectId(req.userId));
     const workedAt = readOptionalDate(req.body, 'workedAt') ?? new Date();
 
     const entry = await TimeEntryModel.create({
       cardId: card._id,
       userId: asObjectId(req.userId),
       hours,
-      rateSnapshot: rate,
-      amount: calcAmount(hours, rate),
       workedAt,
     });
 
     res.status(201).json({
       id: entry._id.toString(),
       hours: entry.hours,
-      amount: entry.amount,
-      rateSnapshot: entry.rateSnapshot,
     });
   }),
 );
@@ -616,9 +577,8 @@ cardsRouter.patch(
     }
 
     entry.hours = readHours(req.body, 'hours');
-    entry.amount = calcAmount(entry.hours, entry.rateSnapshot);
     await entry.save();
-    res.json({ ok: true, amount: entry.amount });
+    res.json({ ok: true });
   }),
 );
 

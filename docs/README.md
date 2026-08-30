@@ -69,7 +69,6 @@ flowchart TB
   Activity[ActivityEvent]
   Project[Project]
   ProjectMember[ProjectMember]
-  MemberRate[ProjectMemberRate]
   Board[Board 1:1]
   Column[Column]
   Label[Label]
@@ -88,7 +87,6 @@ flowchart TB
   User --> ProjectMember
   User --> Notification
   Project --> ProjectMember
-  Project --> MemberRate
   Project --> Board
   Project --> Release
   Board --> Column
@@ -136,21 +134,15 @@ sequenceDiagram
 | Слой | Кто задаёт | Зачем |
 | --- | --- | --- |
 | Команда | инвайт или создатель | инвайты, состав команды, создание проекта, удаление команды |
-| Проект | Owner/Admin проекта или Owner команды | карточки, колонки, бюджет, ставки, релизы, аналитика |
+| Проект | Owner/Admin проекта или Owner команды | карточки, колонки, релизы, аналитика |
 
 Owner через инвайт и смену роли не выдаётся. Создатель команды/проекта становится Owner.
 
-## Экономика
+## Часы
 
-Валюта RUB. Бюджет — целое ≥ 0. Ставка: персональная участника → ставка его роли на проекте → 0.
-
-- **План карточки** = `estimateHours × ставка исполнителя` (`planAmount`, округление)
-- **Факт** = сумма `TimeEntry.amount` (`hours × rateSnapshot` на момент списания)
-- **Остаток** = `budgetLimit − факт`
-- Смена ставки пересчитывает план, старые списания не трогает
-- Превышение бюджета — предупреждение, списания не блокируются
-
-Деньги скрыты у Viewer. Member видит ₽ только на своих карточках плюс остаток проекта.
+- **План карточки** = `estimateHours`
+- **Факт** = сумма `TimeEntry.hours` по списаниям карточки
+- Списание пишет `hours` и `workedAt`; ставка и суммы не хранятся
 
 ## Исходники
 

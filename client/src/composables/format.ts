@@ -38,14 +38,6 @@ export function initials(name: string): string {
     .join('');
 }
 
-export function formatMoney(value: number | undefined): string {
-  if (value === undefined) {
-    return '—';
-  }
-
-  return `${value.toLocaleString('ru-RU')} ₽`;
-}
-
 export function formatDate(value: string | Date | null | undefined): string {
   if (!value) {
     return '';

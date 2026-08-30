@@ -89,10 +89,7 @@ analyticsRouter.get(
     }));
 
     const planHours = cards.reduce((sum, card) => sum + card.estimateHours, 0);
-    const planAmount = cards.reduce((sum, card) => sum + card.planAmount, 0);
     const factHours = periodEntries.reduce((sum, entry) => sum + entry.hours, 0);
-    const factAmount = periodEntries.reduce((sum, entry) => sum + entry.amount, 0);
-    const totalFact = allEntries.reduce((sum, entry) => sum + entry.amount, 0);
 
     const workload = members.map((member) => {
       const userEntries = periodEntries.filter(
@@ -102,16 +99,11 @@ analyticsRouter.get(
         (item) => item._id.toString() === member.userId.toString(),
       );
       const hours = userEntries.reduce((sum, entry) => sum + entry.hours, 0);
-      const amount = userEntries.reduce((sum, entry) => sum + entry.amount, 0);
-      const showMoney = access.role === 'owner'
-        || access.role === 'admin'
-        || member.userId.toString() === req.userId;
 
       return {
         userId: member.userId.toString(),
         displayName: user?.displayName ?? '',
         hours,
-        amount: access.role !== 'viewer' && showMoney ? amount : undefined,
       };
     });
 
@@ -162,7 +154,6 @@ analyticsRouter.get(
       from: Date;
       to: Date;
       hours: number;
-      amount: number;
     }[] = [];
     let cursor = weekStart(from);
 
@@ -173,28 +164,15 @@ analyticsRouter.get(
         (entry) => entry.workedAt >= weekFrom && entry.workedAt < end,
       );
       const hours = weekEntries.reduce((sum, entry) => sum + entry.hours, 0);
-      const amount = weekEntries.reduce((sum, entry) => sum + entry.amount, 0);
       weeks.push({
         from: new Date(weekFrom),
         to: addDays(end, -1),
         hours,
-        amount,
       });
       cursor = end;
     }
 
-    const hideMoney = access.role === 'viewer';
-    const memberMoney = access.role === 'member';
     const releasesEnabled = isFeatureOn(project.releasesEnabled);
-    const budgetEnabled = isFeatureOn(project.budgetEnabled);
-
-    const visibleMoney = (value: number): number | undefined => {
-      if (hideMoney || memberMoney) {
-        return undefined;
-      }
-
-      return value;
-    };
 
     type RiskKind = 'overdue' | 'dueSoon' | 'gaps';
     const risks = cards.flatMap((card) => {
@@ -258,7 +236,6 @@ analyticsRouter.get(
       to,
       role: access.role,
       releasesEnabled,
-      budgetEnabled,
       summary: {
         cards: cards.length,
         overdue: cards.filter(isOverdue).length,
@@ -267,30 +244,18 @@ analyticsRouter.get(
         noRelease: releasesEnabled
           ? cards.filter((card) => !card.releaseId).length
           : undefined,
-        factAmount: visibleMoney(factAmount),
       },
       byStatus,
       planVsFact: {
         planHours,
         factHours,
-        planAmount: visibleMoney(planAmount),
-        factAmount: visibleMoney(factAmount),
       },
-      burn:
-        hideMoney || !budgetEnabled
-          ? undefined
-          : {
-            limit: access.role === 'member' ? undefined : project.budgetLimit,
-            totalFact: access.role === 'member' ? undefined : totalFact,
-            remainder: project.budgetLimit - totalFact,
-          },
       workload,
       releases: releasesEnabled ? releaseRows : [],
       weeks: weeks.map((week) => ({
         from: week.from,
         to: week.to,
         hours: week.hours,
-        amount: visibleMoney(week.amount),
       })),
       risks,
     });

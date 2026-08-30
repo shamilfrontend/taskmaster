@@ -42,10 +42,6 @@ function isActive(tab: PageTab): boolean {
     return route.name === 'analytics';
   }
 
-  if (name === 'project-expenses') {
-    return route.name === 'project-expenses';
-  }
-
   if (name === 'project-releases') {
     return route.name === 'project-releases' || route.name === 'release';
   }

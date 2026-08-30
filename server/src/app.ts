@@ -12,7 +12,6 @@ import { boardsRouter } from './routes/boards.js';
 import { cardsRouter } from './routes/cards.js';
 import { releasesRouter } from './routes/releases.js';
 import { analyticsRouter } from './routes/analytics.js';
-import { timesheetRouter } from './routes/timesheet.js';
 import { meRouter } from './routes/me.js';
 import { notificationsRouter } from './routes/notifications.js';
 
@@ -40,7 +39,6 @@ export function createApp() {
   app.use('/api/auth', authRouter);
   app.use('/api/teams', teamsRouter);
   app.use('/api/invites', invitesRouter);
-  app.use('/api/projects', timesheetRouter);
   app.use('/api/projects', analyticsRouter);
   app.use('/api/projects', projectsRouter);
   app.use('/api/boards', boardsRouter);

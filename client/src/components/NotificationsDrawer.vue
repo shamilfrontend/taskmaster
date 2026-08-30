@@ -9,6 +9,18 @@ import type { NotificationItem, NotificationKind } from '../types/index.ts';
 const notifications = useNotificationsStore();
 const router = useRouter();
 
+function notificationTitle(item: NotificationItem): string {
+  if (item.kind === 'card_overdue') {
+    return 'Срок истек';
+  }
+
+  if (item.kind === 'card_due_soon') {
+    return 'Срок на этой неделе';
+  }
+
+  return `${item.actorName || 'Участник'} ${notificationAction(item.kind)}`;
+}
+
 function notificationAction(kind: NotificationKind): string {
   if (kind === 'card_assigned') {
     return 'назначил вас исполнителем';
@@ -106,13 +118,13 @@ onUnmounted(() => {
               @click="openItem(item)"
             >
               <UserAvatar
+                v-if="item.actorId"
                 :name="item.actorName || 'Участник'"
                 :src="item.actorAvatarUrl"
               />
               <div class="grow">
                 <div>
-                  {{ item.actorName || 'Участник' }}
-                  {{ notificationAction(item.kind) }}
+                  {{ notificationTitle(item) }}
                 </div>
                 <div class="muted">
                   {{ notificationSubtitle(item) }}

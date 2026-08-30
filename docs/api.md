@@ -47,7 +47,7 @@
 | DELETE | `/:teamId/members/:userId` | см. состав | — | Выход или исключение; owner не выходит |
 | POST | `/:teamId/invites` | team O/A | `{ role }` | 201 `{ id, token, role, expiresAt }` — сырой token один раз |
 | DELETE | `/:teamId/invites/:inviteId` | team O/A | — | Отзыв, `{ ok: true }` |
-| POST | `/:teamId/projects` | team O/A | `{ name, budgetLimit? }` | 201 проект + доска по умолчанию; budgetLimit только team owner |
+| POST | `/:teamId/projects` | team O/A | `{ name }` | 201 проект + доска по умолчанию |
 | POST | `/:teamId/projects/from-trello` | team O/A | `{ name, board }` | 201 импорт JSON Trello |
 
 Состав команды: Owner меняет/исключает любого; Admin — только Member/Viewer. Сам себя может удалить любой кроме Owner.
@@ -65,19 +65,17 @@ JWT + доступ к проекту (участник проекта или own
 
 | Метод | Путь | Роль | Тело | Ответ |
 | --- | --- | --- | --- | --- |
-| GET | `/:projectId` | любой доступ | — | Детали: флаги, board.id, releases, rates (деньги по роли) |
-| PATCH | `/:projectId` | O/A; бюджет только owner | `name`, `releasesEnabled`, `budgetEnabled`, `budgetLimit`, `boardBackground` | Обновлённые поля |
-| POST | `/:projectId/duplicate` | O/A | — | 201 `{ id }` копия с составом и ставками, пустая доска |
+| GET | `/:projectId` | любой доступ | — | Детали: флаги, board.id, releases, people |
+| PATCH | `/:projectId` | O/A | `name`, `releasesEnabled`, `boardBackground` | Обновлённые поля |
+| POST | `/:projectId/duplicate` | O/A | — | 201 `{ id }` копия с составом, пустая доска |
 | DELETE | `/:projectId` | O/A | — | Каскад колонок, карточек, релизов |
-| PUT | `/:projectId/role-rates` | O/A | `{ owner, admin, member, viewer }` | `{ roleRates }`, пересчёт планов |
-| PUT | `/:projectId/member-rates` | O/A | `{ userId, amount? }` | `{ ok }`; без `amount` — сброс персональной ставки |
 | GET | `/:projectId/members` | любой доступ | — | `{ role, teamRole, members, candidates }` |
 | POST | `/:projectId/members` | O/A проекта или owner команды | `{ userId, role }` | 201; роль не owner; кандидат из команды |
 | PATCH | `/:projectId/members/:userId` | см. состав | `{ role }` | `{ ok, role }` |
 | DELETE | `/:projectId/members/:userId` | см. состав | — | Owner проекта не выходит и не исключается |
 | POST | `/:projectId/releases` | O/A | `{ name, date? }` | 201 `{ id, name, date, status: "planned" }`; нужен `releasesEnabled` |
 
-GET проекта: Viewer без ставок/бюджета; Member видит `remainder`, не видит чужие ставки; O/A видят `budgetLimit`, `fact`, `roleRates`.
+GET проекта отдаёт `people` — участники для фильтра и исполнителя на доске.
 
 ## Me `/api/me`
 
@@ -97,21 +95,13 @@ GET проекта: Viewer без ставок/бюджета; Member видит
 | --- | --- | --- | --- | --- |
 | GET | `/:projectId/analytics` | доступ к проекту | `period=today\|7d\|30d\|quarter\|year\|3y\|5y` или `from`+`to` | `AnalyticsPayload` |
 
-Сводка, статусы, риски, релизы «готово/всего» — снимок сейчас. План vs факт, загрузка, недели — списания с `workedAt` в периоде. Burn бюджета — всё время. Viewer без денег; Member — часы всех, ₽ только свои + remainder.
-
-## Timesheet `/api/projects`
-
-| Метод | Путь | Auth | Query | Ответ |
-| --- | --- | --- | --- | --- |
-| GET | `/:projectId/time-entries` | доступ к проекту | `from`+`to` (обяз.), `userId?` | `TimesheetPayload` |
-
-Списания за период по карточкам проекта. Member/Viewer видят только свои записи (`userId` игнорируется). Owner/Admin/owner команды: без `userId` — все участники; с `userId` — один человек (режим недели). В ответе: `entries`, `members`, `loggableCards` (карточки, куда текущий пользователь может списать), `totals`. Мутации — те же `POST/PATCH/DELETE` на `/api/cards/.../time-entries`. Деньги по тем же правилам, что аналитика.
+Сводка, статусы, риски, релизы «готово/всего» — снимок сейчас. План vs факт (часы), загрузка, недели — списания с `workedAt` в периоде.
 
 ## Boards `/api/boards`
 
 | Метод | Путь | Роль | Тело | Ответ |
 | --- | --- | --- | --- | --- |
-| GET | `/:boardId` | доступ к проекту | — | Колонки, метки, карточки (агрегаты часов/₽), релизы |
+| GET | `/:boardId` | доступ к проекту | — | Колонки, метки, карточки (агрегаты часов), релизы |
 | PATCH | `/:boardId` | O/A | `{ name }` | `{ id, name }` |
 | DELETE | `/:boardId` | O/A | — | Каскад доски |
 | POST | `/:boardId/columns` | O/A | `{ name }` | 201 колонка, `isDone: false`, position в конец |
@@ -125,12 +115,12 @@ GET проекта: Viewer без ставок/бюджета; Member видит
 
 | Метод | Путь | Роль | Тело | Ответ |
 | --- | --- | --- | --- | --- |
-| POST | `/` | Member+ | `{ boardId, columnId, title, assigneeId?, dueDate?, estimateHours?, releaseId?, labelIds? }` | 201 `{ id, title, planAmount }` |
+| POST | `/` | Member+ | `{ boardId, columnId, title, assigneeId?, dueDate?, estimateHours?, releaseId?, labelIds? }` | 201 `{ id, title }` |
 | GET | `/:cardId` | доступ | — | Детали, checklists, timeEntries, comments |
-| PATCH | `/:cardId` | Member+ | любое из: `title, description, columnId, position, assigneeId, dueDate, estimateHours, releaseId, labelIds` | `{ ok: true }`, пересчёт плана |
+| PATCH | `/:cardId` | Member+ | любое из: `title, description, columnId, position, assigneeId, dueDate, estimateHours, releaseId, labelIds` | `{ ok: true }` |
 | DELETE | `/:cardId` | Member+ без списаний; O/A со списаниями | — | Карточка, списания, комментарии |
-| POST | `/:cardId/time-entries` | O/A любые; member — свой assignee | `{ hours, workedAt? }` | 201 `{ id, hours, amount, rateSnapshot }` |
-| PATCH | `/time-entries/:entryId` | O/A; member — своё на своей карточке | `{ hours }` | `{ ok, amount }` |
+| POST | `/:cardId/time-entries` | O/A любые; member — свой assignee | `{ hours, workedAt? }` | 201 `{ id, hours }` |
+| PATCH | `/time-entries/:entryId` | O/A; member — своё на своей карточке | `{ hours }` | `{ ok: true }` |
 | DELETE | `/time-entries/:entryId` | как PATCH | — | `{ ok: true }` |
 | POST | `/:cardId/comments` | Member+ | `{ body, parentId? }` | 201 `{ id, body }` |
 | PATCH | `/comments/:commentId` | автор | `{ body }` | `{ id, body, editedAt }` |
@@ -164,17 +154,6 @@ GET проекта: Viewer без ставок/бюджета; Member видит
 | PATCH | `/:id/read` | получатель | — | `{ ok: true }` |
 | POST | `/read-all` | JWT | — | `{ ok: true }` |
 
-`kind`: `card_assigned` (назначили исполнителем), `comment_added` (комментарий на вашей карточке), `comment_reply` (ответ на ваш комментарий; если вы и исполнитель — только этот kind).
+`kind`: `card_assigned` (назначили исполнителем), `comment_added` (комментарий на вашей карточке), `comment_reply` (ответ на ваш комментарий; если вы и исполнитель — только этот kind), `card_overdue` (срок истек), `card_due_soon` (срок на этой неделе). Просрочка и «скоро срок» создаются при первой странице `GET /` для исполнителя, без крона: не чаще раза в сутки на карточку и не пока предыдущее того же kind непрочитано. У системных записей `actorId` пустой.
 
 Элемент: `id`, `kind`, `readAt`, `actorId`, `actorName`, `actorAvatarUrl`, `cardId`, `cardTitle`, `projectId`, `projectName`, `teamId`, `teamName`, `detail`, `createdAt`.
-
-## Кто что видит в деньгах
-
-| Роль проекта | Бюджет / ставки | План/факт ₽ карточки | Аналитика ₽ |
-| --- | --- | --- | --- |
-| Owner | чтение и запись лимита и ставок | все | все + burn |
-| Admin | ставки чтение/запись; лимит только смотрит | все | все + burn |
-| Member | только остаток проекта | свои карточки | часы всех; ₽ свои; remainder |
-| Viewer | скрыто | скрыто | без денег и burn |
-
-`budgetEnabled = false` — денежные поля в ответах не отдаются.

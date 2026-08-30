@@ -115,11 +115,6 @@ export const router = createRouter({
           beforeEnter: redirectLegacyProjectTab,
         },
         {
-          path: 'expenses',
-          name: 'project-expenses',
-          component: () => import('../views/ExpensesView.vue'),
-        },
-        {
           path: 'releases',
           name: 'project-releases',
           component: () => import('../views/ProjectReleasesView.vue'),

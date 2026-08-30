@@ -17,7 +17,6 @@ import { UserModel } from '../models/user.js';
 import { deleteTeamCascade, unassignUserInTeam } from '../services/cascade.js';
 import { createDefaultBoard } from '../services/project-setup.js';
 import { importTrelloBoard } from '../services/trello-import.js';
-import { DEFAULT_ROLE_RATES } from '../constants.js';
 import {
   createInviteToken,
   hashToken,
@@ -26,10 +25,7 @@ import { canManageMember } from '../utils/roles.js';
 import {
   asObjectId,
   assertRole,
-  isFeatureOn,
-  readBudget,
   readInviteRole,
-  readOptionalNumber,
   readString,
   readTeamRole,
 } from '../utils/validate.js';
@@ -141,20 +137,11 @@ teamsRouter.post(
     assertRole(membership.role, ['owner', 'admin']);
 
     const name = readString(req.body, 'name');
-    let budgetLimit = 0;
-
-    if (membership.role === 'owner') {
-      const raw = readOptionalNumber(req.body, 'budgetLimit');
-      budgetLimit = raw === undefined ? 0 : readBudget(req.body, 'budgetLimit');
-    }
 
     const project = await ProjectModel.create({
       teamId: asObjectId(teamId),
       name,
-      budgetLimit,
-      roleRates: DEFAULT_ROLE_RATES,
       releasesEnabled: false,
-      budgetEnabled: false,
     });
 
     await createDefaultBoard(project._id);
@@ -167,7 +154,6 @@ teamsRouter.post(
     res.status(201).json({
       id: project._id.toString(),
       name: project.name,
-      budgetLimit: project.budgetLimit,
     });
   }),
 );
@@ -350,8 +336,6 @@ teamsRouter.get(
       expiresAt: { $gt: new Date() },
     }).lean();
 
-    const canSeeBudget = membership.role === 'owner' || membership.role === 'admin';
-
     res.json({
       id: team._id.toString(),
       name: team.name,
@@ -372,11 +356,6 @@ teamsRouter.get(
         name: project.name,
         role: projectRoleById.get(project._id.toString())
           ?? (membership.role === 'owner' ? 'owner' : 'viewer'),
-        budgetEnabled: isFeatureOn(project.budgetEnabled),
-        budgetLimit:
-          canSeeBudget && isFeatureOn(project.budgetEnabled)
-            ? project.budgetLimit
-            : undefined,
       })),
       invites:
         membership.role === 'owner' || membership.role === 'admin'

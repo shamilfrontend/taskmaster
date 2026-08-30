@@ -10,7 +10,6 @@ import {
   workloadBarOption,
   workloadChartHeight,
 } from '../composables/analytics-charts.ts';
-import { formatMoney } from '../composables/format.ts';
 import type { AnalyticsPeriod, AnalyticsRiskKind } from '../types/index.ts';
 
 const route = useRoute();
@@ -175,15 +174,6 @@ const statusOption = computed(() => {
   return statusPieOption(rows);
 });
 
-const showWeekMoney = computed(() => {
-  const data = projects.analytics;
-
-  return Boolean(
-    data?.budgetEnabled
-      && data.weeks.some((week) => week.amount !== undefined),
-  );
-});
-
 const weeksOption = computed(() => {
   const weeks = projects.analytics?.weeks ?? [];
 
@@ -191,7 +181,7 @@ const weeksOption = computed(() => {
     return null;
   }
 
-  return weeksLineOption(weeks, showWeekMoney.value);
+  return weeksLineOption(weeks);
 });
 
 const activeWorkload = computed(() => (
@@ -207,16 +197,6 @@ const workloadOption = computed(() => {
 });
 
 const workloadHeight = computed(() => workloadChartHeight(activeWorkload.value.length));
-
-const showPlanMoney = computed(
-  () => projects.analytics?.planVsFact.planAmount !== undefined,
-);
-
-const hasBurnMeter = computed(() => {
-  const burn = projects.analytics?.burn;
-
-  return burn?.limit !== undefined && burn.totalFact !== undefined;
-});
 </script>
 
 <template>
@@ -382,17 +362,6 @@ const hasBurnMeter = computed(() => {
             {{ projects.analytics.summary.noRelease }}
           </div>
         </button>
-        <div
-          v-if="projects.analytics.summary.factAmount !== undefined"
-          class="panel stat"
-        >
-          <div class="label">
-            Факт за период
-          </div>
-          <div class="value">
-            {{ formatMoney(projects.analytics.summary.factAmount) }}
-          </div>
-        </div>
       </div>
       <div class="grid-2 mb-16">
         <div class="panel">
@@ -480,73 +449,8 @@ const hasBurnMeter = computed(() => {
               />
             </div>
           </div>
-          <div
-            v-if="showPlanMoney"
-            class="meter"
-          >
-            <div class="meter-head">
-              <span>Сумма</span>
-              <span>
-                {{ formatMoney(projects.analytics.planVsFact.factAmount) }}
-                /
-                {{ formatMoney(projects.analytics.planVsFact.planAmount) }}
-              </span>
-            </div>
-            <div class="meter-track">
-              <div
-                class="meter-fill"
-                :class="{
-                  'is-over':
-                    (projects.analytics.planVsFact.factAmount ?? 0) >
-                    (projects.analytics.planVsFact.planAmount ?? 0)
-                }"
-                :style="{
-                  width: barWidth(
-                    projects.analytics.planVsFact.factAmount ?? 0,
-                    projects.analytics.planVsFact.planAmount ?? 0
-                  )
-                }"
-              />
-            </div>
-          </div>
           <p class="muted tight">
             План — все карточки, факт — выбранный период
-          </p>
-          <div
-            v-if="hasBurnMeter && projects.analytics.burn"
-            class="meter"
-          >
-            <div class="meter-head">
-              <span>Бюджет</span>
-              <span>
-                {{ formatMoney(projects.analytics.burn.totalFact) }}
-                /
-                {{ formatMoney(projects.analytics.burn.limit) }}
-              </span>
-            </div>
-            <div class="meter-track">
-              <div
-                class="meter-fill"
-                :class="{
-                  'is-over':
-                    (projects.analytics.burn.totalFact ?? 0) >
-                    (projects.analytics.burn.limit ?? 0)
-                }"
-                :style="{
-                  width: barWidth(
-                    projects.analytics.burn.totalFact ?? 0,
-                    projects.analytics.burn.limit ?? 0
-                  )
-                }"
-              />
-            </div>
-          </div>
-          <p
-            v-if="projects.analytics.burn"
-            class="muted tight"
-            :class="{ neg: projects.analytics.burn.remainder < 0 }"
-          >
-            Остаток {{ formatMoney(projects.analytics.burn.remainder) }}
           </p>
         </div>
       </div>

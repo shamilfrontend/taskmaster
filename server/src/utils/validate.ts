@@ -125,16 +125,6 @@ export function readEstimate(body: unknown, field: string): number {
   return value;
 }
 
-export function readBudget(body: unknown, field: string): number {
-  const value = readNumber(body, field);
-
-  if (!Number.isInteger(value) || value < 0) {
-    throw new AppError(400, `${field}: целое число ≥ 0`);
-  }
-
-  return value;
-}
-
 export function readTeamRole(body: unknown, field: string): TeamRole {
   const value = readString(body, field);
 

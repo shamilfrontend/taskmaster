@@ -24,9 +24,6 @@ const auth = useAuthStore();
 const projects = useProjectStore();
 const projectId = computed(() => String(route.params.projectId));
 
-const budgetOpen = ref(false);
-const budgetLimit = ref('0');
-const ratesOpen = ref(false);
 const deleteOpen = ref(false);
 const addMemberOpen = ref(false);
 const addMemberUserId = ref('');
@@ -36,19 +33,11 @@ const memberAction = ref<'remove' | 'leave'>('remove');
 const memberTargetId = ref('');
 const memberTargetName = ref('');
 const releasesDraft = ref(false);
-const budgetDraft = ref(false);
 const projectNameDraft = ref('');
 const assignableRoles: InviteRole[] = ['admin', 'member', 'viewer'];
-const roleRates = ref<Record<TeamRole, number>>({
-  owner: 0,
-  admin: 0,
-  member: 0,
-  viewer: 0,
-});
 
 function syncFeatureDrafts(): void {
   releasesDraft.value = Boolean(projects.current?.releasesEnabled);
-  budgetDraft.value = Boolean(projects.current?.budgetEnabled);
 }
 
 function syncProjectNameDraft(): void {
@@ -64,14 +53,6 @@ watch(
 
     syncFeatureDrafts();
     syncProjectNameDraft();
-
-    if (project.roleRates) {
-      roleRates.value = { ...project.roleRates };
-    }
-
-    if (project.budgetLimit !== undefined) {
-      budgetLimit.value = String(project.budgetLimit);
-    }
   },
   { immediate: true },
 );
@@ -232,25 +213,9 @@ async function saveProjectName(): Promise<void> {
   }
 }
 
-async function saveBudget(): Promise<void> {
-  await projects.updateBudget(projectId.value, Number(budgetLimit.value));
-  budgetOpen.value = false;
-}
-
-function openBudget(): void {
-  budgetLimit.value = String(projects.current?.budgetLimit ?? 0);
-  budgetOpen.value = true;
-}
-
-async function saveRates(): Promise<void> {
-  await projects.saveRoleRates(projectId.value, roleRates.value);
-  ratesOpen.value = false;
-}
-
 async function saveFeatures(): Promise<void> {
   await projects.updateSettings(projectId.value, {
     releasesEnabled: releasesDraft.value,
-    budgetEnabled: budgetDraft.value,
   });
   syncFeatureDrafts();
 }
@@ -378,42 +343,6 @@ async function removeProject(): Promise<void> {
         Нет участников
       </p>
     </div>
-    <div
-      v-if="projects.current.budgetEnabled && projects.current.roleRates"
-      class="panel"
-    >
-      <div class="panel-head">
-        <h2>Ставки, ₽/час</h2>
-        <button
-          type="button"
-          class="btn btn-ghost"
-          @click="ratesOpen = true"
-        >
-          Ставки ролей
-        </button>
-      </div>
-      <table class="table">
-        <thead>
-          <tr>
-            <th>Участник</th>
-            <th>Источник</th>
-            <th>Ставка</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="row in projects.current.rates"
-            :key="row.userId"
-          >
-            <td>{{ row.displayName }}</td>
-            <td class="muted">
-              {{ row.source === 'personal' ? 'персональная' : 'роль ' + row.role }}
-            </td>
-            <td>{{ row.amount }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
     <div class="panel">
       <div class="panel-head">
         <h2>Фон доски</h2>
@@ -449,14 +378,6 @@ async function removeProject(): Promise<void> {
     <div class="panel">
       <div class="panel-head">
         <h2>Функции</h2>
-        <button
-          v-if="projects.current.budgetEnabled && projects.current.role === 'owner'"
-          type="button"
-          class="btn btn-ghost"
-          @click="openBudget"
-        >
-          Изменить бюджет
-        </button>
       </div>
       <div class="choice-list">
         <label class="choice">
@@ -465,13 +386,6 @@ async function removeProject(): Promise<void> {
             type="checkbox"
           >
           <span>Релизы</span>
-        </label>
-        <label class="choice">
-          <input
-            v-model="budgetDraft"
-            type="checkbox"
-          >
-          <span>Введение бюджета</span>
         </label>
       </div>
       <div class="actions actions--start">
@@ -500,76 +414,6 @@ async function removeProject(): Promise<void> {
       </div>
     </div>
   </div>
-
-  <ModalDialog
-    :open="budgetOpen"
-    title="Бюджет проекта"
-    @close="budgetOpen = false"
-  >
-    <div class="field">
-      <label>Лимит, ₽</label>
-      <input
-        v-model="budgetLimit"
-        class="input"
-        type="number"
-        min="0"
-        placeholder="0"
-      >
-    </div>
-    <div class="modal-foot">
-      <button
-        type="button"
-        class="btn btn-ghost"
-        @click="budgetOpen = false"
-      >
-        Отмена
-      </button>
-      <button
-        type="button"
-        class="btn"
-        @click="saveBudget"
-      >
-        Сохранить
-      </button>
-    </div>
-  </ModalDialog>
-
-  <ModalDialog
-    :open="ratesOpen"
-    title="Ставки ролей"
-    @close="ratesOpen = false"
-  >
-    <div
-      v-for="role in (['owner', 'admin', 'member', 'viewer'] as TeamRole[])"
-      :key="role"
-      class="field"
-    >
-      <label>{{ role }}</label>
-      <input
-        v-model.number="roleRates[role]"
-        class="input"
-        type="number"
-        min="0"
-        placeholder="0"
-      >
-    </div>
-    <div class="modal-foot">
-      <button
-        type="button"
-        class="btn btn-ghost"
-        @click="ratesOpen = false"
-      >
-        Отмена
-      </button>
-      <button
-        type="button"
-        class="btn"
-        @click="saveRates"
-      >
-        Сохранить
-      </button>
-    </div>
-  </ModalDialog>
 
   <ModalDialog
     :open="deleteOpen"

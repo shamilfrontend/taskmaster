@@ -9,7 +9,6 @@ import { useTeamsStore } from '../stores/teams.ts';
 import {
   avatarClass,
   formatDate,
-  formatMoney,
   initials,
   roleClass,
   roleLabel,
@@ -644,12 +643,6 @@ async function confirmRevoke(): Promise<void> {
                 <div class="grow">
                   {{ project.name }}
                 </div>
-                <span
-                  v-if="project.budgetEnabled && project.budgetLimit !== undefined"
-                  class="muted"
-                >
-                  {{ formatMoney(project.budgetLimit) }}
-                </span>
                 <button
                   v-if="canManageProject(project.role)"
                   type="button"

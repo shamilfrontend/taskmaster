@@ -10,7 +10,6 @@ import type {
   InviteRole,
   ProjectDetails,
   ProjectMembersPayload,
-  TeamRole,
 } from '../types/index.ts';
 import { useTeamsStore } from './teams.ts';
 
@@ -26,6 +25,7 @@ function toProjectDetails(data: ProjectPayload): ProjectDetails {
     ...data,
     boardBackground: data.boardBackground ?? 'default',
     teamRole: data.teamRole ?? data.role,
+    people: data.people ?? [],
     board: { id: boardId },
   };
 }
@@ -88,22 +88,10 @@ export const useProjectStore = defineStore('project', () => {
     }
   }
 
-  async function updateBudget(projectId: string, budgetLimit: number): Promise<void> {
-    try {
-      await http.patch(`/projects/${projectId}`, { budgetLimit });
-      await fetchOne(projectId);
-      toastSuccess('Бюджет обновлён');
-    } catch (err: unknown) {
-      toastError('Ошибка при обновлении бюджета', err);
-      throw err;
-    }
-  }
-
   async function updateSettings(
     projectId: string,
     payload: {
       releasesEnabled?: boolean;
-      budgetEnabled?: boolean;
       boardBackground?: BoardBackgroundId;
     },
   ): Promise<void> {
@@ -149,20 +137,6 @@ export const useProjectStore = defineStore('project', () => {
       return null;
     } finally {
       isLoading.value = false;
-    }
-  }
-
-  async function saveRoleRates(
-    projectId: string,
-    roleRates: Record<TeamRole, number>,
-  ): Promise<void> {
-    try {
-      await http.put(`/projects/${projectId}/role-rates`, roleRates);
-      await fetchOne(projectId);
-      toastSuccess('Ставки сохранены');
-    } catch (err: unknown) {
-      toastError('Ошибка при сохранении ставок', err);
-      throw err;
     }
   }
 
@@ -297,10 +271,8 @@ export const useProjectStore = defineStore('project', () => {
     changeMemberRole,
     removeMember,
     renameProject,
-    updateBudget,
     updateSettings,
     createRelease,
-    saveRoleRates,
     deleteProject,
     duplicateProject,
     fetchAnalytics,

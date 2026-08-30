@@ -79,8 +79,6 @@ export interface TeamProject {
   id: string;
   name: string;
   role: TeamRole;
-  budgetEnabled: boolean;
-  budgetLimit?: number;
 }
 
 export interface TeamInvite {
@@ -121,7 +119,9 @@ export interface TeamActivityPage {
 export type NotificationKind =
   | 'card_assigned'
   | 'comment_added'
-  | 'comment_reply';
+  | 'comment_reply'
+  | 'card_overdue'
+  | 'card_due_soon';
 
 export interface NotificationItem {
   id: string;
@@ -184,12 +184,10 @@ export interface ProjectRelease {
   cardCount: number;
 }
 
-export interface ProjectRateRow {
+export interface ProjectPerson {
   userId: string;
   displayName: string;
   role: TeamRole;
-  source?: string;
-  amount?: number;
 }
 
 export interface ProjectMember {
@@ -221,13 +219,8 @@ export interface ProjectDetails {
   role: TeamRole;
   teamRole: TeamRole;
   releasesEnabled: boolean;
-  budgetEnabled: boolean;
   boardBackground: BoardBackgroundId;
-  budgetLimit?: number;
-  fact?: number;
-  remainder?: number;
-  roleRates?: Record<TeamRole, number>;
-  rates: ProjectRateRow[];
+  people: ProjectPerson[];
   board: { id: string };
   releases: ProjectRelease[];
 }
@@ -255,8 +248,6 @@ export interface BoardCard {
   dueDate: string | null;
   estimateHours: number;
   factHours: number;
-  planAmount?: number;
-  factAmount?: number;
   releaseId: string | null;
   releaseName: string | null;
   labelIds: string[];
@@ -282,8 +273,6 @@ export interface TimeEntry {
   userId: string;
   displayName: string;
   hours: number;
-  rateSnapshot?: number;
-  amount?: number;
   workedAt: string;
 }
 
@@ -324,7 +313,6 @@ export interface CardDetails {
   releaseId: string | null;
   labelIds: string[];
   checklists: CardChecklist[];
-  planAmount?: number;
   timeEntries: TimeEntry[];
   comments: CardComment[];
 }
@@ -345,79 +333,28 @@ export interface ReleaseDetails {
   }[];
 }
 
-export type TimesheetView = 'week' | 'list';
-
-export interface TimesheetMember {
-  id: string;
-  displayName: string;
-}
-
-export interface TimesheetLoggableCard {
-  id: string;
-  title: string;
-  columnName: string;
-  assigneeId: string | null;
-}
-
-export interface TimesheetEntry {
-  id: string;
-  cardId: string;
-  cardTitle: string;
-  columnName: string;
-  userId: string;
-  displayName: string;
-  hours: number;
-  rateSnapshot?: number;
-  amount?: number;
-  workedAt: string;
-}
-
-export interface TimesheetPayload {
-  from: string;
-  to: string;
-  role: TeamRole;
-  budgetEnabled: boolean;
-  members: TimesheetMember[];
-  entries: TimesheetEntry[];
-  loggableCards: TimesheetLoggableCard[];
-  totals: {
-    hours: number;
-    amount?: number;
-  };
-}
-
 export interface AnalyticsPayload {
   period: AnalyticsPeriod;
   from: string;
   to: string;
   role: TeamRole;
   releasesEnabled: boolean;
-  budgetEnabled: boolean;
   summary: {
     cards: number;
     overdue: number;
     noAssignee: number;
     noEstimate: number;
     noRelease?: number;
-    factAmount?: number;
   };
   byStatus: { columnId: string; name: string; count: number }[];
   planVsFact: {
     planHours: number;
     factHours: number;
-    planAmount?: number;
-    factAmount?: number;
-  };
-  burn?: {
-    limit?: number;
-    totalFact?: number;
-    remainder: number;
   };
   workload: {
     userId: string;
     displayName: string;
     hours: number;
-    amount?: number;
   }[];
   releases: {
     id: string | null;
@@ -428,7 +365,7 @@ export interface AnalyticsPayload {
     planHours: number;
     factHours: number;
   }[];
-  weeks: { from: string; to: string; hours: number; amount?: number }[];
+  weeks: { from: string; to: string; hours: number }[];
   risks: {
     cardId: string;
     title: string;

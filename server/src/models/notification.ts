@@ -4,14 +4,23 @@ export const NOTIFICATION_KINDS = [
   'card_assigned',
   'comment_added',
   'comment_reply',
+  'card_overdue',
+  'card_due_soon',
 ] as const;
 
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
+export const DUE_NOTIFICATION_KINDS = [
+  'card_overdue',
+  'card_due_soon',
+] as const;
+
+export type DueNotificationKind = (typeof DUE_NOTIFICATION_KINDS)[number];
+
 export interface NotificationPojo {
   _id: mongoose.Types.ObjectId;
   recipientId: mongoose.Types.ObjectId;
-  actorId: mongoose.Types.ObjectId;
+  actorId: mongoose.Types.ObjectId | null;
   kind: NotificationKind;
   teamId: mongoose.Types.ObjectId;
   projectId: mongoose.Types.ObjectId;
@@ -27,7 +36,7 @@ export interface NotificationPojo {
 const notificationSchema = new Schema<NotificationPojo>(
   {
     recipientId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    actorId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    actorId: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     kind: { type: String, enum: NOTIFICATION_KINDS, required: true },
     teamId: { type: Schema.Types.ObjectId, ref: 'Team', required: true },
     projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true },
@@ -42,6 +51,12 @@ const notificationSchema = new Schema<NotificationPojo>(
 
 notificationSchema.index({ recipientId: 1, createdAt: -1 });
 notificationSchema.index({ recipientId: 1, readAt: 1 });
+notificationSchema.index({
+  recipientId: 1,
+  kind: 1,
+  cardId: 1,
+  createdAt: -1,
+});
 notificationSchema.index({ cardId: 1 });
 notificationSchema.index({ boardId: 1 });
 notificationSchema.index({ projectId: 1 });

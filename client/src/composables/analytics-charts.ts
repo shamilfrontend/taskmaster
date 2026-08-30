@@ -7,7 +7,6 @@ import {
 } from 'echarts/components';
 import { CanvasRenderer } from 'echarts/renderers';
 import type { EChartsOption } from 'echarts';
-import { formatMoney } from './format.ts';
 import 'vue-echarts/style.css';
 
 use([
@@ -23,7 +22,6 @@ use([
 const TEXT = '#172b4d';
 const MUTED = '#5e6c84';
 const BLUE = '#0079bf';
-const GREEN = '#61bd4f';
 const BORDER = '#dfe1e6';
 const SPLIT = '#ebecf0';
 
@@ -51,7 +49,6 @@ interface ChartTooltipItem {
 
 interface WorkloadBarDatum {
   value: number;
-  amount?: number;
 }
 
 function tooltipItems(raw: unknown): ChartTooltipItem[] {
@@ -144,15 +141,13 @@ export function statusPieOption(
 }
 
 export function weeksLineOption(
-  weeks: { from: string; hours: number; amount?: number }[],
-  showMoney: boolean,
+  weeks: { from: string; hours: number }[],
 ): EChartsOption {
   const labels = weeks.map((week) => weekLabel(week.from));
   const hours = weeks.map((week) => week.hours);
-  const amounts = weeks.map((week) => week.amount ?? 0);
 
   return {
-    color: [BLUE, GREEN],
+    color: [BLUE],
     tooltip: {
       trigger: 'axis',
       formatter: (raw: unknown) => {
@@ -160,9 +155,7 @@ export function weeksLineOption(
         const title = items[0]?.axisValue ?? '';
         const lines = items.map((item) => {
           const value = numericValue(item.value);
-          const formatted = item.seriesName === 'Сумма'
-            ? formatMoney(value)
-            : `${value.toLocaleString('ru-RU')} ч`;
+          const formatted = `${value.toLocaleString('ru-RU')} ч`;
 
           return `${item.marker ?? ''}${item.seriesName ?? ''}: ${formatted}`;
         });
@@ -170,19 +163,10 @@ export function weeksLineOption(
         return [title, ...lines].join('<br/>');
       },
     },
-    legend: showMoney
-      ? {
-        top: 0,
-        icon: 'circle',
-        itemWidth: 8,
-        itemHeight: 8,
-        textStyle: { color: MUTED, fontSize: 12 },
-      }
-      : undefined,
     grid: {
       left: 48,
-      right: showMoney ? 56 : 16,
-      top: showMoney ? 36 : 16,
+      right: 16,
+      top: 16,
       bottom: 28,
     },
     xAxis: {
@@ -192,27 +176,13 @@ export function weeksLineOption(
       axisLine: { lineStyle: { color: BORDER } },
       axisTick: { show: false },
     },
-    yAxis: showMoney
-      ? [
-        {
-          ...axisValue(),
-          name: 'ч',
-          nameTextStyle: { color: MUTED, fontSize: 11 },
-        },
-        {
-          ...axisValue(),
-          name: '₽',
-          nameTextStyle: { color: MUTED, fontSize: 11 },
-          splitLine: { show: false },
-        },
-      ]
-      : [
-        {
-          ...axisValue(),
-          name: 'ч',
-          nameTextStyle: { color: MUTED, fontSize: 11 },
-        },
-      ],
+    yAxis: [
+      {
+        ...axisValue(),
+        name: 'ч',
+        nameTextStyle: { color: MUTED, fontSize: 11 },
+      },
+    ],
     series: [
       {
         name: 'Часы',
@@ -223,30 +193,16 @@ export function weeksLineOption(
         data: hours,
         areaStyle: { opacity: 0.12 },
       },
-      ...(showMoney
-        ? [
-          {
-            name: 'Сумма',
-            type: 'line' as const,
-            yAxisIndex: 1,
-            smooth: true,
-            symbol: 'circle',
-            symbolSize: 6,
-            data: amounts,
-          },
-        ]
-        : []),
     ],
   };
 }
 
 export function workloadBarOption(
-  rows: { displayName: string; hours: number; amount?: number }[],
+  rows: { displayName: string; hours: number }[],
 ): EChartsOption {
   const names = rows.map((row) => row.displayName);
   const data: WorkloadBarDatum[] = rows.map((row) => ({
     value: row.hours,
-    amount: row.amount,
   }));
 
   return {
@@ -262,14 +218,8 @@ export function workloadBarOption(
         }
 
         const hours = numericValue(item.value);
-        const extra = typeof item.data === 'object'
-          && item.data !== null
-          && 'amount' in item.data
-          && typeof item.data.amount === 'number'
-          ? `<br/>${formatMoney(item.data.amount)}`
-          : '';
 
-        return `${item.name ?? ''}<br/>${hours.toLocaleString('ru-RU')} ч${extra}`;
+        return `${item.name ?? ''}<br/>${hours.toLocaleString('ru-RU')} ч`;
       },
     },
     grid: {

@@ -179,8 +179,6 @@ const canAdmin = computed(() => {
   return role === 'owner' || role === 'admin';
 });
 
-const showMoney = computed(() => project.current?.budgetEnabled === true);
-
 const showReleases = computed(() => project.current?.releasesEnabled === true);
 
 const canLogHours = computed(() => {
@@ -205,19 +203,6 @@ const canDeleteCard = computed(() => {
 const factHours = computed(() => (
   board.card?.timeEntries ?? []
 ).reduce((sum, entry) => sum + entry.hours, 0));
-
-const factAmount = computed(() => {
-  if (!showMoney.value || !board.card) {
-    return null;
-  }
-
-  const total = board.card.timeEntries.reduce(
-    (sum, entry) => sum + (entry.amount ?? 0),
-    0,
-  );
-
-  return total;
-});
 
 const cardColumnName = computed(() => {
   const columnId = board.card?.columnId;
@@ -1401,7 +1386,7 @@ async function saveLabelName(labelId: string): Promise<void> {
               Без исполнителя
             </option>
             <option
-              v-for="row in project.current?.rates ?? []"
+              v-for="row in project.current?.people ?? []"
               :key="row.userId"
               :value="row.userId"
             >
@@ -1944,7 +1929,7 @@ async function saveLabelName(labelId: string): Promise<void> {
                       Без исполнителя
                     </option>
                     <option
-                      v-for="row in project.current?.rates ?? []"
+                      v-for="row in project.current?.people ?? []"
                       :key="row.userId"
                       :value="row.userId"
                     >
@@ -1995,19 +1980,6 @@ async function saveLabelName(labelId: string): Promise<void> {
                   >
                     {{ factHours }} ч
                   </div>
-                </div>
-              </div>
-
-              <div
-                v-if="showMoney"
-                class="field"
-              >
-                <label>План / факт, ₽</label>
-                <div class="fake-input">
-                  {{ board.card.planAmount ?? '—' }} ₽
-                  <template v-if="factAmount !== null">
-                    · факт {{ factAmount }} ₽
-                  </template>
                 </div>
               </div>
 

@@ -7,6 +7,7 @@ import { NotificationModel } from '../models/notification.js';
 import { ProjectModel } from '../models/project.js';
 import { TeamModel } from '../models/team.js';
 import { UserModel } from '../models/user.js';
+import { ensureDueNotifications } from '../services/notifications.js';
 import { asObjectId } from '../utils/validate.js';
 
 export const notificationsRouter = Router();
@@ -35,6 +36,11 @@ notificationsRouter.get(
   asyncHandler(async (req: Request, res: Response) => {
     const recipientId = asObjectId(req.userId);
     const before = readBefore(req.query);
+
+    if (!before) {
+      await ensureDueNotifications(req.userId);
+    }
+
     const fetchLimit = NOTIFICATION_LIMIT + 1;
 
     const [docs, unreadCount] = await Promise.all([
@@ -54,7 +60,11 @@ notificationsRouter.get(
     const hasMore = docs.length > NOTIFICATION_LIMIT;
     const page = docs.slice(0, NOTIFICATION_LIMIT);
 
-    const actorIds = [...new Set(page.map((item) => item.actorId.toString()))];
+    const actorIds = [...new Set(
+      page
+        .map((item) => item.actorId?.toString())
+        .filter((id): id is string => Boolean(id)),
+    )];
     const projectIds = [...new Set(page.map((item) => item.projectId.toString()))];
     const teamIds = [...new Set(page.map((item) => item.teamId.toString()))];
 
@@ -84,13 +94,14 @@ notificationsRouter.get(
     );
 
     const items = page.map((item) => {
-      const actor = actorMap.get(item.actorId.toString());
+      const actorId = item.actorId?.toString() ?? '';
+      const actor = actorId ? actorMap.get(actorId) : undefined;
 
       return {
         id: item._id.toString(),
         kind: item.kind,
         readAt: item.readAt,
-        actorId: item.actorId.toString(),
+        actorId,
         actorName: actor?.name ?? '',
         actorAvatarUrl: actor?.avatarUrl ?? '',
         cardId: item.cardId.toString(),

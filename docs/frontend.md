@@ -16,7 +16,6 @@ flowchart TB
   Team["/teams/:teamId TeamView"]
   Layout["/projects/:projectId ProjectLayout"]
   Board["'' ProjectView канбан"]
-  Expenses["expenses ExpensesView"]
   Releases["releases ProjectReleasesView"]
   Release["releases/:releaseId ReleaseView"]
   Analytics["analytics AnalyticsView"]
@@ -31,7 +30,6 @@ flowchart TB
   Teams --> MyTasks
   Team --> Layout
   Layout --> Board
-  Layout --> Expenses
   Layout --> Releases
   Layout --> Release
   Layout --> Analytics
@@ -54,19 +52,16 @@ flowchart TB
 | `/teams/:teamId` | `team` | `TeamView` | `chrome: true` | Участники, инвайты, проекты, действия |
 | `/projects/:projectId` | layout | `ProjectLayout` | `chrome: true` | Оболочка проекта: вкладки, хлебные крошки |
 | `/projects/:projectId` | `project` | `ProjectView` | дочерний | Канбан |
-| `/projects/:projectId/expenses` | `project-expenses` | `ExpensesView` | дочерний | Табель списаний: неделя и список |
 | `/projects/:projectId/releases` | `project-releases` | `ProjectReleasesView` | дочерний | Список релизов (если `releasesEnabled`) |
 | `/projects/:projectId/releases/:releaseId` | `release` | `ReleaseView` | дочерний | Релиз: карточки, статус, дата |
 | `/projects/:projectId/analytics` | `analytics` | `AnalyticsView` | дочерний | Отчёты за период |
-| `/projects/:projectId/settings` | `project-settings` | `ProjectSettingsView` | дочерний | Настройки, состав, ставки, бюджет |
+| `/projects/:projectId/settings` | `project-settings` | `ProjectSettingsView` | дочерний | Настройки, состав, фон, релизы |
 | `/boards/:boardId` | `board` | пустой + `beforeEnter` | — | `GET /boards/:id` → `project` |
 | `/releases/:releaseId` | `legacy-release` | пустой + `beforeEnter` | — | `GET /releases/:id` → вложенный `release` |
 
 Legacy query `?tab=releases|settings` на канбане редиректится на именованные дочерние маршруты.
 
-Вкладки проекта (`useProjectTabs`): Доска всегда; Учёт расходов всегда; Релизы — если включены; Аналитика всегда; Настройки — owner/admin проекта или owner команды.
-
-Query на `/expenses`: `view=week|list` (по умолчанию неделя), `from=YYYY-MM-DD` (понедельник), `userId` — для owner/admin в режиме недели.
+Вкладки проекта (`useProjectTabs`): Доска всегда; Релизы — если включены; Аналитика всегда; Настройки — owner/admin проекта или owner команды.
 
 Query на `/my-tasks`: `done=1` (готовые колонки), `teamId`, `projectId`. Клик открывает `/projects/:id?card=`.
 
@@ -88,9 +83,8 @@ Query на `/my-tasks`: `done=1` (готовые колонки), `teamId`, `pro
 | --- | --- | --- |
 | `auth` | [`client/src/stores/auth.ts`](../client/src/stores/auth.ts) | `user`, `fetchMe`, `login` → `/api/auth/yandex`, `loginDemo`, `logout`. Ставит `setDemoMode`. |
 | `teams` | [`client/src/stores/teams.ts`](../client/src/stores/teams.ts) | Список и текущая команда, activity, инвайты, участники, создание проекта и импорт Trello. |
-| `project` | [`client/src/stores/project.ts`](../client/src/stores/project.ts) | Детали проекта, members, analytics, ставки ролей, дублирование, релизы create. |
+| `project` | [`client/src/stores/project.ts`](../client/src/stores/project.ts) | Детали проекта, members, analytics, дублирование, релизы create. |
 | `board` | [`client/src/stores/board.ts`](../client/src/stores/board.ts) | Колонки, карточки, метки, списания, комментарии, чеклисты, релизы attach/detach. |
-| `timesheet` | [`client/src/stores/timesheet.ts`](../client/src/stores/timesheet.ts) | Табель: `GET /projects/:id/time-entries`, списание/правка через `/cards/.../time-entries`. |
 | `my-tasks` | [`client/src/stores/my-tasks.ts`](../client/src/stores/my-tasks.ts) | Карточки текущего исполнителя: `GET /me/tasks`. |
 | `notifications` | [`client/src/stores/notifications.ts`](../client/src/stores/notifications.ts) | Инбокс, `unreadCount`, polling 10 с, `markRead` / `markAllRead`. Drawer в шапке. |
 
@@ -110,10 +104,9 @@ Query на `/my-tasks`: `done=1` (готовые колонки), `teamId`, `pro
 | Мои задачи | Назначенные карточки по проектам, группы по сроку |
 | Team | Состав, инвайты (owner/admin), проекты, лента действий, настройки/удаление |
 | Project (канбан) | Колонки, карточки, фон, DnD, модалка карточки |
-| Учёт расходов | Недельная сетка (Tempo), список списаний, списание часов по карточкам |
 | Модалка карточки | Исполнитель, срок, оценка, описание, чеклисты, релиз, списания, метки, комментарии |
 | Releases | Список релизов проекта |
 | Release | Название, дата, статус, прикреплённые карточки |
-| Analytics | Период, сводка, статусы, план/факт, burn, загрузка, релизы, недели, риски |
-| Settings | Имя, флаги релизов/бюджета, фон, состав, ставки, лимит, удаление |
-| Уведомления | Колокольчик слева от аватарки, drawer, подгрузка; клик открывает карточку |
+| Analytics | Период, сводка, статусы, план/факт по часам, загрузка, релизы, недели, риски |
+| Settings | Имя, флаг релизов, фон, состав, удаление |
+| Уведомления | Колокольчик слева от аватарки, drawer, подгрузка; назначение, комментарии, просрочка и срок на этой неделе; клик открывает карточку |

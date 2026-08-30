@@ -70,8 +70,6 @@ boardsRouter.get(
     const project = await ProjectModel.findById(board.projectId).lean();
     const releasesEnabled = isFeatureOn(project?.releasesEnabled);
 
-    const hideMoney = access.role === 'viewer' || !isFeatureOn(project?.budgetEnabled);
-
     res.json({
       id: board._id.toString(),
       projectId: board.projectId.toString(),
@@ -99,14 +97,6 @@ boardsRouter.get(
         const factHours = entries
           .filter((entry) => entry.cardId.toString() === card._id.toString())
           .reduce((sum, entry) => sum + entry.hours, 0);
-        const factAmount = entries
-          .filter((entry) => entry.cardId.toString() === card._id.toString())
-          .reduce((sum, entry) => sum + entry.amount, 0);
-        const isOwn = card.assigneeId?.toString() === req.userId;
-        const showMoney = !hideMoney
-          && (access.role === 'owner'
-            || access.role === 'admin'
-            || isOwn);
         const assignee = users.find(
           (user) => user._id.toString() === card.assigneeId?.toString(),
         );
@@ -129,8 +119,6 @@ boardsRouter.get(
           dueDate: card.dueDate,
           estimateHours: card.estimateHours,
           factHours,
-          planAmount: showMoney ? card.planAmount : undefined,
-          factAmount: showMoney ? factAmount : undefined,
           releaseId: releasesEnabled
             ? card.releaseId?.toString() ?? null
             : null,

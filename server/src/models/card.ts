@@ -27,7 +27,6 @@ export interface CardPojo {
   labelIds: mongoose.Types.ObjectId[];
   checklists: ChecklistPojo[];
   position: number;
-  planAmount: number;
 }
 
 const checklistItemSchema = new Schema<ChecklistItemPojo>(
@@ -61,7 +60,6 @@ const cardSchema = new Schema<CardPojo>(
     labelIds: [{ type: Schema.Types.ObjectId, ref: 'Label' }],
     checklists: { type: [checklistSchema], default: [] },
     position: { type: Number, required: true },
-    planAmount: { type: Number, required: true, default: 0 },
   },
   { timestamps: true },
 );
