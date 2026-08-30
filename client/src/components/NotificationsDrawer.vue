@@ -161,6 +161,8 @@ onUnmounted(() => {
 </template>
 
 <style lang="scss" scoped>
+@use '../assets/breakpoints' as *;
+
 .drawer-overlay {
   display: none;
   position: fixed;
@@ -226,5 +228,20 @@ onUnmounted(() => {
 .empty {
   padding: 24px 8px;
   text-align: center;
+}
+
+@media (max-width: $bp-phone) {
+  .drawer {
+    width: 100%;
+  }
+
+  .notification-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .notification-date {
+    white-space: normal;
+  }
 }
 </style>

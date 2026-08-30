@@ -75,6 +75,8 @@ function isActive(tab: PageTab): boolean {
 </template>
 
 <style lang="scss" scoped>
+@use '../assets/breakpoints' as *;
+
 .page-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -102,6 +104,25 @@ function isActive(tab: PageTab): boolean {
     background: var(--surface);
     color: var(--blue);
     box-shadow: var(--shadow);
+  }
+}
+
+@media (max-width: $bp-phone) {
+  .page-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin-bottom: 16px;
+    padding-bottom: 2px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+
+  .page-tab {
+    flex-shrink: 0;
   }
 }
 </style>

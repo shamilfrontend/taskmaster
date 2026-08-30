@@ -119,8 +119,10 @@ function login(): void {
 </template>
 
 <style lang="scss" scoped>
+@use '../assets/breakpoints' as *;
+
 .auth-card {
-  width: 400px;
+  width: min(400px, 100%);
   padding: 40px 32px;
   text-align: center;
   box-shadow: 0 8px 24px #091e4226;
@@ -147,11 +149,22 @@ function login(): void {
 .invite-meta {
   display: flex;
   justify-content: space-between;
+  gap: 8px;
   margin-bottom: 12px;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
   background: var(--input-bg);
   text-align: left;
   font-size: 14px;
+}
+
+@media (max-width: $bp-narrow) {
+  .auth-card {
+    padding: 28px 16px;
+  }
+
+  .invite-meta {
+    flex-direction: column;
+  }
 }
 </style>

@@ -538,6 +538,8 @@ const workloadHeight = computed(() => workloadChartHeight(activeWorkload.value.l
 </template>
 
 <style lang="scss" scoped>
+@use '../assets/breakpoints' as *;
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -725,9 +727,26 @@ button.stat:hover {
   }
 }
 
-@media (max-width: 800px) {
+@media (max-width: $bp-phone) {
   .stats-grid {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .analytics-range {
+    width: 100%;
+    flex-wrap: wrap;
+
+    .input {
+      flex: 1;
+      min-width: 0;
+      width: auto;
+    }
+  }
+}
+
+@media (max-width: $bp-narrow) {
+  .stats-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

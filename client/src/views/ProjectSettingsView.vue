@@ -276,6 +276,8 @@ async function removeProject(): Promise<void> {
 </template>
 
 <style lang="scss" scoped>
+@use '../assets/breakpoints' as *;
+
 .bg-picker {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -326,9 +328,15 @@ async function removeProject(): Promise<void> {
   }
 }
 
-@media (max-width: 800px) {
+@media (max-width: $bp-phone) {
   .bg-picker {
     grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: $bp-narrow) {
+  .bg-picker {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 </style>

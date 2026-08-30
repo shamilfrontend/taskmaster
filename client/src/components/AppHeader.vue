@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue';
+import {
+  computed, onMounted, onUnmounted, ref,
+} from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.ts';
 import { useNotificationsStore } from '../stores/notifications.ts';
@@ -13,6 +15,8 @@ const route = useRoute();
 const auth = useAuthStore();
 const notifications = useNotificationsStore();
 const { crumbs } = useBreadcrumbs();
+const menuOpen = ref(false);
+const menuRef = ref<HTMLElement | null>(null);
 
 const unreadLabel = computed(() => {
   if (notifications.unreadCount > 9) {
@@ -22,17 +26,44 @@ const unreadLabel = computed(() => {
   return String(notifications.unreadCount);
 });
 
+function closeMenu(): void {
+  menuOpen.value = false;
+}
+
+function toggleMenu(): void {
+  menuOpen.value = !menuOpen.value;
+}
+
+function onDocumentClick(event: MouseEvent): void {
+  const { target } = event;
+
+  if (!(target instanceof Node) || !menuRef.value?.contains(target)) {
+    closeMenu();
+  }
+}
+
+function onDocumentKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    closeMenu();
+  }
+}
+
 async function logout(): Promise<void> {
+  closeMenu();
   await auth.logout();
   await router.push({ name: 'landing' });
 }
 
 onMounted(() => {
   notifications.startPolling();
+  document.addEventListener('click', onDocumentClick);
+  document.addEventListener('keydown', onDocumentKeydown);
 });
 
 onUnmounted(() => {
   notifications.stopPolling();
+  document.removeEventListener('click', onDocumentClick);
+  document.removeEventListener('keydown', onDocumentKeydown);
 });
 </script>
 
@@ -74,7 +105,7 @@ onUnmounted(() => {
     <div class="header-right">
       <router-link
         :to="{ name: 'my-tasks' }"
-        class="btn btn-ghost"
+        class="btn btn-ghost header-link"
         :class="{ 'is-open': route.name === 'my-tasks' }"
       >
         Мои задачи
@@ -112,23 +143,64 @@ onUnmounted(() => {
       />
       <button
         type="button"
-        class="btn btn-ghost"
+        class="btn btn-ghost header-link"
         @click="logout"
       >
         Выйти
       </button>
+      <div
+        ref="menuRef"
+        class="header-menu"
+      >
+        <button
+          type="button"
+          class="header-menu-btn"
+          :class="{ 'is-open': menuOpen }"
+          aria-label="Меню"
+          :aria-expanded="menuOpen"
+          @click="toggleMenu"
+        >
+          ⋯
+        </button>
+        <div
+          v-if="menuOpen"
+          class="header-menu-list"
+          role="menu"
+        >
+          <router-link
+            :to="{ name: 'my-tasks' }"
+            class="header-menu-item"
+            :class="{ 'is-open': route.name === 'my-tasks' }"
+            role="menuitem"
+            @click="closeMenu"
+          >
+            Мои задачи
+          </router-link>
+          <button
+            type="button"
+            class="header-menu-item"
+            role="menuitem"
+            @click="logout"
+          >
+            Выйти
+          </button>
+        </div>
+      </div>
     </div>
   </header>
   <NotificationsDrawer />
 </template>
 
 <style lang="scss" scoped>
+@use '../assets/breakpoints' as *;
+
 .app-header {
   display: flex;
   align-items: center;
   gap: 4px;
   height: var(--header-h);
-  padding: 0 12px 0 16px;
+  padding: 0 calc(12px + env(safe-area-inset-right, 0px))
+    0 calc(16px + env(safe-area-inset-left, 0px));
   background: #1f1f21;
   border-bottom: 0;
   color: #fff;
@@ -263,5 +335,81 @@ onUnmounted(() => {
   font-weight: 700;
   line-height: 16px;
   text-align: center;
+}
+
+.header-menu {
+  display: none;
+  position: relative;
+}
+
+.header-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 0;
+  background: none;
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+
+  &:hover,
+  &.is-open {
+    background: rgb(255 255 255 / 20%);
+  }
+}
+
+.header-menu-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 80;
+  min-width: 180px;
+  padding: 4px;
+  background: #282e33;
+  border-radius: var(--radius);
+  box-shadow: 0 8px 16px #091e4240;
+}
+
+.header-menu-item {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  background: none;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+
+  &:hover,
+  &.is-open {
+    background: rgb(255 255 255 / 12%);
+  }
+}
+
+@media (max-width: $bp-tablet) {
+  .app-header {
+    gap: 2px;
+  }
+
+  .crumbs {
+    display: none;
+  }
+}
+
+@media (max-width: $bp-phone) {
+  .header-link {
+    display: none;
+  }
+
+  .header-menu {
+    display: block;
+  }
 }
 </style>

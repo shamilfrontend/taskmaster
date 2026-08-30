@@ -1426,7 +1426,7 @@ async function saveLabelName(labelId: string): Promise<void> {
 </script>
 
 <template>
-  <div>
+  <div class="board-body">
     <p
       v-if="board.error"
       class="warn"
@@ -2611,6 +2611,15 @@ async function saveLabelName(labelId: string): Promise<void> {
 </template>
 
 <style lang="scss" scoped>
+@use '../assets/breakpoints' as *;
+
+.board-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 .board-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -2645,16 +2654,23 @@ async function saveLabelName(labelId: string): Promise<void> {
 
 .columns {
   display: flex;
+  flex: 1;
   gap: 12px;
+  min-width: 0;
+  min-height: 0;
   overflow-x: auto;
-  align-items: flex-start;
+  align-items: stretch;
   padding-bottom: 8px;
 }
 
 .column {
   flex: 0 0 272px;
+  flex-shrink: 0;
   width: 272px;
-  max-height: calc(100vh - var(--header-h) - 200px);
+  min-width: 272px;
+  max-width: 272px;
+  height: 100%;
+  max-height: 100%;
   min-height: 120px;
   display: flex;
   flex-direction: column;
@@ -2789,7 +2805,11 @@ async function saveLabelName(labelId: string): Promise<void> {
 
 .add-list {
   flex: 0 0 272px;
+  flex-shrink: 0;
+  align-self: flex-start;
   width: 272px;
+  min-width: 272px;
+  max-width: 272px;
   padding: 8px;
   background: rgb(255 255 255 / 20%);
   border-radius: var(--radius-lg);
@@ -3020,6 +3040,8 @@ async function saveLabelName(labelId: string): Promise<void> {
   z-index: 40;
   place-items: center;
   padding: 24px 16px;
+  padding: max(16px, env(safe-area-inset-top, 0px))
+    16px max(16px, env(safe-area-inset-bottom, 0px));
   background: rgb(0 0 0 / 64%);
   overflow: auto;
 
@@ -3052,6 +3074,7 @@ async function saveLabelName(labelId: string): Promise<void> {
   flex-direction: column;
   width: min(920px, 100%);
   max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
   overflow: hidden;
   color: var(--text);
   background: var(--surface);
@@ -3629,25 +3652,108 @@ h2.card-modal-title {
   padding: 0;
 }
 
-@media (max-width: 800px) {
+@media (max-width: $bp-phone) {
+  .board-toolbar {
+    margin-bottom: 12px;
+  }
+
+  .board-filters {
+    width: 100%;
+  }
+
+  .board-filter-search,
+  .board-filter-select {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .board-filter-labels {
+    width: 100%;
+    flex-wrap: wrap;
+
+    .board-filter-select {
+      flex: 1;
+    }
+  }
+
+  .overlay {
+    padding: 8px;
+    padding: max(8px, env(safe-area-inset-top, 0px))
+      8px max(8px, env(safe-area-inset-bottom, 0px));
+  }
+
   .card-modal {
-    max-height: calc(100vh - 32px);
-    overflow: auto;
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+    overflow: hidden;
+    border-radius: var(--radius);
   }
 
   .card-modal-grid {
-    grid-template-columns: 1fr;
-    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
   }
 
   .card-modal-main,
   .card-modal-side {
+    flex: none;
+    min-height: min-content;
     overflow: visible;
+    padding: 12px 16px 20px;
   }
 
   .card-modal-side {
     border-left: 0;
     border-top: 1px solid var(--border);
+  }
+
+  .costs-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+
+    > :nth-child(1) {
+      grid-column: 1;
+    }
+
+    > :nth-child(2) {
+      grid-column: 1;
+    }
+
+    > :nth-child(3) {
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    > :nth-child(4) {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .costs-row--head {
+    display: none;
+  }
+
+  .costs-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: $bp-narrow) {
+  .overlay {
+    padding: 0;
+  }
+
+  .card-modal {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100vh;
+    max-height: 100dvh;
+    overflow: hidden;
+    border-radius: 0;
   }
 }
 </style>

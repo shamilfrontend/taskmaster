@@ -315,6 +315,8 @@ watch(
 </template>
 
 <style lang="scss" scoped>
+@use '../assets/breakpoints' as *;
+
 .task-filters {
   display: flex;
   flex-wrap: wrap;
@@ -324,5 +326,15 @@ watch(
 
 .select-inline {
   min-width: 180px;
+}
+
+@media (max-width: $bp-phone) {
+  .task-filters {
+    .select-inline,
+    .choice {
+      width: 100%;
+      min-width: 0;
+    }
+  }
 }
 </style>
