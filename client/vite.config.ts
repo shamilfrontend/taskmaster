@@ -8,6 +8,10 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
+      workbox: {
+        // Иначе SW отдаёт index.html на переход /api/auth/yandex и ломает OAuth.
+        navigateFallbackDenylist: [/^\/api(?:\/|$)/],
+      },
       manifest: {
         name: 'Taskmaster',
         short_name: 'Taskmaster',
