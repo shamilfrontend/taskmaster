@@ -94,13 +94,13 @@ const filterEstimate = ref('');
 const filterColumnId = ref('');
 
 onMounted(() => {
-  document.addEventListener('click', closeMenus);
+  document.addEventListener('click', onDocumentClick);
   window.addEventListener('scroll', closeMenus, true);
   window.addEventListener('resize', closeMenus);
 });
 
 onUnmounted(() => {
-  document.removeEventListener('click', closeMenus);
+  document.removeEventListener('click', onDocumentClick);
   window.removeEventListener('scroll', closeMenus, true);
   window.removeEventListener('resize', closeMenus);
 });
@@ -257,6 +257,12 @@ function closeMenus(): void {
   menuColumnId.value = null;
   menuCardId.value = null;
   menuPosition.value = null;
+}
+
+function onDocumentClick(): void {
+  closeMenus();
+  cancelCardComposer();
+  cancelColumnComposer();
 }
 
 function canDeleteBoardCard(card: BoardCard): boolean {
@@ -1635,6 +1641,7 @@ async function saveLabelName(labelId: string): Promise<void> {
           <div
             v-if="canEdit"
             class="composer"
+            @click.stop
           >
             <template v-if="addingCardColumnId === column.id">
               <textarea
@@ -1673,6 +1680,7 @@ async function saveLabelName(labelId: string): Promise<void> {
         <div
           v-if="canAdmin"
           class="add-list"
+          @click.stop
         >
           <div
             v-if="addingColumn"
