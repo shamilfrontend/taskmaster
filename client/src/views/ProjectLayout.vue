@@ -132,11 +132,6 @@ const isRouteAllowed = computed(() => {
       :class="{ 'has-photo': hasBoardPhoto }"
       :style="boardStyle"
     >
-      <div class="page-head">
-        <div>
-          <h1>{{ projects.current.name }}</h1>
-        </div>
-      </div>
       <PageTabs :tabs="tabs" />
       <p
         v-if="projects.error"
@@ -156,3 +151,19 @@ const isRouteAllowed = computed(() => {
     </p>
   </section>
 </template>
+
+<style lang="scss" scoped>
+.screen {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.board-screen {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+</style>

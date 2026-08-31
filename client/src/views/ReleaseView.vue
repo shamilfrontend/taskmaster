@@ -155,41 +155,30 @@ async function remove(): Promise<void> {
 
 <template>
   <div v-if="board.release">
-    <div class="page-head">
-      <div>
-        <h1>
-          {{ board.release.name }}
-          <span
-            class="badge"
-            :class="board.release.status === 'released' ? 'badge-released' : 'badge-planned'"
-          >
-            {{ board.release.status }}
-          </span>
-        </h1>
-        <p class="muted">
-          {{ formatDate(board.release.date) || 'без даты' }}
-        </p>
-      </div>
-      <div class="actions">
-        <button
-          v-if="canAdmin"
-          type="button"
-          class="btn btn-ghost"
-          @click="openEdit"
-        >
-          Изменить
-        </button>
-        <button
-          v-if="canEdit"
-          type="button"
-          class="btn"
-          @click="attachOpen = true"
-        >
-          Прикрепить карточку
-        </button>
-      </div>
+    <p class="grouped-caption">
+      {{ formatDate(board.release.date) || 'без даты' }}
+      ·
+      {{ board.release.status }}
+    </p>
+    <div class="actions mb-16">
+      <button
+        v-if="canAdmin"
+        type="button"
+        class="btn btn-ghost"
+        @click="openEdit"
+      >
+        Изменить
+      </button>
+      <button
+        v-if="canEdit"
+        type="button"
+        class="btn"
+        @click="attachOpen = true"
+      >
+        Прикрепить
+      </button>
     </div>
-    <div class="panel">
+    <div class="grouped-section">
       <div class="panel-head">
         <h2>Карточки релиза</h2>
         <button

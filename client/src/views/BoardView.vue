@@ -2675,14 +2675,18 @@ async function saveLabelName(labelId: string): Promise<void> {
   display: flex;
   flex-direction: column;
   padding: 8px;
-  background: var(--column);
-  border: 0;
-  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 1%) 0, transparent 18%),
+    #5a4336;
+  border: 1px solid #3a2a21;
+  border-radius: 8px;
+  box-shadow: inset 0 2px 8px rgb(0 0 0 / 35%), 0 2px 4px rgb(0 0 0 / 3%);
+  color: #f4eadb;
 
   &.is-drop-target {
-    outline: 2px solid var(--blue);
+    outline: 2px solid #f4eadb;
     outline-offset: -2px;
-    background: var(--selected);
+    background: #4a362c;
   }
 }
 
@@ -2703,7 +2707,9 @@ async function saveLabelName(labelId: string): Promise<void> {
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 700;
+    color: #f4eadb;
+    text-shadow: 0 1px 0 rgb(0 0 0 / 45%);
 
     &.is-editable {
       cursor: pointer;
@@ -2794,12 +2800,12 @@ async function saveLabelName(labelId: string): Promise<void> {
   border-radius: var(--radius);
   padding: 6px 8px;
   background: transparent;
-  color: var(--muted);
+  color: #d8c8b4;
   text-align: left;
 
   &:hover {
-    background: var(--hover);
-    color: var(--text);
+    background: rgb(255 255 255 / 1%);
+    color: #f4eadb;
   }
 }
 
@@ -2844,16 +2850,16 @@ async function saveLabelName(labelId: string): Promise<void> {
   margin-bottom: 8px;
   padding: 8px 10px 10px;
   text-align: left;
-  border: 0;
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow);
-  color: inherit;
+  border: 1px solid #c4b89a;
+  border-radius: 4px;
+  background-image: linear-gradient(#fffef8, #f3eedd);
+  box-shadow: inset 0 1px 0 #fff, 0 2px 3px rgb(0 0 0 / 28%);
+  color: #2c2416;
   cursor: pointer;
 
   &:hover {
-    background: var(--surface);
-    box-shadow: var(--shadow-hover);
+    background-image: linear-gradient(#fff, #f7f1e2);
+    box-shadow: inset 0 1px 0 #fff, 0 3px 5px rgb(0 0 0 / 32%);
   }
 
   &:has(.task-menu-btn) {
@@ -2886,19 +2892,20 @@ async function saveLabelName(labelId: string): Promise<void> {
   }
 
   &.is-overdue {
-    box-shadow: inset 0 0 0 2px var(--danger), var(--shadow);
-    background: var(--surface);
+    box-shadow: inset 0 0 0 2px var(--danger), inset 0 1px 0 #fff, 0 2px 3px rgb(0 0 0 / 28%);
+    background-image: linear-gradient(#fff6f4, #f3e0d8);
 
     &:hover {
-      box-shadow: inset 0 0 0 2px var(--danger), var(--shadow-hover);
-      background: var(--surface);
+      box-shadow: inset 0 0 0 2px var(--danger), inset 0 1px 0 #fff, 0 3px 5px rgb(0 0 0 / 32%);
+      background-image: linear-gradient(#fff8f6, #f6e6de);
     }
   }
 
   h3 {
     margin: 0 0 8px;
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 700;
+    color: #2c2416;
   }
 
   .label {
@@ -3051,25 +3058,24 @@ async function saveLabelName(labelId: string): Promise<void> {
 }
 
 .card-modal {
-  --bg: #1d2125;
-  --surface: #22272b;
-  --border: #a6c5e229;
-  --text: #c7d1db;
-  --muted: #9fadbc;
-  --hover: #a1bdd914;
-  --column: #a1bdd914;
-  --input-bg: #22272b;
-  --selected: #1c2b41;
-  --blue: #579dff;
-  --blue-hover: #85b8ff;
-  --blue-soft: #579dff3d;
-  --primary: #579dff;
-  --primary-hover: #85b8ff;
-  --danger: #f87168;
-  --danger-soft: #42221f;
-  --green: #4bce97;
-  --green-soft: #1c3329;
-  color-scheme: dark;
+  --bg: #c5ccd4;
+  --surface: #f7f3e8;
+  --border: #b8b0a0;
+  --text: #1a140c;
+  --muted: #5c5346;
+  --hover: #e8e0ce;
+  --column: #efe8d6;
+  --input-bg: #fffdf6;
+  --selected: #d6e2f0;
+  --blue: #4a6c9b;
+  --blue-hover: #3d5c88;
+  --blue-soft: #d6e2f0;
+  --primary: #4a6c9b;
+  --primary-hover: #3d5c88;
+  --danger: #c1272d;
+  --danger-soft: #f3d4d5;
+  --green: #3d8f4a;
+  --green-soft: #d8edd9;
   display: flex;
   flex-direction: column;
   width: min(920px, 100%);
@@ -3077,60 +3083,42 @@ async function saveLabelName(labelId: string): Promise<void> {
   max-height: calc(100dvh - 48px);
   overflow: hidden;
   color: var(--text);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 12px 48px rgb(0 0 0 / 55%);
+  background: #f7f3e8;
+  background-image:
+    linear-gradient(#f7f3e8, #f0ead8),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent 3px,
+      rgb(255 255 255 / 22%) 3px,
+      rgb(255 255 255 / 22%) 4px
+    );
+  border: 1px solid #8a8374;
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 45%), inset 0 1px 0 rgb(255 255 255 / 7%);
 
   .input.card-modal-title {
     background: transparent;
     border-color: transparent;
 
     &:focus {
-      background: var(--bg);
+      background: #fffdf6;
       border-color: var(--blue);
-      box-shadow: 0 0 0 2px var(--blue-soft);
+      box-shadow: 0 0 0 1px #6d84a2;
     }
   }
 
   .btn-ghost {
-    color: var(--muted);
-
-    &:hover:not(:disabled) {
-      color: var(--text);
-      background: var(--hover);
-    }
-  }
-
-  .btn-danger:hover:not(:disabled) {
-    background: #5d2a26;
+    color: var(--text);
   }
 
   .input:focus,
   .select:focus {
-    background: var(--bg);
+    background: #fffdf6;
   }
 
   .check-item-text:focus {
-    background: var(--bg);
-  }
-
-  .icon-btn {
-    color: var(--muted);
-
-    &:hover {
-      background: var(--hover);
-      color: var(--text);
-    }
-  }
-
-  .column-menu-btn {
-    color: var(--muted);
-
-    &:hover {
-      background: var(--hover);
-      color: var(--text);
-    }
+    background: #fffdf6;
   }
 }
 
@@ -3140,16 +3128,42 @@ async function saveLabelName(labelId: string): Promise<void> {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 16px 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid #2d3642;
+  background-image:
+    linear-gradient(
+      to bottom,
+      rgb(255 255 255 / 38%) 0,
+      rgb(255 255 255 / 8%) 48%,
+      transparent 52%
+    ),
+    linear-gradient(to bottom, #b4c1d2 0%, #8ea0b8 4%, #6d84a2 49%, #546a8a 51%, #4a5d7a 100%);
+  color: #fff;
+
+  .icon-btn {
+    color: #fff;
+    background: rgb(255 255 255 / 14%);
+    border-color: rgb(255 255 255 / 22%);
+
+    &:hover {
+      background: rgb(255 255 255 / 24%);
+      color: #fff;
+    }
+
+    &.is-danger {
+      color: #ffd4d4;
+    }
+  }
 }
 
 .card-modal-list {
   max-width: 60%;
   overflow: hidden;
-  color: var(--muted);
+  color: #fff;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   text-overflow: ellipsis;
+  text-shadow: 0 -1px 0 rgb(0 0 0 / 4%);
   white-space: nowrap;
 }
 
@@ -3176,8 +3190,8 @@ async function saveLabelName(labelId: string): Promise<void> {
 }
 
 .card-modal-side {
-  border-left: 1px solid var(--border);
-  background: var(--bg);
+  border-left: 1px solid #c8bfae;
+  background: #efe8d6;
 }
 
 .card-modal-title-wrap {

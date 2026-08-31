@@ -22,7 +22,7 @@ async function mountApp(): Promise<ReturnType<typeof mount>> {
     global: {
       plugins: [router],
       stubs: {
-        AppHeader: true,
+        IosAppChrome: true,
         Notifications: true,
       },
     },

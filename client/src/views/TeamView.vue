@@ -14,6 +14,7 @@ import {
   roleClass,
   roleLabel,
 } from '../composables/format.ts';
+import { useIosNavAction } from '../composables/ios-chrome.ts';
 import ModalDialog from '../components/ModalDialog.vue';
 import PageTabs, { type PageTab } from '../components/PageTabs.vue';
 import UserAvatar from '../components/UserAvatar.vue';
@@ -155,6 +156,34 @@ const activeTab = computed<TeamTab>(() => {
   }
 
   return 'projects';
+});
+
+useIosNavAction(() => {
+  if (!canManage.value) {
+    return null;
+  }
+
+  if (activeTab.value === 'projects') {
+    return {
+      id: 'create-project',
+      label: '+',
+      handler: () => {
+        openProjectModal();
+      },
+    };
+  }
+
+  if (activeTab.value === 'members') {
+    return {
+      id: 'invite-member',
+      label: '+',
+      handler: () => {
+        inviteOpen.value = true;
+      },
+    };
+  }
+
+  return null;
 });
 
 watch(
@@ -694,35 +723,27 @@ async function confirmRevoke(): Promise<void> {
         </p>
       </template>
       <template v-else>
-        <div class="page-head">
-          <div>
-            <h1>
-              {{ teams.current.name }}
-              <span :class="roleClass(teams.current.role)">{{
-                roleLabel(teams.current.role)
-              }}</span>
-            </h1>
-            <p>
-              {{
-                pluralRu(
-                  teams.current.members.length,
-                  'участник',
-                  'участника',
-                  'участников'
-                )
-              }}
-              ·
-              {{
-                pluralRu(
-                  teams.current.projects.length,
-                  'проект',
-                  'проекта',
-                  'проектов'
-                )
-              }}
-            </p>
-          </div>
-        </div>
+        <p class="grouped-caption">
+          {{
+            pluralRu(
+              teams.current.members.length,
+              'участник',
+              'участника',
+              'участников'
+            )
+          }}
+          ·
+          {{
+            pluralRu(
+              teams.current.projects.length,
+              'проект',
+              'проекта',
+              'проектов'
+            )
+          }}
+          ·
+          {{ roleLabel(teams.current.role) }}
+        </p>
         <PageTabs :tabs="tabs" />
         <p
           v-if="teams.error"
@@ -734,23 +755,12 @@ async function confirmRevoke(): Promise<void> {
           v-if="activeTab === 'projects'"
           class="stack"
         >
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Проекты</h2>
-              <button
-                v-if="canManage"
-                type="button"
-                class="btn"
-                @click="openProjectModal"
-              >
-                Создать проект
-              </button>
-            </div>
+          <div class="grouped-section">
             <template v-if="teams.current.projects.length">
               <div
                 v-for="project in teams.current.projects"
                 :key="project.id"
-                class="list-row"
+                class="list-row has-disclosure"
                 role="button"
                 tabindex="0"
                 @click="openProject(project.id)"
@@ -810,18 +820,7 @@ async function confirmRevoke(): Promise<void> {
           v-else-if="activeTab === 'members'"
           class="stack"
         >
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Участники</h2>
-              <button
-                v-if="canManage"
-                type="button"
-                class="btn"
-                @click="inviteOpen = true"
-              >
-                Добавить участника
-              </button>
-            </div>
+          <div class="grouped-section">
             <div
               v-for="member in teams.current.members"
               :key="member.userId"
@@ -900,10 +899,7 @@ async function confirmRevoke(): Promise<void> {
           v-else-if="activeTab === 'activity'"
           class="stack"
         >
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Действия</h2>
-            </div>
+          <div class="grouped-section">
             <p
               v-if="teams.isActivityLoading && !teams.activity.length"
               class="muted"

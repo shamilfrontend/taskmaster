@@ -8,6 +8,7 @@ import {
   roleClass,
   roleLabel,
 } from '../composables/format.ts';
+import { useIosNavAction } from '../composables/ios-chrome.ts';
 import ModalDialog from '../components/ModalDialog.vue';
 import UserAvatar from '../components/UserAvatar.vue';
 import type {
@@ -52,6 +53,18 @@ const canManageMembers = computed(() => {
   const teamRole = projects.current?.teamRole;
   return role === 'owner' || role === 'admin' || teamRole === 'owner';
 });
+
+useIosNavAction(() => (
+  canManageMembers.value
+    ? {
+      id: 'add-member',
+      label: '+',
+      handler: () => {
+        openAddMember();
+      },
+    }
+    : null
+));
 
 const hasCandidates = computed(
   () => Boolean(projects.members?.candidates.length),
@@ -216,18 +229,7 @@ async function confirmMemberAction(): Promise<void> {
     v-if="projects.current"
     class="stack"
   >
-    <div class="panel">
-      <div class="panel-head">
-        <h2>Участники проекта</h2>
-        <button
-          v-if="canManageMembers"
-          type="button"
-          class="btn"
-          @click="openAddMember"
-        >
-          Добавить
-        </button>
-      </div>
+    <div class="grouped-section">
       <div
         v-for="member in projects.members?.members ?? []"
         :key="member.userId"

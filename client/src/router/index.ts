@@ -106,6 +106,18 @@ export const router = createRouter({
       meta: { chrome: true },
     },
     {
+      path: '/notifications',
+      name: 'notifications',
+      component: () => import('../views/NotificationsView.vue'),
+      meta: { chrome: true },
+    },
+    {
+      path: '/more',
+      name: 'more',
+      component: () => import('../views/MoreView.vue'),
+      meta: { chrome: true },
+    },
+    {
       path: '/teams/:teamId',
       name: 'team',
       component: () => import('../views/TeamView.vue'),

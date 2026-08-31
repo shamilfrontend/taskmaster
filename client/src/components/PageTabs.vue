@@ -27,7 +27,6 @@ function tabQuery(to: RouteLocationRaw): string | undefined {
   }
 
   const value = to.query.tab;
-
   return typeof value === 'string' ? value : undefined;
 }
 
@@ -79,40 +78,55 @@ function isActive(tab: PageTab): boolean {
 
 .page-tabs {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0 0 24px;
-  border-bottom: 0;
+  overflow: hidden;
+  margin: 0 0 16px;
+  border: 1px solid #3d5476;
+  border-radius: 8px;
+  background: #6a80a0;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 28%), 0 1px 1px rgb(0 0 0 / 2%);
 }
 
 .page-tab {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 8px;
   border: 0;
-  border-radius: var(--radius);
-  padding: 6px 12px;
-  background: none;
-  color: var(--muted);
-  font-size: 14px;
-  font-weight: 500;
+  border-right: 1px solid #3d5476;
+  background-image:
+    linear-gradient(
+      to bottom,
+      rgb(255 255 255 / 32%) 0,
+      rgb(255 255 255 / 6%) 48%,
+      transparent 52%
+    ),
+    linear-gradient(to bottom, #9aadc6 0%, #7b91b0 49%, #6a80a0 51%, #5a6f90 100%);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
   text-decoration: none;
+  text-overflow: ellipsis;
+  text-shadow: 0 -1px 0 rgb(0 0 0 / 35%);
+  white-space: nowrap;
+
+  &:last-child {
+    border-right: 0;
+  }
 
   &:hover {
-    background: var(--hover);
-    color: var(--text);
+    color: #fff;
   }
 
   &.is-active {
-    background: var(--surface);
-    color: var(--blue);
-    box-shadow: var(--shadow);
+    background-image: linear-gradient(to bottom, #314868, #4e678c);
+    box-shadow: inset 0 1px 3px rgb(0 0 0 / 4%);
+    color: #fff;
   }
 }
 
 @media (max-width: $bp-phone) {
   .page-tabs {
-    flex-wrap: nowrap;
     overflow-x: auto;
-    margin-bottom: 16px;
-    padding-bottom: 2px;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
 
@@ -122,7 +136,8 @@ function isActive(tab: PageTab): boolean {
   }
 
   .page-tab {
-    flex-shrink: 0;
+    flex: 1 0 auto;
+    padding: 7px 10px;
   }
 }
 </style>

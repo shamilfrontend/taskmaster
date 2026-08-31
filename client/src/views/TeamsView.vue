@@ -9,12 +9,21 @@ import {
   roleClass,
   roleLabel,
 } from '../composables/format.ts';
+import { useIosNavAction } from '../composables/ios-chrome.ts';
 import ModalDialog from '../components/ModalDialog.vue';
 
 const router = useRouter();
 const teams = useTeamsStore();
 const modalOpen = ref(false);
 const name = ref('');
+
+useIosNavAction({
+  id: 'create-team',
+  label: '+',
+  handler: () => {
+    modalOpen.value = true;
+  },
+});
 
 onMounted(() => {
   void teams.fetchList();
@@ -34,19 +43,9 @@ async function create(): Promise<void> {
 <template>
   <section class="screen is-active">
     <div class="wrap">
-      <div class="page-head">
-        <div>
-          <h1>Команды</h1>
-          <p>Рабочие пространства, в которых вы состоите</p>
-        </div>
-        <button
-          type="button"
-          class="btn"
-          @click="modalOpen = true"
-        >
-          Создать команду
-        </button>
-      </div>
+      <p class="grouped-caption">
+        Рабочие пространства, в которых вы состоите
+      </p>
       <p
         v-if="teams.error"
         class="warn"
@@ -55,13 +54,13 @@ async function create(): Promise<void> {
       </p>
       <p
         v-if="teams.isLoading && !teams.list.length"
-        class="muted"
+        class="grouped-caption"
       >
         Загрузка…
       </p>
       <div
         v-else-if="!teams.isLoading && !teams.list.length"
-        class="panel empty-panel"
+        class="grouped-section empty-panel"
       >
         <h2>Пока нет команд</h2>
         <p class="muted">
@@ -77,13 +76,13 @@ async function create(): Promise<void> {
       </div>
       <div
         v-else
-        class="panel"
+        class="grouped-section"
       >
         <button
           v-for="team in teams.list"
           :key="team.id"
           type="button"
-          class="list-row"
+          class="list-row has-disclosure"
           @click="router.push({ name: 'team', params: { teamId: team.id } })"
         >
           <span :class="avatarClass(team.role)">{{ initials(team.name) }}</span>

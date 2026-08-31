@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useProjectStore } from '../stores/project.ts';
+import { useIosNavAction } from '../composables/ios-chrome.ts';
 import ModalDialog from '../components/ModalDialog.vue';
 
 const route = useRoute();
@@ -17,6 +18,18 @@ const canAdmin = computed(() => {
   const role = projects.current?.role;
   return role === 'owner' || role === 'admin';
 });
+
+useIosNavAction(() => (
+  canAdmin.value
+    ? {
+      id: 'create-release',
+      label: '+',
+      handler: () => {
+        releaseOpen.value = true;
+      },
+    }
+    : null
+));
 
 function openRelease(releaseId: string): void {
   void router.push({
@@ -47,23 +60,12 @@ async function createRelease(): Promise<void> {
     v-if="projects.current"
     class="stack"
   >
-    <div class="panel">
-      <div class="panel-head">
-        <h2>Релизы</h2>
-        <button
-          v-if="canAdmin"
-          type="button"
-          class="btn"
-          @click="releaseOpen = true"
-        >
-          Создать релиз
-        </button>
-      </div>
+    <div class="grouped-section">
       <button
         v-for="release in projects.current.releases"
         :key="release.id"
         type="button"
-        class="list-row"
+        class="list-row has-disclosure"
         @click="openRelease(release.id)"
       >
         <div class="grow">

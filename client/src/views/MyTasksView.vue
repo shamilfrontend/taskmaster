@@ -3,6 +3,7 @@ import { computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { formatDate, isOverdue } from '../composables/format.ts';
 import { useMyTasksStore } from '../stores/my-tasks.ts';
+import { useIosNavAction } from '../composables/ios-chrome.ts';
 import type { MyTaskItem } from '../types/index.ts';
 
 type TaskGroupId =
@@ -69,6 +70,8 @@ function taskGroup(task: MyTaskItem): TaskGroupId {
 
   return 'later';
 }
+
+useIosNavAction(null);
 
 const includeDone = computed(() => route.query.done === '1');
 const teamId = computed(() => (
@@ -199,14 +202,11 @@ watch(
 <template>
   <section class="screen is-active">
     <div class="wrap">
-      <div class="page-head">
-        <div>
-          <h1>Мои задачи</h1>
-          <p>Карточки, где вы исполнитель</p>
-        </div>
-      </div>
+      <p class="grouped-caption">
+        Карточки, где вы исполнитель
+      </p>
 
-      <div class="task-filters mb-16">
+      <div class="grouped-section task-filters mb-16">
         <select
           class="input select-inline"
           :value="teamId"
@@ -281,33 +281,34 @@ watch(
         <div
           v-for="group in groups"
           :key="group.id"
-          class="panel"
+          class="grouped"
         >
-          <div class="panel-head">
-            <h2>{{ group.label }}</h2>
-            <span class="muted">{{ group.items.length }}</span>
-          </div>
-          <button
-            v-for="task in group.items"
-            :key="task.id"
-            type="button"
-            class="list-row"
-            @click="openTask(task)"
-          >
-            <div class="grow">
-              <div>{{ task.title }}</div>
-              <div class="muted">
-                {{ taskSubtitle(task) }}
-              </div>
-            </div>
-            <span
-              v-if="task.dueDate"
-              class="muted"
-              :class="{ 'is-overdue': isOverdue(task.dueDate, task.isDone) }"
+          <p class="grouped-caption">
+            {{ group.label }} · {{ group.items.length }}
+          </p>
+          <div class="grouped-section">
+            <button
+              v-for="task in group.items"
+              :key="task.id"
+              type="button"
+              class="list-row has-disclosure"
+              @click="openTask(task)"
             >
-              {{ formatDate(task.dueDate) }}
-            </span>
-          </button>
+              <div class="grow">
+                <div>{{ task.title }}</div>
+                <div class="muted">
+                  {{ taskSubtitle(task) }}
+                </div>
+              </div>
+              <span
+                v-if="task.dueDate"
+                class="muted"
+                :class="{ 'is-overdue': isOverdue(task.dueDate, task.isDone) }"
+              >
+                {{ formatDate(task.dueDate) }}
+              </span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -322,6 +323,7 @@ watch(
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+  padding: 10px 12px;
 }
 
 .select-inline {
