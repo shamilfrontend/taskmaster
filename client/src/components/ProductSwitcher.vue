@@ -199,9 +199,17 @@ onUnmounted(() => {
 </template>
 
 <style lang="scss" scoped>
+@use '../assets/breakpoints' as *;
+
 .product-switcher {
   position: relative;
   flex-shrink: 0;
+}
+
+@media (max-width: $bp-phone) {
+  .product-switcher {
+    display: none;
+  }
 }
 
 .product-switcher-btn {

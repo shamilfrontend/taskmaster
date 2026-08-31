@@ -21,7 +21,6 @@ function photo(
 }
 
 export const BOARD_BACKGROUNDS: BoardBackgroundOption[] = [
-  photo('default', 'Горный хребет', 'bg-01'),
   photo('bg-01', 'Горный хребет', 'bg-01'),
   photo('bg-02', 'Ночные вершины', 'bg-02'),
   photo('bg-03', 'Снежная вершина', 'bg-03'),

@@ -6,6 +6,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth.ts';
 import { useNotificationsStore } from '../stores/notifications.ts';
 import { useBreadcrumbs } from '../composables/breadcrumbs.ts';
+import ModalDialog from './ModalDialog.vue';
 import NotificationsDrawer from './NotificationsDrawer.vue';
 import ProductSwitcher from './ProductSwitcher.vue';
 import UserAvatar from './UserAvatar.vue';
@@ -17,6 +18,7 @@ const notifications = useNotificationsStore();
 const { crumbs } = useBreadcrumbs();
 const menuOpen = ref(false);
 const menuRef = ref<HTMLElement | null>(null);
+const logoutOpen = ref(false);
 
 const unreadLabel = computed(() => {
   if (notifications.unreadCount > 9) {
@@ -48,8 +50,13 @@ function onDocumentKeydown(event: KeyboardEvent): void {
   }
 }
 
-async function logout(): Promise<void> {
+function openLogout(): void {
   closeMenu();
+  logoutOpen.value = true;
+}
+
+async function confirmLogout(): Promise<void> {
+  logoutOpen.value = false;
   await auth.logout();
   await router.push({ name: 'landing' });
 }
@@ -144,7 +151,7 @@ onUnmounted(() => {
       <button
         type="button"
         class="btn btn-ghost header-link"
-        @click="logout"
+        @click="openLogout"
       >
         Выйти
       </button>
@@ -180,7 +187,7 @@ onUnmounted(() => {
             type="button"
             class="header-menu-item"
             role="menuitem"
-            @click="logout"
+            @click="openLogout"
           >
             Выйти
           </button>
@@ -189,6 +196,31 @@ onUnmounted(() => {
     </div>
   </header>
   <NotificationsDrawer />
+  <ModalDialog
+    :open="logoutOpen"
+    title="Выйти"
+    @close="logoutOpen = false"
+  >
+    <p class="muted mb-16">
+      Завершить текущий сеанс?
+    </p>
+    <div class="modal-foot">
+      <button
+        type="button"
+        class="btn btn-ghost"
+        @click="logoutOpen = false"
+      >
+        Отмена
+      </button>
+      <button
+        type="button"
+        class="btn btn-danger"
+        @click="confirmLogout"
+      >
+        Выйти
+      </button>
+    </div>
+  </ModalDialog>
 </template>
 
 <style lang="scss" scoped>

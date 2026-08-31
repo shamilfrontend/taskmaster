@@ -1,5 +1,7 @@
 <script setup lang="ts">
-defineProps<{
+import { onUnmounted, watch } from 'vue';
+
+const props = defineProps<{
   open: boolean;
   title: string;
 }>();
@@ -7,6 +9,33 @@ defineProps<{
 const emit = defineEmits<{
   close: [];
 }>();
+
+function onDocumentKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape') {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  emit('close');
+}
+
+watch(
+  () => props.open,
+  (open) => {
+    if (open) {
+      document.addEventListener('keydown', onDocumentKeydown, true);
+      return;
+    }
+
+    document.removeEventListener('keydown', onDocumentKeydown, true);
+  },
+  { immediate: true },
+);
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', onDocumentKeydown, true);
+});
 </script>
 
 <template>

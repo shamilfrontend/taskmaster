@@ -43,6 +43,7 @@ const boardId = computed(() => project.current?.board?.id ?? '');
 const cardOpen = ref(false);
 const hoursOpen = ref(false);
 const labelsOpen = ref(false);
+const filtersPanelOpen = ref(false);
 const hours = ref(2);
 const hoursWorkedAt = ref('');
 const editingEntryId = ref<string | null>(null);
@@ -98,12 +99,14 @@ const filterColumnId = ref('');
 
 onMounted(() => {
   document.addEventListener('click', onDocumentClick);
+  document.addEventListener('keydown', onDocumentKeydown);
   window.addEventListener('scroll', closeMenus, true);
   window.addEventListener('resize', closeMenus);
 });
 
 onUnmounted(() => {
   document.removeEventListener('click', onDocumentClick);
+  document.removeEventListener('keydown', onDocumentKeydown);
   window.removeEventListener('scroll', closeMenus, true);
   window.removeEventListener('resize', closeMenus);
 });
@@ -279,6 +282,26 @@ function onDocumentClick(): void {
   closeMenus();
   cancelCardComposer();
   cancelColumnComposer();
+}
+
+function onDocumentKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape') {
+    return;
+  }
+
+  if (menuColumnId.value || menuCardId.value || menuCommentId.value) {
+    closeMenus();
+    return;
+  }
+
+  if (cardOpen.value) {
+    cardOpen.value = false;
+    return;
+  }
+
+  if (filtersPanelOpen.value) {
+    filtersPanelOpen.value = false;
+  }
 }
 
 function canDeleteBoardCard(card: BoardCard): boolean {
@@ -1441,7 +1464,30 @@ async function saveLabelName(labelId: string): Promise<void> {
     </p>
     <template v-if="board.current">
       <div class="board-toolbar">
-        <div class="board-filters">
+        <button
+          type="button"
+          class="board-filters-toggle"
+          :class="{ 'is-active': filtersActive }"
+          :aria-expanded="filtersPanelOpen"
+          @click="filtersPanelOpen = !filtersPanelOpen"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            width="16"
+            height="16"
+            aria-hidden="true"
+          >
+            <path
+              fill="currentColor"
+              d="M1.5 2.5h13l-4.75 5.7V13l-3.5 1.5V8.2L1.5 2.5z"
+            />
+          </svg>
+          Фильтры
+        </button>
+        <div
+          class="board-filters"
+          :class="{ 'is-open': filtersPanelOpen }"
+        >
           <input
             v-model="filterQuery"
             class="input board-filter-search"
@@ -1542,7 +1588,7 @@ async function saveLabelName(labelId: string): Promise<void> {
               placeholder="Название колонки…"
               @click.stop
               @keydown.enter.prevent="saveRename(column.id)"
-              @keydown.escape.prevent="renamingId = null"
+              @keydown.escape.stop.prevent="renamingId = null"
               @blur="saveRename(column.id)"
             >
             <h2
@@ -1715,7 +1761,7 @@ async function saveLabelName(labelId: string): Promise<void> {
                 v-model="newCardTitle"
                 placeholder="Название карточки…"
                 @keydown.enter.exact.prevent="submitCard(column.id)"
-                @keydown.escape="cancelCardComposer"
+                @keydown.escape.stop="cancelCardComposer"
               />
               <div class="composer-actions">
                 <button
@@ -1759,7 +1805,7 @@ async function saveLabelName(labelId: string): Promise<void> {
               type="text"
               placeholder="Название колонки…"
               @keydown.enter.prevent="submitColumn"
-              @keydown.escape="cancelColumnComposer"
+              @keydown.escape.stop="cancelColumnComposer"
             >
             <div class="composer-actions">
               <button
@@ -2326,13 +2372,25 @@ async function saveLabelName(labelId: string): Promise<void> {
                   Отмена
                 </button>
               </div>
-              <input
+              <div
                 v-if="canEdit"
-                v-model="comment"
-                class="input card-comment-input"
-                :placeholder="commentPlaceholder"
-                @keydown.enter="sendComment"
+                class="card-comment-form"
               >
+                <input
+                  v-model="comment"
+                  class="input card-comment-input"
+                  :placeholder="commentPlaceholder"
+                  @keydown.enter.prevent="sendComment"
+                >
+                <button
+                  type="button"
+                  class="btn"
+                  :disabled="!comment.trim()"
+                  @click="sendComment"
+                >
+                  Добавить комментарий
+                </button>
+              </div>
               <div class="card-comments">
                 <template
                   v-for="thread in commentThreads"
@@ -2344,69 +2402,73 @@ async function saveLabelName(labelId: string): Promise<void> {
                     class="comment"
                     :class="{ 'comment--reply': Boolean(item.parentId) }"
                   >
-                    <div class="comment-head">
-                      <div class="who">
-                        <UserAvatar
-                          class="sm"
-                          :name="item.displayName"
-                          :src="item.avatarUrl"
-                        />
-                        {{ item.displayName }}
-                        <span
-                          v-if="item.editedAt"
-                          class="comment-edited"
-                        >изменён</span>
+                    <UserAvatar
+                      :name="item.displayName"
+                      :src="item.avatarUrl"
+                    />
+                    <div class="comment-main">
+                      <div class="comment-head">
+                        <div class="who">
+                          {{ item.displayName }}
+                          <span
+                            v-if="item.editedAt"
+                            class="comment-edited"
+                          >изменён</span>
+                        </div>
+                        <div
+                          v-if="editingCommentId !== item.id && hasCommentActions(item)"
+                          class="comment-actions"
+                        >
+                          <button
+                            type="button"
+                            class="column-menu-btn"
+                            aria-label="Действия комментария"
+                            @click.stop="toggleCommentMenu($event, item.id)"
+                          >
+                            ⋯
+                          </button>
+                        </div>
                       </div>
                       <div
-                        v-if="editingCommentId !== item.id && hasCommentActions(item)"
-                        class="comment-actions"
+                        v-if="item.parentId"
+                        class="comment-reply-to"
                       >
-                        <button
-                          type="button"
-                          class="column-menu-btn"
-                          aria-label="Действия комментария"
-                          @click.stop="toggleCommentMenu($event, item.id)"
-                        >
-                          ⋯
-                        </button>
+                        в ответ {{ thread.root.displayName }}
                       </div>
-                    </div>
-                    <div
-                      v-if="item.parentId"
-                      class="comment-reply-to"
-                    >
-                      в ответ {{ thread.root.displayName }}
-                    </div>
-                    <div
-                      v-if="editingCommentId === item.id"
-                      class="comment-edit"
-                    >
-                      <textarea
-                        v-model="editingBody"
-                        class="input comment-edit-input"
-                        rows="3"
-                        @keydown.escape.prevent="cancelEditComment"
-                      />
-                      <div class="comment-edit-actions">
-                        <button
-                          type="button"
-                          class="btn btn-ghost"
-                          @click="cancelEditComment"
-                        >
-                          Отмена
-                        </button>
-                        <button
-                          type="button"
-                          class="btn"
-                          :disabled="!editingBody.trim()"
-                          @click="saveEditComment"
-                        >
-                          Сохранить
-                        </button>
+                      <div
+                        v-if="editingCommentId === item.id"
+                        class="comment-edit"
+                      >
+                        <textarea
+                          v-model="editingBody"
+                          class="input comment-edit-input"
+                          rows="3"
+                          @keydown.escape.stop.prevent="cancelEditComment"
+                        />
+                        <div class="comment-edit-actions">
+                          <button
+                            type="button"
+                            class="btn btn-ghost"
+                            @click="cancelEditComment"
+                          >
+                            Отмена
+                          </button>
+                          <button
+                            type="button"
+                            class="btn"
+                            :disabled="!editingBody.trim()"
+                            @click="saveEditComment"
+                          >
+                            Сохранить
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                    <div v-else>
-                      {{ item.body }}
+                      <div
+                        v-else
+                        class="comment-body"
+                      >
+                        {{ item.body }}
+                      </div>
                     </div>
                   </div>
                 </template>
@@ -2624,6 +2686,7 @@ async function saveLabelName(labelId: string): Promise<void> {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  gap: 8px;
   margin-bottom: 16px;
 }
 
@@ -2650,6 +2713,27 @@ async function saveLabelName(labelId: string): Promise<void> {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.board-filters-toggle {
+  display: none;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  background: rgb(255 255 255 / 24%);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+
+  svg {
+    flex-shrink: 0;
+  }
 }
 
 .columns {
@@ -3255,8 +3339,16 @@ h2.card-modal-title {
   }
 }
 
-.card-comment-input {
+.card-comment-form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
   margin-bottom: 12px;
+
+  .card-comment-input {
+    width: 100%;
+  }
 }
 
 .comment-reply-chip {
@@ -3315,21 +3407,38 @@ h2.card-modal-title {
 }
 
 .comment {
-  padding: 10px 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 0;
   border-bottom: 1px solid var(--border);
-  font-size: 14px;
 
   &:last-child {
     border-bottom: 0;
   }
 
+  > .avatar {
+    flex-shrink: 0;
+  }
+
   .who {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     font-weight: 600;
-    font-size: 13px;
+    font-size: 14px;
   }
+}
+
+.comment-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.comment-body {
+  margin-top: 4px;
+  font-size: 15px;
+  line-height: 1.45;
 }
 
 .comment--reply {
@@ -3654,11 +3763,21 @@ h2.card-modal-title {
 
 @media (max-width: $bp-phone) {
   .board-toolbar {
+    width: 100%;
     margin-bottom: 12px;
   }
 
+  .board-filters-toggle {
+    display: flex;
+  }
+
   .board-filters {
+    display: none;
     width: 100%;
+
+    &.is-open {
+      display: flex;
+    }
   }
 
   .board-filter-search,
@@ -3738,6 +3857,14 @@ h2.card-modal-title {
 
   .costs-actions {
     justify-content: flex-start;
+  }
+
+  .card-comment-form {
+    align-items: stretch;
+
+    .btn {
+      width: 100%;
+    }
   }
 }
 

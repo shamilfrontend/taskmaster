@@ -342,6 +342,14 @@ h2 {
     color: var(--danger);
     font-weight: 600;
   }
+
+  .grow {
+    overflow: hidden;
+
+    .muted {
+      overflow-wrap: anywhere;
+    }
+  }
 }
 
 .grow {
@@ -350,10 +358,12 @@ h2 {
 }
 
 .badge {
+  flex-shrink: 0;
   border-radius: 4px;
   padding: 2px 6px;
   font-size: 12px;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .badge-owner {
@@ -716,7 +726,9 @@ h2 {
     }
 
     .filter button.is-active,
-    .filter button.is-active:hover:not(:disabled) {
+    .filter button.is-active:hover:not(:disabled),
+    .board-toolbar .btn.is-active,
+    .board-toolbar .btn.is-active:hover:not(:disabled) {
       background: rgb(255 255 255 / 24%);
       color: #fff;
     }

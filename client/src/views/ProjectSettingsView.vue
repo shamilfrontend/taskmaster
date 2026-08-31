@@ -46,9 +46,10 @@ const canSaveProjectName = computed(() => {
 const BACKGROUND_PREVIEW_COUNT = 12;
 const showAllBackgrounds = ref(false);
 
-const selectedBackground = computed(
-  () => projects.current?.boardBackground ?? 'default',
-);
+const selectedBackground = computed(() => {
+  const id = projects.current?.boardBackground ?? 'default';
+  return id === 'default' ? 'bg-01' : id;
+});
 
 const orderedBackgrounds = computed(() => {
   const selected = BOARD_BACKGROUNDS.find(
@@ -331,6 +332,10 @@ async function removeProject(): Promise<void> {
 @media (max-width: $bp-phone) {
   .bg-picker {
     grid-template-columns: repeat(3, 1fr);
+  }
+
+  .actions .btn {
+    width: 100%;
   }
 }
 
